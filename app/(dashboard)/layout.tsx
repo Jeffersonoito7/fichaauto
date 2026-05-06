@@ -50,7 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Car className="w-4 h-4 text-white" />
           </div>
           <span className="font-bold text-brand-dark text-sm">
-            Auto Base <span className="text-brand-green">Brasil</span>
+            Ficha Auto
           </span>
         </Link>
       </div>
@@ -131,7 +131,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="w-6 h-6 rounded gradient-hero flex items-center justify-center">
               <Car className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="font-bold text-sm text-brand-dark">Auto Base <span className="text-brand-green">Brasil</span></span>
+            <span className="font-bold text-sm text-brand-dark">Ficha Auto</span>
           </div>
           <Link href="/dashboard/carteira" className="text-xs font-semibold text-brand-green bg-brand-green-light px-2.5 py-1 rounded-full">
             7 consultas

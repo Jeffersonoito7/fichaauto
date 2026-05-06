@@ -66,7 +66,7 @@ export default function LandingPage() {
               <Car className="w-4 h-4 text-white" />
             </div>
             <span className="font-bold text-lg text-brand-dark">
-              Auto Base <span className="text-brand-green">Brasil</span>
+              Ficha Auto
             </span>
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm text-brand-gray">
@@ -264,10 +264,10 @@ export default function LandingPage() {
             <div className="w-7 h-7 rounded-lg gradient-hero flex items-center justify-center">
               <Car className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="font-bold text-sm">Auto Base Brasil</span>
+            <span className="font-bold text-sm">Ficha Auto</span>
           </div>
           <p className="text-white/40 text-xs text-center">
-            © 2026 Auto Base Brasil · OITO7DIGITAL SERVIÇOS LTDA · CNPJ 62.302.560/0001-58
+            © 2026 Ficha Auto · OITO7DIGITAL SERVIÇOS LTDA · CNPJ 62.302.560/0001-58
           </p>
           <div className="flex items-center gap-1 text-white/40 text-xs">
             <Phone className="w-3 h-3" />

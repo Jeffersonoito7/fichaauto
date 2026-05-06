@@ -26,7 +26,7 @@ export default function LoginPage() {
           <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
             <Car className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-lg">Auto Base Brasil</span>
+          <span className="font-bold text-lg">Ficha Auto</span>
         </Link>
 
         <div>
@@ -52,7 +52,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-white/40 text-xs">© 2026 Auto Base Brasil</p>
+        <p className="text-white/40 text-xs">© 2026 Ficha Auto</p>
       </div>
 
       {/* Right - form */}
@@ -66,7 +66,7 @@ export default function LoginPage() {
             <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
               <Car className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-brand-dark">Auto Base <span className="text-brand-green">Brasil</span></span>
+            <span className="font-bold text-brand-dark">Ficha Auto</span>
           </div>
 
           <h1 className="text-2xl font-bold text-brand-dark mb-1">Bem-vindo de volta</h1>

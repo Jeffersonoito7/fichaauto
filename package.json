@@ -1,8 +1,8 @@
 {
-  "name": "auto-base-brasil",
+  "name": "ficha-auto",
   "version": "1.0.0",
   "private": true,
-  "description": "Auto Base Brasil",
+  "description": "Ficha Auto",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

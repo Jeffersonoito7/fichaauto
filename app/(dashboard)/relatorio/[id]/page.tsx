@@ -391,7 +391,7 @@ export default function RelatorioPage() {
           <p className="text-xs text-brand-gray leading-relaxed">
             Esta consulta veicular não tem caráter pericial e não substitui a perícia oficial.
             As informações têm validade apenas para o momento de sua realização e são oriundas de bases públicas e privadas.
-            A Auto Base Brasil não se responsabiliza por informações publicadas após a emissão desta consulta.
+            A Ficha Auto não se responsabiliza por informações publicadas após a emissão desta consulta.
           </p>
         </div>
 
