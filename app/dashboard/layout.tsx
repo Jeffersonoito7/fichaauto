@@ -8,10 +8,11 @@ import {
 } from 'lucide-react'
 
 const navItems = [
-  { href: '/dashboard',              icon: Home,      label: 'Home'          },
-  { href: '/dashboard/consultar',    icon: Search,    label: 'Nova Consulta' },
-  { href: '/dashboard/historico',    icon: History,   label: 'Histórico'     },
-  { href: '/dashboard/carteira',     icon: Wallet,    label: 'Carteira'      },
+  { href: '/dashboard',                 icon: Home,      label: 'Home'          },
+  { href: '/dashboard/consultar',       icon: Search,    label: 'Nova Consulta' },
+  { href: '/dashboard/historico',       icon: History,   label: 'Histórico'     },
+  { href: '/dashboard/associacoes',     icon: Shield,    label: 'Associações'   },
+  { href: '/dashboard/carteira',        icon: Wallet,    label: 'Carteira'      },
 ]
 
 const adminItems = [
