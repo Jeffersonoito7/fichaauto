@@ -19,9 +19,10 @@ function tipoVeiculo(placa: string): 'carros' | 'motos' | 'caminhoes' {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { placa: string } }
+  { params }: { params: Promise<{ placa: string }> }
 ) {
-  const placa = params.placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  const { placa: placaRaw } = await params
+  const placa = placaRaw.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
 
   try {
     // Consulta Assertiva para pegar marca/modelo/ano (já temos a API)
