@@ -3,20 +3,21 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Car, Search, History, Wallet, Bell, BarChart3,
-  Users, Settings, LogOut, Menu, X, ChevronDown
+  Car, Search, History, Wallet, BarChart3,
+  Users, LogOut, Menu, X, ChevronDown, Home, Shield, User, Building2
 } from 'lucide-react'
 
 const navItems = [
-  { href: '/dashboard/consultar',    icon: Search,   label: 'Nova Consulta' },
-  { href: '/dashboard/historico',    icon: History,  label: 'Histórico' },
-  { href: '/dashboard/monitoramento',icon: Bell,     label: 'Monitoramento' },
-  { href: '/dashboard/carteira',     icon: Wallet,   label: 'Carteira' },
+  { href: '/dashboard',              icon: Home,      label: 'Home'          },
+  { href: '/dashboard/consultar',    icon: Search,    label: 'Nova Consulta' },
+  { href: '/dashboard/historico',    icon: History,   label: 'Histórico'     },
+  { href: '/dashboard/carteira',     icon: Wallet,    label: 'Carteira'      },
 ]
 
 const adminItems = [
-  { href: '/dashboard/admin',          icon: BarChart3, label: 'Dashboard Admin' },
-  { href: '/dashboard/admin/usuarios', icon: Users,     label: 'Usuários' },
+  { href: '/dashboard/admin',           icon: BarChart3, label: 'Dashboard Admin' },
+  { href: '/dashboard/admin/tenants',   icon: Shield,    label: 'Tenants / Módulos' },
+  { href: '/dashboard/admin/usuarios',  icon: Users,     label: 'Usuários' },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -24,14 +25,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   function NavLink({ href, icon: Icon, label }: { href: string; icon: any; label: string }) {
-    const active = pathname === href || pathname.startsWith(href + '/')
+    const active = href === '/dashboard'
+      ? pathname === '/dashboard'
+      : pathname === href || pathname.startsWith(href + '/')
     return (
       <Link
         href={href}
         onClick={() => setSidebarOpen(false)}
         className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
           active
-            ? 'bg-brand-blue text-white shadow-blue'
+            ? 'bg-brand-green text-white shadow-green'
             : 'text-brand-gray hover:bg-brand-gray-light hover:text-brand-dark'
         }`}
       >
@@ -88,9 +91,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           <ChevronDown className="w-4 h-4 text-brand-gray shrink-0" />
         </div>
-        <Link href="/login" className="flex items-center gap-2 px-3 py-2 mt-1 text-sm text-brand-gray hover:text-brand-danger rounded-lg hover:bg-red-50 transition-colors">
+        <button
+          onClick={async () => {
+            await fetch('/api/auth/logout', { method: 'POST' })
+            window.location.href = '/login'
+          }}
+          className="flex items-center gap-2 px-3 py-2 mt-1 text-sm text-brand-gray hover:text-brand-danger rounded-lg hover:bg-red-50 transition-colors w-full"
+        >
           <LogOut className="w-4 h-4" /> Sair
-        </Link>
+        </button>
       </div>
     </div>
   )

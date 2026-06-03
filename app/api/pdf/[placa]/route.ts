@@ -1,0 +1,812 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { consultarVeiculo } from '@/lib/providers'
+
+const TENANT = {
+  nome:  'Ficha Auto',
+  cor:   '#00703C',
+  site:  'fichaauto.com.br',
+}
+
+/* ── helpers ─────────────────────────────────────────────────────────────── */
+function v(x: any, fallback = 'Não Informado'): string {
+  if (x === null || x === undefined || x === '') return fallback
+  return String(x)
+}
+function moeda(x: any): string {
+  if (x === null || x === undefined || x === '') return '0,00'
+  if (typeof x === 'string' && x.includes('R$')) return x.replace('R$','').trim()
+  const n = Number(x)
+  return isNaN(n) ? String(x) : n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+}
+function anoStr(p: any): string {
+  if (p.anoFabricacao && p.anoModelo) return `${p.anoFabricacao}/${p.anoModelo}`
+  return v(p.anoFabricacao ?? p.ano, 'N/I')
+}
+function isOk(s: string): boolean {
+  const u = (s ?? '').toUpperCase()
+  return u === '' || u === 'NADA CONSTA' || u === 'SEM RESTRICAO' || u === 'NORMAL' || u === '0,00' || u === '0'
+}
+function cor(s: string): string {
+  const u = (s ?? '').toUpperCase()
+  if (u === 'NADA CONSTA' || u === 'SEM RESTRICAO' || u === 'NORMAL') return '#16a34a'
+  if (u.includes('RENAJUD') || u.includes('ROUBO') || u.includes('CONSTA RESTRIÇÃO') || u === 'CONSTA') return '#dc2626'
+  if (u.includes('ALIEN') || u.includes('FIDUCIARIA')) return '#d97706'
+  return '#1a1a1a'
+}
+function protocolo(): string { return String(Date.now()).slice(-9) }
+
+type Status = 'ok' | 'warn' | 'error'
+
+/* ── ícone de status: verde=ok, amarelo=alerta, vermelho=crítico ──────────── */
+function iconeInner(status: Status, label: string): string {
+  const bg     = status === 'ok' ? '#16a34a' : status === 'warn' ? '#d97706' : '#dc2626'
+  const symbol = status === 'ok' ? '&#10003;' : '!'
+  return `
+    <div style="width:50px;height:50px;border-radius:50%;background:${bg};
+                display:flex;align-items:center;justify-content:center;margin:0 auto">
+      <span style="font-size:22px;font-weight:900;color:white;line-height:1">
+        ${symbol}
+      </span>
+    </div>
+    <div style="font-size:7px;font-weight:700;margin-top:3px;text-align:center;
+                line-height:1.3;color:#222">
+      ${label}
+    </div>`
+}
+
+/* ── cabeçalho de página ─────────────────────────────────────────────────── */
+function header(agora: string, proto: string, pag: string): string {
+  return `
+  <table width="100%" cellpadding="4" cellspacing="0"
+         style="border-bottom:2px solid #333;margin-bottom:0">
+    <tr>
+      <td width="110" valign="middle">
+        <table cellpadding="0" cellspacing="0">
+          <tr>
+            <td valign="middle">
+              <div style="width:34px;height:34px;background:${TENANT.cor};border-radius:5px;
+                display:inline-block;text-align:center;vertical-align:middle;line-height:34px">
+                <span style="color:white;font-weight:900;font-size:16px">F</span>
+              </div>
+            </td>
+            <td valign="middle" style="padding-left:5px">
+              <div style="font-size:13px;font-weight:900;color:${TENANT.cor};line-height:1.1">
+                ${TENANT.nome.toUpperCase()}
+              </div>
+              <div style="font-size:7.5px;color:#666">Tecnologia</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+      <td align="center" valign="middle">
+        <div style="font-size:15px;font-weight:700;color:#111">Consulta Veicular</div>
+        <div style="font-size:8.5px;color:#555">Informações Exclusivas</div>
+        <div style="font-size:8.5px;color:#555">
+          Data Hora da Consulta:&nbsp;<strong>${agora}</strong>
+          &nbsp;(${proto})&nbsp;Pág.&nbsp;${pag}
+        </div>
+      </td>
+      <td width="60" align="right" valign="middle">
+        <table cellpadding="0" cellspacing="0">
+          <tr>
+            <td align="center" valign="middle"
+                style="width:52px;height:52px;border:1px solid #ccc;background:#f5f5f5;
+                       font-size:7px;color:#999">QR</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>`
+}
+
+/* ── banner verde com nome/placa ─────────────────────────────────────────── */
+function banner(marcaModelo: string, placa: string): string {
+  return `
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:0">
+    <tr>
+      <td align="center" valign="middle"
+          style="background:${TENANT.cor};padding:14px 8px">
+        <div style="font-size:24px;font-weight:900;color:white;
+                    letter-spacing:0.5px;text-transform:uppercase;line-height:1.2">
+          ${marcaModelo.toUpperCase()}
+        </div>
+        <div style="font-size:22px;font-weight:900;color:white;
+                    font-family:monospace;letter-spacing:4px;margin-top:2px">
+          ${placa}
+        </div>
+      </td>
+    </tr>
+  </table>`
+}
+
+/* ── rodapé ──────────────────────────────────────────────────────────────── */
+function footer(): string {
+  return `
+  <table width="100%" cellpadding="0" cellspacing="0"
+         style="border-top:1px solid #ccc;margin-top:8px">
+    <tr>
+      <td width="42" valign="top" style="padding-top:5px">
+        <div style="width:36px;height:36px;background:${TENANT.cor};border-radius:4px;
+          text-align:center;line-height:36px">
+          <span style="color:white;font-weight:900;font-size:14px">F</span>
+        </div>
+      </td>
+      <td valign="top" style="font-size:7.5px;color:#555;line-height:1.45;padding-top:5px">
+        A ${TENANT.nome} não é responsável pelas informações inseridas na sua base de dados já que são oriundas de consulta às Bases Públicas e
+        Privadas sobre as quais não detém a propriedade das informações, limitando-se assim, a reproduzi-las fielmente, na forma como
+        originariamente apresentadas. Da mesma forma não se responsabiliza por informações incorretas, faltantes, ou divergentes de bases
+        públicas. Em diversas situações, podem surgir multas retroativas para o veículo, mesmo com alteração de proprietário conforme o
+        Código de Trânsito Brasileiro. Desta forma, a ${TENANT.nome} não se responsabiliza pelos débitos lançados pelos órgãos competentes.
+      </td>
+    </tr>
+  </table>`
+}
+
+/* ── título de seção ─────────────────────────────────────────────────────── */
+function secTitle(txt: string): string {
+  return `
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0 4px">
+    <tr>
+      <td style="font-size:10px;font-weight:700;text-transform:uppercase;
+                 border-bottom:1.5px solid #444;padding-bottom:3px;color:#111">
+        ${txt}
+      </td>
+    </tr>
+  </table>`
+}
+
+/* ── tabela 2 colunas de campos (label | valor | label | valor) ──────────── */
+function tabela2col(linhas: [string, string, string, string][]): string {
+  return `
+  <table width="100%" cellpadding="4" cellspacing="0"
+         style="border-collapse:collapse;font-size:9.5px;margin-bottom:6px">
+    ${linhas.map(([l1, v1, l2, v2], i) => `
+    <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f7f7f7'}">
+      <td width="15%" style="font-weight:700;border:1px solid #ddd;padding:4px 6px">${l1}</td>
+      <td width="35%" style="border:1px solid #ddd;padding:4px 6px">${v1}</td>
+      <td width="15%" style="font-weight:700;border:1px solid #ddd;padding:4px 6px">${l2}</td>
+      <td width="35%" style="border:1px solid #ddd;padding:4px 6px">${v2}</td>
+    </tr>`).join('')}
+  </table>`
+}
+
+/* ── tabela genérica com cabeçalho ───────────────────────────────────────── */
+function tabelaGen(cols: string[], linhas: string[][]): string {
+  return `
+  <table width="100%" cellpadding="4" cellspacing="0"
+         style="border-collapse:collapse;font-size:9.5px;margin-bottom:6px">
+    <tr>
+      ${cols.map(c =>
+        `<th style="font-weight:700;background:#f0f0f0;border:1px solid #ddd;
+                    padding:4px 6px;text-align:left">${c}</th>`
+      ).join('')}
+    </tr>
+    ${linhas.length === 0
+      ? `<tr>${cols.map(() => `<td style="border:1px solid #ddd;padding:4px 6px;color:#999">---</td>`).join('')}</tr>`
+      : linhas.map((row, i) => `
+        <tr style="background:${i % 2 === 0 ? '#fff' : '#f7f7f7'}">
+          ${row.map(c => `<td style="border:1px solid #ddd;padding:4px 6px">${c}</td>`).join('')}
+        </tr>`).join('')
+    }
+  </table>`
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PÁGINA 1 — identificação, características, débitos
+════════════════════════════════════════════════════════════════════════════ */
+function pag1(placa: string, data: any, agora: string, proto: string): string {
+  const p = data.placa ?? {}
+  const j = JSON.stringify(data).toUpperCase()
+
+  const temRenajud          = j.includes('RENAJUD')
+  const temAlienacao        = j.includes('ALIEN')
+  const temAlienacaoFiduc   = j.includes('FIDUCIARIA') || j.includes('FIDUCIÁRIA')
+  const temSinistro         = j.includes('SINISTRO')   && !j.includes('NADA CONSTA')
+  const temRoubo            = j.includes('ROUBO')      && !j.includes('NADA CONSTA')
+  const temLeilao           = j.includes('LOTE')       || (j.includes('LEILÃO') && !j.includes('NADA CONSTA'))
+  const temAlteracoes       = j.includes('ALTERACAO')  && !j.includes('SEM ALTERACAO') && !j.includes('NADA CONSTA')
+
+  // três estados por ícone
+  const stDetran:    Status = temRenajud   ? 'error' : 'ok'
+  const stRestricoes:Status = temRenajud   ? 'error' : temAlienacao ? 'warn' : 'ok'
+  const stAlienacao: Status = !temAlienacao ? 'ok'   : temAlienacaoFiduc ? 'warn' : 'error'
+  const stSinistro:  Status = temSinistro  ? 'error' : 'ok'
+  const stRoubo:     Status = temRoubo     ? 'error' : 'ok'
+  const stLeilao:    Status = temLeilao    ? 'error' : 'ok'
+  const stAlteracoes:Status = temAlteracoes ? 'warn' : 'ok'
+
+  const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
+  const rest1 = v(p.restricaoEstadual01, 'NADA CONSTA')
+  const rest2 = v(p.restricaoEstadual02, temRenajud ? 'RENAJUD' : 'NADA CONSTA')
+  const rest3 = v(p.restricaoEstadual03, temAlienacao ? 'ALIENACAO FIDUCIARIA' : 'NADA CONSTA')
+  const rest4 = v(p.restricaoEstadual04, 'NADA CONSTA')
+
+  return `
+<div class="pg">
+  ${header(agora, proto, '1')}
+  ${banner(mm, placa)}
+
+  <!-- 7 ícones: linha 1 com 4, linha 2 com 3 centralizados -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px">
+    <tr>
+      <td width="25%" align="center" valign="top" style="padding:6px 2px;border:none">${iconeInner(stDetran,    'DETRAN')}</td>
+      <td width="25%" align="center" valign="top" style="padding:6px 2px;border:none">${iconeInner(stRestricoes,'RESTRIÇÕES')}</td>
+      <td width="25%" align="center" valign="top" style="padding:6px 2px;border:none">${iconeInner(stAlienacao, 'ALIENAÇÃO')}</td>
+      <td width="25%" align="center" valign="top" style="padding:6px 2px;border:none">${iconeInner(stSinistro,  'INDÍCIO SINISTRO')}</td>
+    </tr>
+  </table>
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px">
+    <tr>
+      <td width="12.5%" style="border:none;padding:0"></td>
+      <td width="25%" align="center" valign="top" style="padding:6px 2px;border:none">${iconeInner(stRoubo,     'HISTÓRICO ROUBO/FURTO')}</td>
+      <td width="25%" align="center" valign="top" style="padding:6px 2px;border:none">${iconeInner(stLeilao,    'HISTÓRICO LEILÃO')}</td>
+      <td width="25%" align="center" valign="top" style="padding:6px 2px;border:none">${iconeInner(stAlteracoes,'ALTERAÇÕES CARACTERÍSTICAS')}</td>
+      <td width="12.5%" style="border:none;padding:0"></td>
+    </tr>
+  </table>
+
+  ${secTitle('Identificação')}
+  ${tabela2col([
+    ['Placa',        `<span style="font-family:monospace">${placa}</span>`, 'Marca Modelo', mm],
+    ['Ano',          anoStr(p),       'Cor',          v(p.cor)],
+    ['Renavam',      `<span style="font-family:monospace">${v(p.renavam)}</span>`, 'Chassi', `<span style="font-family:monospace">${v(p.chassi)}</span>`],
+    ['Cambio',       v(p.cambio ?? p.transmissao), 'Motor', `<span style="font-family:monospace">${v(p.motor ?? p.numeroMotor)}</span>`],
+    ['Municipio/UF', `${v(p.municipio, '-')}/${v(p.uf, '-')}`, 'Num. Carroceria', v(p.numCarroceria)],
+  ])}
+
+  ${secTitle('Características')}
+  ${tabela2col([
+    ['Combustível',    v(p.combustivel),                         'Passageiros',      v(p.passageiros ?? p.lotacao)],
+    ['Tipo Automóvel', v(p.tipoAutomovel ?? p.tipo),             'Procedência',      v(p.procedencia)],
+    ['Espécie',        v(p.especie),                             'Cilindradas',      v(p.cilindradas)],
+    ['Categoria',      v(p.categoria),                           'Capac. Carga',     v(p.capacCarga ?? p.cargaUtil, '0')],
+    ['Potência',       v(p.potencia),                            'Carroceria',       v(p.carroceria)],
+    ['Eixo Traseiro',  v(p.eixoTraseiro, ''),                    'Eixo Auxiliar',    v(p.eixoAuxiliar, '')],
+    ['Eixos',          v(p.eixos, '0'),                          'Últ. Atualização', v(p.ultimaAtualizacao ?? p.dataAtualizacao)],
+    ['CMT',            v(p.cmt, '0'),                            'PBT',              v(p.pbt, '0')],
+  ])}
+
+  ${secTitle('Débitos e Restrições')}
+  <table width="100%" cellpadding="4" cellspacing="0"
+         style="border-collapse:collapse;font-size:9.5px;margin-bottom:6px">
+    <tr style="background:#fff">
+      <td width="18%" style="font-weight:700;border:1px solid #ddd;padding:4px 6px">Rest. Estadual 01</td>
+      <td width="32%" style="border:1px solid #ddd;padding:4px 6px;color:${cor(rest1)};font-weight:700">${rest1}</td>
+      <td width="15%" style="font-weight:700;border:1px solid #ddd;padding:4px 6px">$ Licenciamento</td>
+      <td style="border:1px solid #ddd;padding:4px 6px">${moeda(p.licenciamento)}</td>
+    </tr>
+    <tr style="background:#f7f7f7">
+      <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">Rest. Estadual 02</td>
+      <td style="border:1px solid #ddd;padding:4px 6px;color:${cor(rest2)};font-weight:700">${rest2}</td>
+      <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">$ IPVA</td>
+      <td style="border:1px solid #ddd;padding:4px 6px">${moeda(p.ipva)}</td>
+    </tr>
+    <tr style="background:#fff">
+      <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">Rest. Estadual 03</td>
+      <td style="border:1px solid #ddd;padding:4px 6px;color:${cor(rest3)};font-weight:700">${rest3}</td>
+      <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">$ DPVAT</td>
+      <td style="border:1px solid #ddd;padding:4px 6px;color:#d97706;font-weight:700">${v(p.dpvat, 'NAODISPONIVEL')}</td>
+    </tr>
+    <tr style="background:#f7f7f7">
+      <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">Rest. Estadual 04</td>
+      <td style="border:1px solid #ddd;padding:4px 6px;color:${cor(rest4)};font-weight:700">${rest4}</td>
+      <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">$ MULTAS</td>
+      <td style="border:1px solid #ddd;padding:4px 6px">${moeda(p.multas ?? p.totalMultas)}</td>
+    </tr>
+    <tr style="background:#fff">
+      <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">Situação Veículo</td>
+      <td style="border:1px solid #ddd;padding:4px 6px;color:#16a34a;font-weight:700">${v(p.situacaoVeiculo, 'EM CIRCULACAO')}</td>
+      <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">Situação Chassi</td>
+      <td style="border:1px solid #ddd;padding:4px 6px;color:#16a34a;font-weight:700">${v(p.situacaoChassi, 'NORMAL')}</td>
+    </tr>
+  </table>
+
+  <p style="font-size:8px;color:#555;line-height:1.5;margin-bottom:8px">
+    ATENÇÃO: Informações de multas, débitos e restrições apresentadas podem conter divergência em razão de critérios regionais dos Órgãos de Trânsito,
+    por isso, recomendamos que consulte SEMPRE o site do DETRAN e SECRETARIA DA FAZENDA, pois cada estado possui características distintas
+  </p>
+
+  ${footer()}
+</div>`
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PÁGINA 2 — alterações, restrições, roubo, gravame
+════════════════════════════════════════════════════════════════════════════ */
+function pag2(placa: string, data: any, agora: string, proto: string): string {
+  const p    = data.placa ?? {}
+  const grav = data.gravame ?? {}
+  const mm   = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
+  const j    = JSON.stringify(data).toUpperCase()
+
+  const temRenajud   = j.includes('RENAJUD')
+  const temAlienacao = j.includes('ALIEN')
+  const temRoubo     = j.includes('ROUBO') && !j.includes('NADA CONSTA')
+
+  const rest1 = v(p.restricaoEstadual01, 'NADA CONSTA')
+  const rest2 = v(p.restricaoEstadual02, temRenajud ? 'RENAJUD' : 'NADA CONSTA')
+  const rest3 = v(p.restricaoEstadual03, temAlienacao ? 'ALIENACAO FIDUCIARIA' : 'NADA CONSTA')
+  const rest4 = v(p.restricaoEstadual04, 'SEM RESTRICAO')
+
+  const gravames: any[] = Array.isArray(grav.gravames) ? grav.gravames : []
+
+  return `
+<div class="pg">
+  ${header(agora, proto, '2')}
+  ${banner(mm, placa)}
+
+  ${secTitle('Alterações de Caracteristicas')}
+  <table width="100%" cellpadding="4" cellspacing="0"
+         style="border-collapse:collapse;font-size:9.5px;margin-bottom:10px">
+    <tr>
+      <th style="font-weight:700;background:#f0f0f0;border:1px solid #ddd;padding:4px 6px;text-align:left;width:18%">ITEM</th>
+      <th style="font-weight:700;background:#f0f0f0;border:1px solid #ddd;padding:4px 6px;text-align:left;width:30%">Fábrica</th>
+      <th style="font-weight:700;background:#f0f0f0;border:1px solid #ddd;padding:4px 6px;text-align:left;width:30%">Atual</th>
+      <th style="font-weight:700;background:#f0f0f0;border:1px solid #ddd;padding:4px 6px;text-align:left;width:22%">Resultado</th>
+    </tr>
+    ${[
+      ['Chassi',      v(p.chassi), v(p.chassi)],
+      ['Motor',       v(p.motor ?? p.numeroMotor), v(p.motor ?? p.numeroMotor)],
+      ['Cor',         v(p.cor), v(p.cor)],
+      ['Combustível', v(p.combustivel), v(p.combustivel)],
+    ].map(([item, fab, atual], i) => `
+    <tr style="background:${i % 2 === 0 ? '#fff' : '#f7f7f7'}">
+      <td style="border:1px solid #ddd;padding:4px 6px">${item}</td>
+      <td style="border:1px solid #ddd;padding:4px 6px;font-family:monospace;font-size:9px">${fab}</td>
+      <td style="border:1px solid #ddd;padding:4px 6px;font-family:monospace;font-size:9px">${atual}</td>
+      <td style="border:1px solid #ddd;padding:4px 6px;color:#16a34a;font-weight:700">Sem Alterações</td>
+    </tr>`).join('')}
+  </table>
+
+  <p style="font-size:10px;font-weight:700;border-bottom:1.5px solid #444;padding-bottom:3px;margin:10px 0 6px;text-transform:uppercase">Restrições</p>
+  <table width="100%" cellpadding="4" cellspacing="0"
+         style="border-collapse:collapse;font-size:9.5px;margin-bottom:10px">
+    <tr>
+      <td width="18%" style="font-weight:700;border:1px solid #ddd;padding:5px 6px">Restricao 01</td>
+      <td width="32%" style="border:1px solid #ddd;padding:5px 6px;color:${cor(rest1)};font-weight:700">${rest1}</td>
+      <td width="18%" style="font-weight:700;border:1px solid #ddd;padding:5px 6px">Restricao 03</td>
+      <td style="border:1px solid #ddd;padding:5px 6px;color:${cor(rest3)};font-weight:700">${rest3}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:700;border:1px solid #ddd;padding:5px 6px">Restricao 02</td>
+      <td style="border:1px solid #ddd;padding:5px 6px;color:${cor(rest2)};font-weight:700">${rest2}</td>
+      <td style="font-weight:700;border:1px solid #ddd;padding:5px 6px">Restricao 04</td>
+      <td style="border:1px solid #ddd;padding:5px 6px;color:${cor(rest4)};font-weight:700">${rest4}</td>
+    </tr>
+  </table>
+
+  ${secTitle('Histórico de Roubo e Furto')}
+  <p style="font-size:10px;font-weight:700;color:${temRoubo ? '#dc2626' : '#16a34a'};margin-bottom:4px">
+    ${temRoubo ? 'CONSTA OCORRÊNCIA' : 'NADA CONSTA'}
+  </p>
+  ${tabelaGen(
+    ['Data Ocorrência', 'Órgão', 'Boletim', 'Município', 'Ocorrência'],
+    []
+  )}
+
+  ${secTitle('Histórico de Gravame')}
+  ${tabelaGen(
+    ['Data', 'UF', 'Situação', 'Status', 'Nome'],
+    gravames.length > 0
+      ? gravames.map((g: any) => [
+          v(g.data ?? g.dataInclusao, '---'),
+          v(g.uf, '---'),
+          v(g.situacao, '---'),
+          v(g.status ?? g.situacao, '---'),
+          v(g.nome ?? g.agente ?? g.nomeFinanciador, '---'),
+        ])
+      : []
+  )}
+
+  ${footer()}
+</div>`
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PÁGINA 3 — sinistro, leilão (3 bases), chassi
+════════════════════════════════════════════════════════════════════════════ */
+function pag3(placa: string, data: any, agora: string, proto: string): string {
+  const p  = data.placa ?? {}
+  const cd = data.chassi ?? {}
+  const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
+  const j  = JSON.stringify(data).toUpperCase()
+
+  const temSinistro = j.includes('SINISTRO') && !j.includes('NADA CONSTA')
+  const temLeilao   = j.includes('LOTE') || (j.includes('LEILÃO') && !j.includes('NADA CONSTA'))
+
+  const leilaoVazio: string[][] = []
+  const leilHdr = ['Data', 'Lote', 'Veiculo', 'Placa', 'Chassi', 'Condição do Veículo']
+
+  function leilaoResult(ok: boolean) {
+    return `<span style="font-weight:700;color:${ok ? '#16a34a' : '#dc2626'}">${ok ? 'NADA CONSTA' : 'CONSTA'}</span>`
+  }
+
+  return `
+<div class="pg">
+  ${header(agora, proto, '3')}
+  ${banner(mm, placa)}
+
+  ${secTitle('Indício de Sinistro')}
+  <p style="font-size:10px;font-weight:700;color:${temSinistro ? '#dc2626' : '#16a34a'};margin-bottom:4px">
+    ${temSinistro ? 'CONSTA INDÍCIO' : 'NADA CONSTA'}
+  </p>
+  <p style="font-size:8.5px;color:#555;margin-bottom:8px;line-height:1.5">
+    ATENÇÃO: ESTA INFORMAÇÃO REPRESENTA INDÍCIOS BASEADOS EM FONTES DE DADOS.<br>
+    REALIZE UMA VISTORIA FÍSICA NO VEÍCULO PARA GARANTIR QUALQUER EVIDÊNCIA DE ACIDENTES E RESPECTIVOS IMPACTOS.
+  </p>
+
+  <p style="font-size:10px;font-weight:700;text-transform:uppercase;
+            border-bottom:1.5px solid #444;padding-bottom:3px;margin:8px 0 4px">
+    HISTÓRICO DE LEILÃO BASE A:&nbsp;${leilaoResult(!temLeilao)}
+  </p>
+  ${tabelaGen(leilHdr, leilaoVazio)}
+
+  <p style="font-size:10px;font-weight:700;text-transform:uppercase;
+            border-bottom:1.5px solid #444;padding-bottom:3px;margin:8px 0 4px">
+    HISTÓRICO DE LEILÃO BASE B:&nbsp;${leilaoResult(!temLeilao)}
+  </p>
+  ${tabelaGen(leilHdr, leilaoVazio)}
+
+  <p style="font-size:10px;font-weight:700;text-transform:uppercase;
+            border-bottom:1.5px solid #444;padding-bottom:3px;margin:8px 0 4px">
+    HISTÓRICO DE REMARKETING:&nbsp;${leilaoResult(!temLeilao)}
+  </p>
+  ${tabelaGen(leilHdr, leilaoVazio)}
+  <p style="font-size:8px;color:#555;margin-bottom:8px">
+    *Remarketing automotivo contempla um evento onde o proprietário do veículo opta por realizar a venda de seu veículo utilizando a plataforma de um leiloeiro privado
+  </p>
+
+  ${secTitle('Decodificador de Chassi')}
+  <table width="100%" cellpadding="4" cellspacing="0"
+         style="border-collapse:collapse;font-size:9.5px;margin-bottom:6px">
+    <tr style="background:#fff">
+      <td width="20%" style="font-weight:700;border:1px solid #ddd;padding:4px 6px">Ident. Completa</td>
+      <td colspan="3" style="border:1px solid #ddd;padding:4px 6px">${v(cd.identificacaoCompleta ?? cd.ident)}</td>
+    </tr>
+    ${[
+      ['Chave Chassi', v(cd.chaveChasse ?? cd.chaveChassi ?? v(p.chassi).slice(0,10)), 'Fabricante', v(cd.fabricante)],
+      ['Modelo',       v(cd.modelo),          'Veículo',        v(cd.veiculo)],
+      ['Portas',       v(cd.portas),           'Motor',          v(cd.motorDesc ?? cd.motor)],
+      ['Transmissão',  v(cd.transmissao),      'Tipo Motor',     v(cd.tipoMotor, '')],
+      ['Ano',          v(cd.ano),              'Combustível',    v(cd.combustivel)],
+      ['Região',       v(cd.regiao),           'Carroceria',     v(cd.carroceria)],
+      ['País/Local',   v(cd.pais ?? cd.local), 'Verif. Serial',  v(cd.verificacaoSerial, 'OK')],
+      ['Cód. Fipe',    v(cd.codigoFipe),       'Qtde Eixos',     v(cd.eixos ?? cd.qtdEixos, '')],
+    ].map(([l1,v1,l2,v2], i) => `
+    <tr style="background:${i % 2 === 0 ? '#f7f7f7' : '#fff'}">
+      <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">${l1}</td>
+      <td style="border:1px solid #ddd;padding:4px 6px">${v1}</td>
+      <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">${l2}</td>
+      <td style="border:1px solid #ddd;padding:4px 6px">${v2}</td>
+    </tr>`).join('')}
+  </table>
+
+  ${footer()}
+</div>`
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PÁGINA 4 — informações adicionais
+════════════════════════════════════════════════════════════════════════════ */
+function pag4(placa: string, data: any, agora: string, proto: string): string {
+  const p  = data.placa ?? {}
+  const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
+  const j  = JSON.stringify(data).toUpperCase()
+  const temRenajud = j.includes('RENAJUD')
+  const temRoubo   = j.includes('ROUBO') && !j.includes('NADA CONSTA')
+
+  const infos: [string, string, string][] = [
+    ['MULTAS DETRAN',        `R$ ${moeda(p.multas ?? p.totalMultas)}`, '#16a34a'],
+    ['IPVALicenciamento',    moeda(p.ipva),                            '#16a34a'],
+    ['OBS GERAIS',           v(p.obsGerais, 'NADA CONSTA'),            '#16a34a'],
+    ['debitos',              v(p.debitos, 'Sem débitos'),               '#16a34a'],
+    ['Ocorrência',
+     temRoubo ? 'VEICULO INDICA OCORRENCIA DE ROUBO/FURTO' : 'VEICULO NAO INDICA OCORRENCIA DE ROUBO/FURTO',
+     temRoubo ? '#dc2626' : '#16a34a'],
+    ['REST. JUDICIAL',
+     temRenajud ? 'CONSTA RESTRIÇÃO RENAJUD' : 'NADA CONSTA',
+     temRenajud ? '#dc2626' : '#16a34a'],
+    ['DATA EMISSAO CRV',     v(p.dataEmissaoCrv ?? p.dataEmissao),    '#1a1a1a'],
+    ['AVISO MULTA/RENAINF',  'Sempre Verifique os sites do DETRAN e outros órgãos para confirmar a lista de multas/autuações', '#555'],
+  ]
+
+  return `
+<div class="pg">
+  ${header(agora, proto, '4')}
+  ${banner(mm, placa)}
+
+  ${secTitle('Informações Adicionais')}
+  <table width="100%" cellpadding="4" cellspacing="0"
+         style="border-collapse:collapse;font-size:9.5px;margin-bottom:6px">
+    <tr>
+      <th style="font-weight:700;background:#f0f0f0;border:1px solid #ddd;padding:4px 6px;
+                 text-align:left;width:25%">Informação</th>
+      <th style="font-weight:700;background:#f0f0f0;border:1px solid #ddd;padding:4px 6px;
+                 text-align:left">Valor</th>
+    </tr>
+    ${infos.map(([info, val, c], i) => `
+    <tr style="background:${i % 2 === 0 ? '#fff' : '#f7f7f7'}">
+      <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">${info}</td>
+      <td style="border:1px solid #ddd;padding:4px 6px;color:${c};font-weight:700">${val}</td>
+    </tr>`).join('')}
+  </table>
+
+  ${footer()}
+</div>`
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PÁGINA EXTRA — tabela FIPE
+════════════════════════════════════════════════════════════════════════════ */
+function pagFipe(placa: string, data: any, agora: string, proto: string): string {
+  const p    = data.placa ?? {}
+  const fipe = data.fipe  ?? {}
+  const cd   = data.chassi ?? {}
+  const mm   = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
+
+  const fipeAtual     = fipe.preco ?? fipe.valorFipe ?? null
+  const historico24: any[] = Array.isArray(fipe.historico) ? fipe.historico : []
+  const historicoAnual: any[] = Array.isArray(fipe.historicoAnual) ? fipe.historicoAnual : []
+  const codigoFipe    = v(cd.codigoFipe ?? fipe.codigoFipe ?? fipe.codigo, '')
+  const descricao     = v(fipe.descricao ?? fipe.modelo ?? mm)
+
+  if (!fipeAtual && historico24.length === 0 && historicoAnual.length === 0) return ''
+
+  const metade = Math.ceil(historico24.length / 2)
+  const col1   = historico24.slice(0, metade)
+  const col2   = historico24.slice(metade)
+
+  return `
+<div class="pg">
+  ${header(agora, proto, 'Extra')}
+  ${banner(mm, placa)}
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px">
+    <tr>
+      <td valign="top">
+        <p style="font-size:9.5px;color:#333;margin-bottom:6px">${descricao}${codigoFipe ? ` (${codigoFipe})` : ''}</p>
+        ${fipeAtual ? `
+        <table cellpadding="2" cellspacing="0" style="font-size:9.5px;margin-bottom:8px">
+          <tr>
+            <td style="font-weight:700;padding-right:8px">Atual</td>
+            <td style="color:#d97706;font-weight:700;font-size:11px">R$ ${moeda(fipeAtual)}</td>
+          </tr>
+        </table>` : ''}
+        ${historicoAnual.map((h: any) => `
+        <table cellpadding="2" cellspacing="0" style="font-size:9px;margin-bottom:1px">
+          <tr>
+            <td style="font-weight:700;padding-right:8px;width:40px">${v(h.ano)}</td>
+            <td>R$ ${moeda(h.valor ?? h.preco)} - ${v(h.variacao ?? h.variPercent, '')}</td>
+          </tr>
+        </table>`).join('')}
+      </td>
+      <td width="100" align="right" valign="top">
+        <span style="font-size:11px;font-weight:700;background:#f0f0f0;border:1px solid #ccc;
+          padding:3px 10px">TABELA FIPE</span>
+      </td>
+    </tr>
+  </table>
+
+  ${historico24.length > 0 ? `
+  <p style="font-size:10px;font-weight:700;margin:10px 0 6px">Histórico Últimos 24 meses:</p>
+  <table width="100%" cellpadding="3" cellspacing="0"
+         style="border-collapse:collapse;font-size:9px">
+    <tr>
+      <th style="background:#f0f0f0;border:1px solid #ddd;padding:3px 5px;width:11%">Mês</th>
+      <th style="background:#f0f0f0;border:1px solid #ddd;padding:3px 5px;width:15%">Valor</th>
+      <th style="background:#f0f0f0;border:1px solid #ddd;padding:3px 5px;width:11%">% Mês Ant.</th>
+      <th style="background:#f0f0f0;border:1px solid #ddd;padding:3px 5px;width:11%">% Acum.</th>
+      <td style="border:none;width:2%"></td>
+      <th style="background:#f0f0f0;border:1px solid #ddd;padding:3px 5px;width:11%">Mês</th>
+      <th style="background:#f0f0f0;border:1px solid #ddd;padding:3px 5px;width:15%">Valor</th>
+      <th style="background:#f0f0f0;border:1px solid #ddd;padding:3px 5px;width:11%">% Mês Ant.</th>
+      <th style="background:#f0f0f0;border:1px solid #ddd;padding:3px 5px;width:11%">% Acum.</th>
+    </tr>
+    ${col1.map((h: any, i: number) => {
+      const h2 = col2[i]
+      return `
+    <tr style="background:${i % 2 === 0 ? '#fff' : '#f7f7f7'}">
+      <td style="border:1px solid #ddd;padding:3px 5px">${v(h.mes ?? h.mesReferencia, '---')}</td>
+      <td style="border:1px solid #ddd;padding:3px 5px">R$ ${moeda(h.valor ?? h.preco)}</td>
+      <td style="border:1px solid #ddd;padding:3px 5px">${v(h.varMes ?? h.variacao, '---')}</td>
+      <td style="border:1px solid #ddd;padding:3px 5px">${v(h.varAcumulada ?? h.acumulada, '---')}</td>
+      <td style="border:none"></td>
+      ${h2 ? `
+      <td style="border:1px solid #ddd;padding:3px 5px">${v(h2.mes ?? h2.mesReferencia, '---')}</td>
+      <td style="border:1px solid #ddd;padding:3px 5px">R$ ${moeda(h2.valor ?? h2.preco)}</td>
+      <td style="border:1px solid #ddd;padding:3px 5px">${v(h2.varMes ?? h2.variacao, '---')}</td>
+      <td style="border:1px solid #ddd;padding:3px 5px">${v(h2.varAcumulada ?? h2.acumulada, '---')}</td>
+      ` : '<td></td><td></td><td></td><td></td>'}
+    </tr>`}).join('')}
+  </table>` : ''}
+
+  ${footer()}
+</div>`
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PÁGINA FICHA — ficha técnica
+════════════════════════════════════════════════════════════════════════════ */
+function pagFicha(placa: string, data: any, agora: string, proto: string): string {
+  const p  = data.placa ?? {}
+  const cd = data.chassi ?? {}
+  const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
+
+  const specs = [
+    ['Modelo',                   v(cd.identificacaoCompleta ?? mm)],
+    ['Pneus dianteiros',         v(cd.pneusDianteiros)],
+    ['Pneus traseiros',          v(cd.pneusTranseiros ?? cd.pneusDianteiros)],
+    ['Fabricante',               v(cd.fabricante)],
+    ['Velocidade maxima',        v(cd.velocidadeMaxima)],
+    ['Aceleracao 0-100 km/h',    v(cd.aceleracao)],
+    ['Potencia',                 v(cd.potencia ?? p.potencia)],
+    ['Torque',                   v(cd.torque)],
+    ['Consumo urbano',           v(cd.consumoUrbano)],
+    ['Consumo rodoviario',       v(cd.consumoRodoviario)],
+    ['Tanque de combustivel',    v(cd.tanque)],
+    ['Comprimento',              v(cd.comprimento)],
+    ['Largura',                  v(cd.largura)],
+    ['Altura',                   v(cd.altura)],
+    ['Distancia entre-eixos',    v(cd.entreEixos)],
+    ['Porta-malas',              v(cd.portaMalas)],
+    ['Peso',                     v(cd.peso)],
+    ['Cilindros',                v(cd.cilindros)],
+    ['Cilindrada',               v(cd.cilindrada ?? p.cilindradas)],
+    ['Cambio',                   v(cd.cambio ?? p.cambio ?? p.transmissao)],
+    ['Tracao',                   v(cd.tracao)],
+    ['Suspensao dianteira',      v(cd.suspensaoDianteira)],
+    ['Suspensao traseira',       v(cd.suspensaoTraseira)],
+    ['Freios dianteiros',        v(cd.freiosDianteiros)],
+    ['Freios traseiros',         v(cd.freiosTraseiros)],
+    ['Direcao',                  v(cd.direcao)],
+    ['Lugares',                  v(cd.lugares ?? p.passageiros ?? p.lotacao)],
+  ].filter(([, val]) => val !== 'Não Informado' && val !== '')
+
+  if (specs.length < 4) return ''
+
+  return `
+<div class="pg">
+  ${header(agora, proto, 'FICHA')}
+  ${banner(mm, placa)}
+
+  <p style="text-align:center;font-size:11px;font-weight:700;margin:10px 0 6px">
+    FICHA TÉCNICA MODELO APROXIMADO
+  </p>
+
+  <table width="100%" cellpadding="4" cellspacing="0"
+         style="border-collapse:collapse;font-size:9.5px">
+    ${specs.map(([label, val], i) => `
+    <tr style="background:${i % 2 === 0 ? '#fff' : '#f7f7f7'}">
+      <td width="40%" style="font-weight:700;text-align:right;border:1px solid #ddd;
+                              padding:4px 8px;color:#444">${label}</td>
+      <td style="border:1px solid #ddd;padding:4px 8px">${val}</td>
+    </tr>`).join('')}
+  </table>
+
+  ${footer()}
+</div>`
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PÁGINA 5 — considerações importantes
+════════════════════════════════════════════════════════════════════════════ */
+function pag5(placa: string, data: any, agora: string, proto: string): string {
+  const p  = data.placa ?? {}
+  const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
+  const n  = TENANT.nome
+
+  return `
+<div class="pg">
+  ${header(agora, proto, '5')}
+  ${banner(mm, placa)}
+
+  <p style="text-align:center;font-size:12px;font-weight:700;margin:12px 0 10px">
+    CONSIDERAÇÕES IMPORTANTES
+  </p>
+
+  <div style="font-size:9px;line-height:1.7;color:#222">
+    <p style="margin-bottom:8px">Esta CONSULTA VEICULAR não tem caráter pericial e, portanto, não substitui a perícia oficial. As informações constantes nesta CONSULTA VEICULAR têm validade apenas para o exato momento de sua realização, limitando-se a verificar as INFORMAÇÕES PÚBLICAS e histórico veicular, com a indicação de algumas não conformidades.</p>
+    <p style="margin-bottom:8px">A ${n} não se responsabiliza por informações publicadas posteriormente à emissão desta CONSULTA VEICULAR.</p>
+    <p style="margin-bottom:8px">A responsabilidade da ${n} limita-se a prestar informações sobre veículos automotores registradas nas bases públicas e privadas detentoras das informações.</p>
+    <p style="margin-bottom:8px">A ${n} não é responsável pelas informações inseridas na sua base de dados já que são oriundas de consulta às bases públicas e privadas sobre as quais não detém a propriedade das informações, limitando-se assim, a reproduzi-las fielmente. Da mesma forma, não se responsabiliza por informações incorretas, faltantes, ou divergentes de bases públicas e outras que não detenha as informações.</p>
+    <p style="margin-bottom:8px">A decisão por parte do CONTRATANTE sobre a concretização do negócio é tomada com riscos exclusivamente pelo CONTRATANTE com base em sua expertise, diretrizes e procedimentos particulares, dos quais a ${n} não participa.</p>
+    <p style="margin-bottom:8px">A ${n} não detém acesso e meios para a obtenção de informações advinda do SNG e RENAJUD, logo qualquer informação exclusiva destes órgãos não caracterizam erro na prestação de serviços. Existem situações como a intenção de gravame que não aparece para consulta pública.</p>
+    <p style="margin-bottom:8px">Para as informações de Histórico de Leilão, o CONTRATANTE deve utilizar as informações de oferta em leilão com caráter informativo no seu processo de negociação. A informação de leilão não é uma afirmação que o veículo tenha sido efetivamente arrematado em leilão, podendo ser apenas designação sem contudo se efetivar em face da possibilidade de remição do devedor.</p>
+    <p style="margin-bottom:8px">A CONSULTA VEICULAR não verifica itens de mecânica, elétrica, transmissão, suspensão e freios, nem nenhum outro item que não tenha sido discriminado como verificado na consulta.</p>
+    <p>Existem diversas situações em que os órgãos municipais, estaduais e federais realizam lançamento de multas e débitos retroativamente sem nenhum aviso. Em muitos casos uma multa pode surgir anos depois da data da infração inclusive para proprietário diferente. Desta forma a ${n} não se responsabiliza por multas e demais débitos retroativos lançados pelo próprio órgão competente.</p>
+  </div>
+
+  ${footer()}
+</div>`
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   BUILD HTML COMPLETO
+════════════════════════════════════════════════════════════════════════════ */
+function buildHtml(placa: string, data: any): string {
+  const agora = new Date().toLocaleString('pt-BR')
+  const proto = protocolo()
+
+  const pg1    = pag1(placa, data, agora, proto)
+  const pg2    = pag2(placa, data, agora, proto)
+  const pg3    = pag3(placa, data, agora, proto)
+  const pg4    = pag4(placa, data, agora, proto)
+  const pgFipe = pagFipe(placa, data, agora, proto)
+  const pgFich = pagFicha(placa, data, agora, proto)
+  const pg5    = pag5(placa, data, agora, proto)
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:Arial,Helvetica,sans-serif; font-size:10px; color:#1a1a1a; background:#fff; }
+.pg { width:210mm; min-height:297mm; padding:10mm 12mm 8mm; page-break-after:always; }
+.pg:last-child { page-break-after:auto; }
+p { margin:0; }
+</style>
+</head>
+<body>
+${pg1}
+${pg2}
+${pg3}
+${pg4}
+${pgFipe}
+${pgFich}
+${pg5}
+</body>
+</html>`
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ROUTE HANDLER
+════════════════════════════════════════════════════════════════════════════ */
+export async function GET(
+  req: NextRequest,
+  context: { params: Promise<{ placa: string }> }
+) {
+  const { placa: placaParam } = await context.params
+  const placa = placaParam.toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+  if (!placa || placa.length < 7) {
+    return NextResponse.json({ error: 'Placa inválida' }, { status: 400 })
+  }
+
+  try {
+    const data = await consultarVeiculo(placa)
+    const html = buildHtml(placa, data)
+
+    let pdfBuffer: Buffer | null = null
+    try {
+      const puppeteer = await import('puppeteer-core')
+      const browser = await puppeteer.default.launch({
+        executablePath: '/usr/bin/chromium-browser',
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        headless: true,
+      })
+      const page = await browser.newPage()
+      await page.setContent(html, { waitUntil: 'networkidle0' })
+      pdfBuffer = Buffer.from(await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: '0', right: '0', bottom: '0', left: '0' },
+      }))
+      await browser.close()
+    } catch { /* fallback para HTML */ }
+
+    if (pdfBuffer) {
+      return new NextResponse(pdfBuffer as BodyInit, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="ficha-${placa}.pdf"`,
+        },
+      })
+    }
+    return new NextResponse(html, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}

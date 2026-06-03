@@ -1,37 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { consultarVeiculo } from '@/lib/providers'
-import { calcularScore } from '@/lib/score'
 
 export async function POST(req: NextRequest) {
   try {
     const { placa, chassi } = await req.json()
-    const input = placa ?? chassi
-    const tipo  = placa ? 'placa' : 'chassi'
+    const input = (placa ?? chassi ?? '').trim()
 
     if (!input) {
       return NextResponse.json({ error: 'Placa ou chassi obrigatório' }, { status: 400 })
     }
 
     // TODO: verificar autenticação (Supabase session)
-    // TODO: verificar saldo de consultas do usuário
-    // TODO: debitar 1 consulta do saldo
+    // TODO: verificar e debitar saldo de consultas
 
-    const { provider, data } = await consultarVeiculo(input, tipo)
-
-    // Calcular score de risco
-    const { score, nivel, fatores } = calcularScore(data)
+    const resultado = await consultarVeiculo(
+      placa  ? input : '',
+      chassi ? input : undefined,
+    )
 
     // TODO: salvar resultado no Supabase (consultations table)
-    // TODO: salvar em cache (vehicles_cache) para evitar re-consulta
 
-    return NextResponse.json({
-      success: true,
-      provider,
-      score,
-      nivel,
-      fatores,
-      data,
-    })
+    return NextResponse.json({ success: true, ...resultado })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

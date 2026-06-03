@@ -6,15 +6,30 @@ import { Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react'
 export default function LoginPage() {
   const [show, setShow]       = useState(false)
   const [loading, setLoading] = useState(false)
+  const [erro, setErro]       = useState('')
   const [form, setForm]       = useState({ email: '', password: '' })
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setErro('')
     setLoading(true)
-    // TODO: integrar Supabase Auth
-    await new Promise(r => setTimeout(r, 1000))
-    setLoading(false)
-    window.location.href = '/dashboard/consultar'
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email, senha: form.password }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setErro(data.erro ?? 'Erro ao fazer login.')
+        setLoading(false)
+        return
+      }
+      window.location.href = '/dashboard/consultar'
+    } catch {
+      setErro('Erro de conexão. Tente novamente.')
+      setLoading(false)
+    }
   }
 
   return (
@@ -57,6 +72,12 @@ export default function LoginPage() {
               <span className="bg-white px-3 text-xs text-brand-gray">Ou acesse com seu e-mail</span>
             </div>
           </div>
+
+          {erro && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-2">
+              {erro}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -144,7 +165,7 @@ export default function LoginPage() {
             Proteja-se contra<br />fraudes e sinistros<br />veiculares.
           </h2>
           <p className="text-white/75 text-lg mb-8 max-w-sm">
-            Consulte histórico completo do veículo — leilão, gravame, roubo e sinistros — antes de comprar ou acionar o seguro.
+            Consulte histórico completo do veículo — leilão, gravame, roubo e sinistros — antes de comprar ou aprovar qualquer indenização.
           </p>
           <div className="space-y-3">
             {[
