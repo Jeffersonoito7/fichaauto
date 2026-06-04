@@ -134,24 +134,31 @@ export default function RelatorioPage() {
   const score  = calcScore(data)
   const agora  = new Date().toLocaleString('pt-BR')
 
+  // Suporte à resposta aninhada v3 da Assertiva
+  const pDesc  = p.resposta?.descricao     ?? p
+  const pIdent = p.resposta?.identificadores ?? p
+  const pMov   = p.resposta?.movimentacao  ?? p
+  const pRestr = p.resposta?.restricoes    ?? p
+  const pFicha = p.resposta?.fichaTecnica  ?? {}
+
   const restricoes = [
-    { label: 'Restrição Estadual 01', valor: val(p.restricaoEstadual01 ?? p.rest01 ?? 'NADA CONSTA'), ok: !(p.restricaoEstadual01 ?? '').toString().toUpperCase().includes('CONSTA') === false },
-    { label: 'Restrição Estadual 02', valor: val(p.restricaoEstadual02 ?? p.rest02 ?? 'RENAJUD'),      ok: false },
-    { label: 'Restrição Estadual 03', valor: val(p.restricaoEstadual03 ?? p.rest03 ?? 'NADA CONSTA'), ok: true },
-    { label: 'Restrição Estadual 04', valor: val(p.restricaoEstadual04 ?? p.rest04 ?? 'NADA CONSTA'), ok: true },
+    { label: 'Restrição Estadual 01', valor: val(pRestr.restricaoEstadual01 ?? pRestr.rest01 ?? 'NADA CONSTA'), ok: !(pRestr.restricaoEstadual01 ?? '').toString().toUpperCase().includes('CONSTA') === false },
+    { label: 'Restrição Estadual 02', valor: val(pRestr.restricaoEstadual02 ?? pRestr.rest02 ?? 'NADA CONSTA'), ok: true },
+    { label: 'Restrição Estadual 03', valor: val(pRestr.restricaoEstadual03 ?? pRestr.rest03 ?? 'NADA CONSTA'), ok: true },
+    { label: 'Restrição Estadual 04', valor: val(pRestr.restricaoEstadual04 ?? pRestr.rest04 ?? 'NADA CONSTA'), ok: true },
   ]
 
-  const temRenajud   = JSON.stringify(p).toUpperCase().includes('RENAJUD')
-  const temAlienacao = JSON.stringify(p).toUpperCase().includes('ALIEN')
+  const temRenajud   = JSON.stringify(pRestr).toUpperCase().includes('RENAJUD')
+  const temAlienacao = JSON.stringify(pRestr).toUpperCase().includes('ALIEN')
   const temSinistro  = JSON.stringify(sin).toUpperCase().includes('CONSTA') && !JSON.stringify(sin).toUpperCase().includes('NADA CONSTA')
   const temRoubo     = JSON.stringify(bin).toUpperCase().includes('ROUBO') && !JSON.stringify(bin).toUpperCase().includes('NADA CONSTA')
   const temLeilao    = JSON.stringify(lei).toUpperCase().includes('LOTE')
 
-  const marcaModelo = val(p.marcaModelo ?? p.marca ?? p.modelo ?? 'Veículo')
-  const placa       = val(p.placa ?? id)
-  const ano         = val(p.anoFabricacao ?? p.ano ?? '')
-  const anoModelo   = val(p.anoModelo ?? '')
-  const anoStr      = ano && anoModelo ? `${ano}/${anoModelo}` : val(p.anoFabricacao ?? p.ano ?? '')
+  const marcaModelo = val(pDesc.marcaModelo ?? pDesc.marca ?? pDesc.modelo ?? 'Veículo')
+  const placa       = val(pIdent.placa ?? id)
+  const ano         = val(pDesc.anoFabricacao ?? pDesc.ano ?? '')
+  const anoModelo   = val(pDesc.anoModelo ?? '')
+  const anoStr      = ano && anoModelo ? `${ano}/${anoModelo}` : val(pDesc.anoFabricacao ?? pDesc.ano ?? '')
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -221,15 +228,15 @@ export default function RelatorioPage() {
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {[
-              ['Placa',         val(p.placa ?? id)],
-              ['Marca/Modelo',  val(p.marcaModelo ?? p.marca)],
+              ['Placa',         val(pIdent.placa ?? id)],
+              ['Marca/Modelo',  val(pDesc.marcaModelo ?? pDesc.marca)],
               ['Ano',           anoStr],
-              ['Cor',           val(p.cor)],
-              ['Renavam',       val(p.renavam)],
-              ['Chassi',        val(p.chassi)],
-              ['Motor',         val(p.motor ?? p.numeroMotor)],
-              ['Município/UF',  val(p.municipio ?? p.uf)],
-              ['Combustível',   val(p.combustivel)],
+              ['Cor',           val(pDesc.cor)],
+              ['Renavam',       val(pIdent.renavam)],
+              ['Chassi',        val(pIdent.chassi)],
+              ['Motor',         val(pIdent.numeroMotor ?? pIdent.motor)],
+              ['Município/UF',  val(pMov.municipio && pMov.uf ? `${pMov.municipio}/${pMov.uf}` : pMov.municipio ?? pMov.uf)],
+              ['Combustível',   val(pDesc.combustivel)],
             ].map(([label, valor]) => (
               <div key={label}>
                 <p className="text-xs text-brand-gray">{label}</p>
@@ -262,7 +269,7 @@ export default function RelatorioPage() {
           </div>
           <div className="mt-2 p-3 bg-brand-green-light rounded-lg flex items-center justify-between">
             <span className="text-xs font-medium text-brand-gray">Situação do Veículo</span>
-            <span className="text-xs font-bold text-brand-green">{val(p.situacaoVeiculo ?? 'EM CIRCULAÇÃO')}</span>
+            <span className="text-xs font-bold text-brand-green">{val(pMov.situacao ?? pMov.situacaoVeiculo ?? 'EM CIRCULAÇÃO')}</span>
           </div>
         </div>
 
