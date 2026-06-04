@@ -195,7 +195,7 @@ function tabelaGen(cols: string[], linhas: string[][]): string {
    PÁGINA 1 — identificação, características, débitos
 ════════════════════════════════════════════════════════════════════════════ */
 function pag1(placa: string, data: any, agora: string, proto: string): string {
-  const p = data.placa ?? {}
+  const p = normalizaPlacaV3(data.placa)
   const j = JSON.stringify(data).toUpperCase()
 
   const temRenajud          = j.includes('RENAJUD')
@@ -314,8 +314,7 @@ function pag1(placa: string, data: any, agora: string, proto: string): string {
    PÁGINA 2 — alterações, restrições, roubo, gravame
 ════════════════════════════════════════════════════════════════════════════ */
 function pag2(placa: string, data: any, agora: string, proto: string): string {
-  const p    = data.placa ?? {}
-  const grav = data.gravame ?? {}
+  const p    = normalizaPlacaV3(data.placa)
   const mm   = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
   const j    = JSON.stringify(data).toUpperCase()
 
@@ -328,7 +327,7 @@ function pag2(placa: string, data: any, agora: string, proto: string): string {
   const rest3 = v(p.restricaoEstadual03, temAlienacao ? 'ALIENACAO FIDUCIARIA' : 'NADA CONSTA')
   const rest4 = v(p.restricaoEstadual04, 'SEM RESTRICAO')
 
-  const gravames: any[] = Array.isArray(grav.gravames) ? grav.gravames : []
+  const gravames: any[] = normalizaGravameV3(data.gravame)
 
   return `
 <div class="pg">
@@ -406,7 +405,7 @@ function pag2(placa: string, data: any, agora: string, proto: string): string {
    PÁGINA 3 — sinistro, leilão (3 bases), chassi
 ════════════════════════════════════════════════════════════════════════════ */
 function pag3(placa: string, data: any, agora: string, proto: string): string {
-  const p  = data.placa ?? {}
+  const p  = normalizaPlacaV3(data.placa)
   const cd = data.chassi ?? {}
   const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
   const j  = JSON.stringify(data).toUpperCase()
@@ -489,7 +488,7 @@ function pag3(placa: string, data: any, agora: string, proto: string): string {
    PÁGINA 4 — informações adicionais
 ════════════════════════════════════════════════════════════════════════════ */
 function pag4(placa: string, data: any, agora: string, proto: string): string {
-  const p  = data.placa ?? {}
+  const p  = normalizaPlacaV3(data.placa)
   const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
   const j  = JSON.stringify(data).toUpperCase()
   const temRenajud = j.includes('RENAJUD')
@@ -539,7 +538,7 @@ function pag4(placa: string, data: any, agora: string, proto: string): string {
    PÁGINA EXTRA — tabela FIPE
 ════════════════════════════════════════════════════════════════════════════ */
 function pagFipe(placa: string, data: any, agora: string, proto: string): string {
-  const p    = data.placa ?? {}
+  const p    = normalizaPlacaV3(data.placa)
   const fipe = data.fipe  ?? {}
   const cd   = data.chassi ?? {}
   const mm   = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
@@ -628,7 +627,7 @@ function pagFipe(placa: string, data: any, agora: string, proto: string): string
    PÁGINA FICHA — ficha técnica
 ════════════════════════════════════════════════════════════════════════════ */
 function pagFicha(placa: string, data: any, agora: string, proto: string): string {
-  const p  = data.placa ?? {}
+  const p  = normalizaPlacaV3(data.placa)
   const cd = data.chassi ?? {}
   const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
 
@@ -691,7 +690,7 @@ function pagFicha(placa: string, data: any, agora: string, proto: string): strin
    PÁGINA 5 — considerações importantes
 ════════════════════════════════════════════════════════════════════════════ */
 function pag5(placa: string, data: any, agora: string, proto: string): string {
-  const p  = data.placa ?? {}
+  const p  = normalizaPlacaV3(data.placa)
   const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
   const n  = TENANT.nome
 
@@ -718,6 +717,65 @@ function pag5(placa: string, data: any, agora: string, proto: string): string {
 
   ${footer()}
 </div>`
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   NORMALIZAÇÃO — achata resposta aninhada v3 da Assertiva
+════════════════════════════════════════════════════════════════════════════ */
+function normalizaPlacaV3(raw: any): any {
+  if (!raw) return {}
+  const desc  = raw.resposta?.descricao     ?? {}
+  const ident = raw.resposta?.identificadores ?? {}
+  const mov   = raw.resposta?.movimentacao   ?? {}
+  const restr = raw.resposta?.restricoes     ?? {}
+  const ficha = raw.resposta?.fichaTecnica   ?? {}
+  return {
+    ...raw,
+    // identificação
+    marcaModelo:         desc.marcaModelo     ?? raw.marcaModelo,
+    marca:               desc.marcaModelo     ?? raw.marca,
+    anoFabricacao:       desc.anoFabricacao   ?? raw.anoFabricacao,
+    anoModelo:           desc.anoModelo       ?? raw.anoModelo,
+    cor:                 desc.cor             ?? raw.cor,
+    combustivel:         desc.combustivel     ?? raw.combustivel,
+    especie:             desc.especie         ?? raw.especie,
+    procedencia:         desc.procedencia     ?? raw.procedencia,
+    // identificadores
+    chassi:              ident.chassi         ?? raw.chassi,
+    renavam:             ident.renavam        ?? raw.renavam,
+    motor:               ident.numeroMotor    ?? raw.motor ?? raw.numeroMotor,
+    numeroMotor:         ident.numeroMotor    ?? raw.numeroMotor,
+    numCarroceria:       ident.numeroCarroceria ?? raw.numCarroceria,
+    // movimentação
+    municipio:           mov.municipio        ?? raw.municipio,
+    uf:                  mov.uf               ?? raw.uf,
+    situacaoVeiculo:     mov.situacao         ?? raw.situacaoVeiculo,
+    ultimaAtualizacao:   mov.ultimaAtualizacao ?? raw.ultimaAtualizacao,
+    // restrições estaduais
+    restricaoEstadual01: restr.restricaoEstadual01 ?? raw.restricaoEstadual01,
+    restricaoEstadual02: restr.restricaoEstadual02 ?? raw.restricaoEstadual02,
+    restricaoEstadual03: restr.restricaoEstadual03 ?? raw.restricaoEstadual03,
+    restricaoEstadual04: restr.restricaoEstadual04 ?? raw.restricaoEstadual04,
+    situacaoChassi:      restr.situacaoChassi ?? raw.situacaoChassi,
+    // ficha técnica
+    tipo:                ficha.tipo           ?? desc.tipoVeiculo ?? raw.tipo,
+    potencia:            ficha.potencia       ?? raw.potencia,
+    cilindradas:         ficha.cilindradas    ?? raw.cilindradas,
+    passageiros:         ficha.passageiros    ?? ficha.lotacao    ?? raw.passageiros,
+    categoria:           ficha.categoria      ?? raw.categoria,
+    carroceria:          ficha.carroceria     ?? raw.carroceria,
+    eixos:               ficha.eixos          ?? raw.eixos,
+    pbt:                 ficha.pbt            ?? raw.pbt,
+    cmt:                 ficha.cmt            ?? raw.cmt,
+    capacCarga:          ficha.capacidadeCarga ?? raw.capacCarga,
+  }
+}
+
+function normalizaGravameV3(raw: any): any[] {
+  if (!raw) return []
+  const resp = raw.resposta ?? raw
+  const lista = resp.gravames ?? resp.listaGravames ?? resp.historicoGravames ?? []
+  return Array.isArray(lista) ? lista : []
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
