@@ -117,19 +117,21 @@ export async function consultarCpfBasico(cpf: string) {
            ?? data?.resposta?.pessoa
            ?? {}
 
-  const tels = data?.resposta?.telefones
-            ?? data?.resposta?.ocorrencias?.telefones
-            ?? data?.resposta?.dadosCadastrais?.telefones
-            ?? []
-  const mails = data?.resposta?.emails
-             ?? data?.resposta?.ocorrencias?.emails
-             ?? data?.resposta?.dadosCadastrais?.emails
-             ?? []
-  const ends = data?.resposta?.enderecos
-            ?? data?.resposta?.ocorrencias?.enderecos
-            ?? data?.resposta?.dadosCadastrais?.enderecos
-            ?? []
-  const end0 = Array.isArray(ends) && ends.length ? ends[0] : {}
+  // Telefones: API v3 retorna {fixos: [], moveis: []} — não array plano
+  const telsRaw = data?.resposta?.telefones ?? data?.resposta?.ocorrencias?.telefones ?? {}
+  const tels: any[] = Array.isArray(telsRaw)
+    ? telsRaw
+    : [
+        ...(Array.isArray(telsRaw?.moveis) ? telsRaw.moveis : []),
+        ...(Array.isArray(telsRaw?.fixos)  ? telsRaw.fixos  : []),
+      ]
+
+  const mailsRaw = data?.resposta?.emails ?? data?.resposta?.ocorrencias?.emails ?? []
+  const mails: any[] = Array.isArray(mailsRaw) ? mailsRaw : []
+
+  const endsRaw = data?.resposta?.enderecos ?? data?.resposta?.ocorrencias?.enderecos ?? []
+  const ends: any[] = Array.isArray(endsRaw) ? endsRaw : []
+  const end0 = ends.length ? ends[0] : {}
 
   // Tenta todos os caminhos possíveis para o nome
   const nome = cab?.nome
@@ -163,12 +165,12 @@ export async function consultarCpfBasico(cpf: string) {
     dataNascimento: dataNasc,
     sexo:           cad?.sexo    ?? cab?.sexo,
     idade:          cad?.idade   ?? cab?.idade,
-    nomeMae:        cad?.nomeMae ?? cad?.mae ?? cad?.nomeDaMae ?? cad?.nomeMae,
+    nomeMae:        cad?.maeNome ?? cad?.nomeMae ?? cad?.mae ?? cad?.nomeDaMae,
     nomePai:        cad?.nomePai ?? cad?.pai,
-    telefone:       Array.isArray(tels) && tels.length
+    telefone:       tels.length
                       ? (tels[0]?.numero ?? tels[0]?.telefone ?? ((tels[0]?.ddd ?? '') + (tels[0]?.numeroTelefone ?? '')))
                       : undefined,
-    telefones:      Array.isArray(tels) ? tels : [],
+    telefones:      tels,
     email:          Array.isArray(mails) && mails.length
                       ? (mails[0]?.email ?? mails[0]?.enderecoEmail)
                       : undefined,
@@ -188,7 +190,7 @@ export async function consultarCpfBasico(cpf: string) {
 
 /** Score de crédito */
 export async function consultarScoreCpf(cpf: string) {
-  const data = await get(`/score/v3/pf/credito/${limpaCpf(cpf)}`)
+  const data = await get(`/score/v3/pf/credito/${limpaCpf(cpf)}?idFinalidade=${FINALIDADE}`)
 
   // Assertiva v3: score pode estar em resposta.score, resposta.scorePf, ou direto em resposta
   const sc = data?.resposta?.score
@@ -232,7 +234,7 @@ export async function consultarScoreCpf(cpf: string) {
 
 /** Processos judiciais (ações PF) */
 export async function consultarProcessosCpf(cpf: string) {
-  const data = await get(`/score/v3/pf/acoes/${limpaCpf(cpf)}`)
+  const data = await get(`/score/v3/pf/acoes/${limpaCpf(cpf)}?idFinalidade=${FINALIDADE}`)
   const ac = data?.resposta?.acoes ?? {}
   const qtd = ac?.qtdAcoes ?? ac?.quantidade ?? ac?.total
            ?? (Array.isArray(ac) ? ac.length : 0)
@@ -246,7 +248,7 @@ export async function consultarProcessosCpf(cpf: string) {
 
 /** Protestos em cartório — retornados junto ao endpoint de score */
 export async function consultarProtestosCpf(cpf: string) {
-  const data = await get(`/score/v3/pf/credito/${limpaCpf(cpf)}`)
+  const data = await get(`/score/v3/pf/credito/${limpaCpf(cpf)}?idFinalidade=${FINALIDADE}`)
   const pp = data?.resposta?.protestosPublicos ?? {}
   const qtd = pp?.qtdProtestos ?? pp?.sumQuantidade ?? pp?.quantidade ?? 0
   return {
@@ -268,7 +270,7 @@ export async function consultarTelefonesCpf(cpf: string) {
 
 /** Renda presumida */
 export async function consultarRendaCpf(cpf: string) {
-  const data = await get(`/score/v3/pf/credito/${limpaCpf(cpf)}`)
+  const data = await get(`/score/v3/pf/credito/${limpaCpf(cpf)}?idFinalidade=${FINALIDADE}`)
   const rp = data?.resposta?.rendaPresumida ?? {}
   const val = rp?.valor ?? rp?.faixaRenda ?? rp?.renda
   return {
@@ -285,17 +287,17 @@ export async function consultarPepCpf(_cpf: string): Promise<{ pep: boolean; isP
   return null
 }
 
-/** Participação societária via Mix v3 com opção PARTICIPACOES */
+/** Participação societária — retornada no próprio Localize v3 */
 export async function consultarSocietarioCpf(cpf: string) {
   try {
-    const data  = await get(`/mix-v3/pf/${limpaCpf(cpf)}?idFinalidade=${FINALIDADE}&opcoes=PARTICIPACOES`)
-    const qtd   = data?.resposta?.resumos?.participacoesEmpresas?.qtdeParticipacoes ?? 0
-    const lista = data?.resposta?.ocorrencias?.participacoes ?? (qtd > 0 ? [{}] : [])
-    return {
-      lista,
-      empresas: lista,
-      ...data,
-    }
+    const data = await get(`/localize/v3/cpf?cpf=${limpaCpf(cpf)}&idFinalidade=${FINALIDADE}`)
+    // v3 retorna participacoesEmpresas direto em resposta
+    const lista: any[] = Array.isArray(data?.resposta?.participacoesEmpresas)
+      ? data.resposta.participacoesEmpresas
+      : Array.isArray(data?.resposta?.ocorrencias?.participacoes)
+        ? data.resposta.ocorrencias.participacoes
+        : []
+    return { lista, empresas: lista }
   } catch {
     return { lista: [], empresas: [] }
   }
@@ -377,7 +379,7 @@ export async function consultarQsaCnpj(cnpj: string) {
 
 /** Score de crédito empresarial */
 export async function consultarScoreCnpj(cnpj: string) {
-  const data = await get(`/score/v3/pj/credito/${limpaCnpj(cnpj)}`)
+  const data = await get(`/score/v3/pj/credito/${limpaCnpj(cnpj)}?idFinalidade=${FINALIDADE}`)
   const sc = data?.resposta?.score ?? {}
   const pontos = sc?.pontuacao ?? sc?.pontos ?? sc?.valor
               ?? (typeof sc === 'number' ? sc : null)
@@ -391,7 +393,7 @@ export async function consultarScoreCnpj(cnpj: string) {
 
 /** Processos judiciais da empresa */
 export async function consultarProcessosCnpj(cnpj: string) {
-  const data = await get(`/score/v3/pj/acoes/${limpaCnpj(cnpj)}`)
+  const data = await get(`/score/v3/pj/acoes/${limpaCnpj(cnpj)}?idFinalidade=${FINALIDADE}`)
   const ac  = data?.resposta?.acoes ?? {}
   const qtd = ac?.qtdAcoes ?? ac?.quantidade ?? ac?.total
            ?? (Array.isArray(ac) ? ac.length : 0)
@@ -400,7 +402,7 @@ export async function consultarProcessosCnpj(cnpj: string) {
 
 /** Protestos da empresa */
 export async function consultarProtestosCnpj(cnpj: string) {
-  const data = await get(`/score/v3/pj/credito/${limpaCnpj(cnpj)}`)
+  const data = await get(`/score/v3/pj/credito/${limpaCnpj(cnpj)}?idFinalidade=${FINALIDADE}`)
   const pp  = data?.resposta?.protestosPublicos ?? {}
   const qtd = pp?.qtdProtestos ?? pp?.sumQuantidade ?? pp?.quantidade ?? 0
   return { total: qtd, quantidade: qtd, _raw: data }
