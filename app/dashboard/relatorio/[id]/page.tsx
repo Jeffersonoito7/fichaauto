@@ -18,7 +18,10 @@ function val(v: any, fallback = 'Não informado') {
   return (v === null || v === undefined || v === '') ? fallback : String(v)
 }
 function num(v: any) {
-  return parseFloat(String(v ?? 0).replace(/[^\d,.-]/g, '').replace(',', '.')) || 0
+  const s = String(v ?? '0').trim()
+  // formato BR: 5.089,18 (ponto=milhar, vírgula=decimal)
+  if (s.includes(',')) return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0
+  return parseFloat(s.replace(/[^\d.-]/g, '')) || 0
 }
 function tipoRestr(s: string): TipoCard {
   const u = (s ?? '').toUpperCase()
@@ -41,7 +44,8 @@ function calcScore(data: ReportData): number {
   if (j.includes('ROUBO') && !j.includes('NADA CONSTA') && !j.includes('NAO EXISTEM')) s -= 30
   if (j.includes('SINISTRO') && j.includes('CONSTA') && !j.includes('NADA CONSTA') && !j.includes('NAO EXISTEM')) s -= 15
   const lr = data.leilao?.resposta ?? data.leilao ?? {}
-  const lTotal = (lr?.baseA?.length ?? 0) + (lr?.baseB?.length ?? 0) + (lr?.remarketing?.length ?? 0) + (lr?.lotes?.length ?? 0)
+  const lTotal = Array.isArray(lr?.historicoLeilao) ? lr.historicoLeilao.length
+    : (lr?.baseA?.length ?? 0) + (lr?.baseB?.length ?? 0) + (lr?.remarketing?.length ?? 0) + (lr?.lotes?.length ?? 0)
   if (lTotal > 0) s -= 15
   return Math.max(s, 10)
 }
@@ -179,23 +183,26 @@ export default function RelatorioPage() {
     val(pRestr.restricaoEstadual04 ?? pRestr.rest04, 'NADA CONSTA').toUpperCase(),
   ]
 
-  // BIN Federal
+  // BIN Federal — restricoes é um array de strings
   const binFedNull = !data.binFederal
   const binFedJ    = JSON.stringify(data.binFederal ?? {}).toUpperCase()
-  const temRenajud = binFedJ.includes('RENAJUD') || rDETRAN.some(r => r.includes('RENAJUD'))
-  const temRoubo   = !binFedNull && binFedJ.includes('ROUBO') && !binFedJ.includes('NADA CONSTA') && !binFedJ.includes('NAO EXISTEM')
+  const binFedResp = data.binFederal?.resposta ?? {}
+  const binFedRestArr: string[] = Array.isArray(binFedResp?.restricoes) ? binFedResp.restricoes : []
+  const temRenajud = binFedRestArr.some((r: string) => r.toUpperCase().includes('RENAJUD')) || binFedJ.includes('RENAJUD')
+  const temRoubo   = binFedRestArr.some((r: string) => r.toUpperCase().includes('ROUBO') || r.toUpperCase().includes('FURTO'))
 
   // BIN Estadual
   const binEst     = data.binEstadual ?? null
   const binEstNull = !binEst
   const binEstResp = binEst?.resposta ?? binEst ?? {}
 
-  const rDENATRAN = [
-    val(binEstResp?.restricoes?.restricaoDenatran01 ?? binEstResp?.restricaoDenatran01 ?? binEstResp?.restricaoDenatran1, '').toUpperCase() || 'SEM RESTRICAO',
-    val(binEstResp?.restricoes?.restricaoDenatran02 ?? binEstResp?.restricaoDenatran02 ?? binEstResp?.restricaoDenatran2, '').toUpperCase() || 'SEM RESTRICAO',
-    val(binEstResp?.restricoes?.restricaoDenatran03 ?? binEstResp?.restricaoDenatran03 ?? binEstResp?.restricaoDenatran3, '').toUpperCase() || 'SEM RESTRICAO',
-    val(binEstResp?.restricoes?.restricaoDenatran04 ?? binEstResp?.restricaoDenatran04 ?? binEstResp?.restricaoDenatran4, '').toUpperCase() || 'SEM RESTRICAO',
-  ]
+  // BIN Estadual — restricoes.outrasUFs é um array de strings
+  const binEstOutrasUFs: string[] = Array.isArray(binEstResp?.restricoes?.outrasUFs)
+    ? binEstResp.restricoes.outrasUFs
+    : []
+  const rDENATRAN = binEstOutrasUFs.length > 0
+    ? binEstOutrasUFs.map((r: string) => (r ?? '').toUpperCase())
+    : ['SEM RESTRICAO']
 
   // Multas individuais (do BIN Estadual)
   const multasRaw = binEstResp?.multas?.lista ?? binEstResp?.multas?.infrações
@@ -205,9 +212,8 @@ export default function RelatorioPage() {
 
   // Comunicação de venda
   const comunicVendaRaw = binEstResp?.comunicacaoVenda?.situacao
-                       ?? binEstResp?.comunicacaoVenda
-                       ?? binEstResp?.comunicacao?.situacao
-                       ?? binEstResp?.comunicacao
+                       ?? binEstResp?.comunicacaoVenda?.descricao
+                       ?? binEstResp?.comunicacaoVenda?.status
   const comunicVenda = val(comunicVendaRaw, binEstNull ? 'NÃO CONSULTADO' : 'NADA CONSTA').toUpperCase()
 
   // Alterações de características
@@ -219,36 +225,46 @@ export default function RelatorioPage() {
     COR:         val(altRaw?.cor         ?? altRaw?.corVeiculo,      'Sem Alteração'),
   }
 
-  // Sinistro
+  // Sinistro — campo indicioSinistro é boolean
   const sinistroNull = !data.sinistro
   const sinistroJ    = JSON.stringify(data.sinistro ?? {}).toUpperCase()
-  const temSinistro  = !sinistroNull && sinistroJ.includes('CONSTA') && !sinistroJ.includes('NADA CONSTA') && !sinistroJ.includes('NAO EXISTEM') && !sinistroJ.includes('NÃO EXISTEM')
+  const temSinistro  = data.sinistro?.resposta?.indicioSinistro === true
+    || (!sinistroNull && sinistroJ.includes('CONSTA') && !sinistroJ.includes('NADA CONSTA') && !sinistroJ.includes('NAO EXISTEM') && !sinistroJ.includes('NÃO EXISTEM'))
   const sinistroResp = data.sinistro?.resposta ?? data.sinistro ?? {}
   const sinistroDesc = val(
     data.sinistro?.cabecalho?.resultado ?? sinistroResp?.situacao ?? sinistroResp?.resultado,
     sinistroNull ? 'NÃO CONSULTADO' : temSinistro ? 'CONSTA INDÍCIO' : 'Não Existem Indícios de Sinistro'
   ).toUpperCase()
 
-  // Leilão
+  // Leilão — API v3 retorna resposta.historicoLeilao[]
   const leilaoNull = !data.leilao
   const leilResp   = data.leilao?.resposta ?? data.leilao ?? {}
-  const leilaoBaseA   = Array.isArray(leilResp?.baseA   ?? leilResp?.historicoBaseA)  ? (leilResp?.baseA   ?? leilResp?.historicoBaseA)  : []
-  const leilaoBaseB   = Array.isArray(leilResp?.baseB   ?? leilResp?.historicoBaseB)  ? (leilResp?.baseB   ?? leilResp?.historicoBaseB)  : []
-  const leilaoRemark  = Array.isArray(leilResp?.remarketing ?? leilResp?.historicoRem) ? (leilResp?.remarketing ?? leilResp?.historicoRem) : []
-  const leilaoLotes   = Array.isArray(leilResp?.lotes   ?? leilResp?.leiloes)         ? (leilResp?.lotes   ?? leilResp?.leiloes)         : []
-  const todosLeilao   = [...leilaoBaseA, ...leilaoBaseB, ...leilaoRemark, ...leilaoLotes]
-  const temLeilao     = todosLeilao.length > 0
+  const todosLeilao: any[] = Array.isArray(leilResp?.historicoLeilao)
+    ? leilResp.historicoLeilao
+    : [
+        ...(Array.isArray(leilResp?.baseA)        ? leilResp.baseA        : []),
+        ...(Array.isArray(leilResp?.baseB)        ? leilResp.baseB        : []),
+        ...(Array.isArray(leilResp?.remarketing)  ? leilResp.remarketing  : []),
+        ...(Array.isArray(leilResp?.lotes)        ? leilResp.lotes        : []),
+      ]
+  const temLeilao = todosLeilao.length > 0
 
-  // Gravame
+  // Gravame — API v3 retorna resposta.gravame como objeto único (não array)
   const gravameNull = !data.gravame
   const gravResp    = data.gravame?.resposta ?? data.gravame ?? {}
-  const gravames: any[] = Array.isArray(gravResp?.gravames ?? gravResp?.listaGravames) ? (gravResp?.gravames ?? gravResp?.listaGravames) : []
+  const gravameObj  = gravResp?.gravame
+  const gravames: any[] = Array.isArray(gravResp?.gravames ?? gravResp?.listaGravames)
+    ? (gravResp?.gravames ?? gravResp?.listaGravames)
+    : (gravameObj && typeof gravameObj === 'object' && Object.keys(gravameObj).length > 0)
+      ? [gravameObj]
+      : []
 
-  // Débitos (consulta-base)
-  const licenciamento  = num(raw.licenciamento)
-  const ipvaVal        = num(raw.ipva)
-  const multasTotal    = num(raw.multas ?? raw.totalMultas)
-  const dpvat          = val(raw.dpvat, 'NAODISPONIVEL').toUpperCase()
+  // Débitos — vêm do BIN Estadual (debitosPendentes), fallback para consulta-base
+  const debitos       = binEstResp?.debitosPendentes ?? {}
+  const licenciamento = num(debitos?.licenciamento ?? raw.licenciamento)
+  const ipvaVal       = num(debitos?.ipva ?? raw.ipva)
+  const multasTotal   = num(debitos?.multas?.total ?? debitos?.multas ?? raw.multas ?? raw.totalMultas)
+  const dpvat         = val(debitos?.dpvat, 'NAODISPONIVEL').toUpperCase()
 
   // Score
   const score = calcScore(data)
@@ -273,8 +289,16 @@ export default function RelatorioPage() {
   function cnt(cards: TipoCard[], tipo: TipoCard) { return cards.filter(c => c === tipo).length }
 
   const todosRestr = [...rDETRAN, ...rDENATRAN]
-  const gravNormal   = gravames.filter((g: any) => { const s = (g.situacao ?? g.tipo ?? g.tipoGravame ?? '').toUpperCase(); return s.includes('BAIXADO') || s.includes('HISTORICO') || s.includes('HISTÓRICO') }).length
-  const gravAtencao  = gravames.filter((g: any) => { const s = (g.situacao ?? g.tipo ?? g.tipoGravame ?? '').toUpperCase(); return s.includes('ATUAL') || s.includes('ATIVO') || s.includes('ALIEN') }).length
+  const gravNormal  = gravames.filter((g: any) => {
+    const s = (g.situacao ?? g.status ?? g.tipo ?? g.tipoGravame ?? '').toUpperCase()
+    const r = (g.restricaoFinanceira ?? '').toUpperCase()
+    return !s.includes('ATUAL') && !s.includes('ATIVO') && !r.includes('ALIEN') && !r.includes('FIDUCI')
+  }).length
+  const gravAtencao = gravames.filter((g: any) => {
+    const s = (g.situacao ?? g.status ?? g.tipo ?? g.tipoGravame ?? '').toUpperCase()
+    const r = (g.restricaoFinanceira ?? '').toUpperCase()
+    return s.includes('ATUAL') || s.includes('ATIVO') || s.includes('ALIEN') || r.includes('ALIEN') || r.includes('FIDUCI')
+  }).length
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -376,7 +400,7 @@ export default function RelatorioPage() {
           <CardStatus titulo="HISTÓRICO DE LEILÃO" valor="NADA CONSTA" tipo="normal" />
         ) : todosLeilao.map((l: any, i: number) => {
           const dataL  = val(l.data ?? l.dataLeilao ?? l.dataCadastro, '')
-          const desc   = val(l.descricao ?? l.orgao ?? l.comarca ?? l.vara ?? l.leilaoeiro ?? l.evento, '')
+          const desc   = val(l.comitente ?? l.descricao ?? l.orgao ?? l.comarca ?? l.vara ?? l.leiloeiro ?? l.leilaoeiro ?? l.evento, '')
           const linha  = [dataL, desc].filter(Boolean).join(' ')
           return <CardStatus key={i} titulo={`LEILÃO ${i + 1}`} valor={linha || '---'} tipo="alerta" />
         })}
@@ -475,14 +499,17 @@ export default function RelatorioPage() {
         ) : gravames.length === 0 ? (
           <CardStatus titulo="GRAVAME" valor="NADA CONSTA" tipo="normal" />
         ) : gravames.map((g: any, i: number) => {
-          const banco  = val(g.nome ?? g.agente ?? g.nomeAgente ?? g.nomeFinanciador, '---').toUpperCase()
-          const dataG  = val(g.data ?? g.dataGravame ?? g.dataInclusao, '')
-          const sitG   = val(g.situacao ?? g.tipoGravame ?? g.tipo ?? g.status, '---').toUpperCase()
-          const isAtual = sitG.includes('ATUAL') || sitG.includes('ATIVO') || sitG.includes('ALIEN')
-          const tit    = [dataG, banco].filter(Boolean).join(' ')
+          const banco   = val(g.agenteFinanceiro ?? g.nome ?? g.agente ?? g.nomeAgente ?? g.nomeFinanciador, '---').toUpperCase()
+          const devedor = val(g.nomeFinanciado ?? g.nomeDevedor ?? g.devedor, '').toUpperCase()
+          const restrF  = val(g.restricaoFinanceira ?? g.restricao ?? '', '').toUpperCase()
+          const dataG   = val(g.data ?? g.dataGravame ?? g.dataInclusao, '')
+          const sitG    = val(g.situacao ?? g.status ?? g.tipoGravame ?? g.tipo, '---').toUpperCase()
+          const isAtual = sitG.includes('ATUAL') || sitG.includes('ATIVO') || sitG.includes('ALIEN') || restrF.includes('ALIEN') || restrF.includes('FIDUCI')
+          const titLine = [dataG, banco].filter(Boolean).join(' — ')
+          const valLine = [restrF || sitG, devedor].filter(Boolean).join(' · ')
           return (
-            <CardStatus key={i} titulo={tit || `GRAVAME ${i + 1}`}
-              valor={isAtual ? `ATUAL - ${sitG}` : `HISTÓRICO - ${sitG}`}
+            <CardStatus key={i} titulo={titLine || `GRAVAME ${i + 1}`}
+              valor={isAtual ? `ATIVO — ${valLine}` : `HISTÓRICO — ${valLine}`}
               tipo={isAtual ? 'atencao' : 'normal'} />
           )
         })}
