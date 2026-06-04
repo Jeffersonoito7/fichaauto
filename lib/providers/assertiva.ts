@@ -108,45 +108,71 @@ export async function consultarHistoricoVeiculosPorCpf(cpf: string) {
 export async function consultarCpfBasico(cpf: string) {
   const data = await get(`/localize/v3/cpf?cpf=${limpaCpf(cpf)}&idFinalidade=${FINALIDADE}`)
 
-  // v3: nome fica no cabecalho; dados detalhados no cadastro
-  const cab  = data?.cabecalho ?? {}
-  const cad  = data?.resposta?.ocorrencias?.cadastro
-            ?? data?.resposta?.cadastro
-            ?? {}
-  const tels  = data?.resposta?.ocorrencias?.telefones
-             ?? data?.resposta?.telefones
-             ?? []
-  const mails = data?.resposta?.ocorrencias?.emails
-             ?? data?.resposta?.emails
-             ?? []
-  const ends  = data?.resposta?.ocorrencias?.enderecos
-             ?? data?.resposta?.enderecos
-             ?? []
-  const end0  = Array.isArray(ends) && ends.length ? ends[0] : {}
+  // Assertiva v3: estrutura pode variar entre dadosCadastrais, cadastro, ocorrencias.cadastro, identificacao
+  const cab = data?.cabecalho ?? {}
+  const cad = data?.resposta?.dadosCadastrais
+           ?? data?.resposta?.ocorrencias?.cadastro
+           ?? data?.resposta?.cadastro
+           ?? data?.resposta?.identificacao
+           ?? data?.resposta?.pessoa
+           ?? {}
 
+  const tels = data?.resposta?.telefones
+            ?? data?.resposta?.ocorrencias?.telefones
+            ?? data?.resposta?.dadosCadastrais?.telefones
+            ?? []
+  const mails = data?.resposta?.emails
+             ?? data?.resposta?.ocorrencias?.emails
+             ?? data?.resposta?.dadosCadastrais?.emails
+             ?? []
+  const ends = data?.resposta?.enderecos
+            ?? data?.resposta?.ocorrencias?.enderecos
+            ?? data?.resposta?.dadosCadastrais?.enderecos
+            ?? []
+  const end0 = Array.isArray(ends) && ends.length ? ends[0] : {}
+
+  // Tenta todos os caminhos possíveis para o nome
   const nome = cab?.nome
             ?? cab?.nomeCompleto
+            ?? data?.resposta?.nome
+            ?? data?.resposta?.nomeCompleto
             ?? cad?.nome
             ?? cad?.nomeCompleto
             ?? cad?.nomePessoa
+            ?? cad?.nomecompleto
+            ?? null
+
+  const situacao = cad?.situacaoCadastral
+                ?? cad?.situacaoCpf
+                ?? cad?.situacao
+                ?? cab?.situacaoCpf
+                ?? cab?.situacao
+                ?? null
+
+  const dataNasc = cad?.dataNascimento
+                ?? cad?.nascimento
+                ?? cab?.dataNascimento
+                ?? cab?.nascimento
+                ?? null
 
   return {
     nome,
     nomeCompleto:   nome,
-    situacaoCpf:    cad?.situacaoCadastral ?? cad?.situacao ?? cab?.situacao,
-    situacao:       cad?.situacaoCadastral ?? cad?.situacao ?? cab?.situacao,
-    dataNascimento: cad?.dataNascimento    ?? cab?.dataNascimento,
-    sexo:           cad?.sexo              ?? cab?.sexo,
-    idade:          cad?.idade             ?? cab?.idade,
-    nomeMae:        cad?.nomeMae ?? cad?.mae ?? cad?.nomeDaMae,
+    situacaoCpf:    situacao,
+    situacao:       situacao,
+    dataNascimento: dataNasc,
+    sexo:           cad?.sexo    ?? cab?.sexo,
+    idade:          cad?.idade   ?? cab?.idade,
+    nomeMae:        cad?.nomeMae ?? cad?.mae ?? cad?.nomeDaMae ?? cad?.nomeMae,
+    nomePai:        cad?.nomePai ?? cad?.pai,
     telefone:       Array.isArray(tels) && tels.length
-                      ? (tels[0]?.numero ?? tels[0]?.telefone ?? tels[0]?.ddd + tels[0]?.numeroTelefone)
+                      ? (tels[0]?.numero ?? tels[0]?.telefone ?? ((tels[0]?.ddd ?? '') + (tels[0]?.numeroTelefone ?? '')))
                       : undefined,
-    telefones:      tels,
+    telefones:      Array.isArray(tels) ? tels : [],
     email:          Array.isArray(mails) && mails.length
                       ? (mails[0]?.email ?? mails[0]?.enderecoEmail)
                       : undefined,
-    emails:         mails,
+    emails:         Array.isArray(mails) ? mails : [],
     logradouro:     end0?.logradouro  ?? end0?.nomeLogradouro ?? end0?.endereco,
     numero:         end0?.numero      ?? end0?.numeroLogradouro,
     bairro:         end0?.bairro      ?? end0?.nomeBairro,
@@ -163,18 +189,43 @@ export async function consultarCpfBasico(cpf: string) {
 /** Score de crédito */
 export async function consultarScoreCpf(cpf: string) {
   const data = await get(`/score/v3/pf/credito/${limpaCpf(cpf)}`)
-  const sc = data?.resposta?.score ?? {}
-  const pontos = sc?.pontuacao ?? sc?.pontos ?? sc?.valor
+
+  // Assertiva v3: score pode estar em resposta.score, resposta.scorePf, ou direto em resposta
+  const sc = data?.resposta?.score
+          ?? data?.resposta?.scorePf
+          ?? data?.resposta?.scoreCredito
+          ?? data?.resposta?.scoreRestritivo
+          ?? {}
+
+  const pontos = sc?.pontuacao
+              ?? sc?.pontos
+              ?? sc?.valor
+              ?? sc?.score
               ?? (typeof sc === 'number' ? sc : null)
               ?? data?.resposta?.pontuacao
+              ?? data?.resposta?.pontuacaoScore
+              ?? null
+
+  const faixa = sc?.faixa
+             ?? sc?.classificacao
+             ?? sc?.descricaoFaixa
+             ?? data?.resposta?.faixa
+             ?? null
+
+  const rp = data?.resposta?.rendaPresumida ?? {}
+  const rendaVal = typeof rp === 'object'
+    ? (rp?.valor ?? rp?.faixaRenda ?? rp?.renda)
+    : (typeof rp === 'string' || typeof rp === 'number' ? rp : null)
+
   return {
-    score:     pontos,
-    pontuacao: pontos,
-    faixa:     sc?.faixa ?? sc?.classificacao,
-    rendaPresumida: data?.resposta?.rendaPresumida?.valor ?? data?.resposta?.rendaPresumida,
-    protestos: data?.resposta?.protestosPublicos?.qtdProtestos
-            ?? data?.resposta?.protestosPublicos?.sumQuantidade
-            ?? 0,
+    score:          pontos,
+    pontuacao:      pontos,
+    faixa,
+    rendaPresumida: rendaVal,
+    faixaRenda:     rp?.faixaRenda ?? rp?.descricao ?? faixa,
+    protestos:      data?.resposta?.protestosPublicos?.qtdProtestos
+                 ?? data?.resposta?.protestosPublicos?.sumQuantidade
+                 ?? 0,
     _raw: data,
   }
 }

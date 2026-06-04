@@ -24,17 +24,37 @@ async function get(path: string) {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
   })
-  return res.json()
+  return { status: res.status, data: await res.json().catch(() => null) }
 }
 
 export async function GET(req: NextRequest) {
   const cpf = req.nextUrl.searchParams.get('cpf')?.replace(/\D/g, '') ?? ''
-  if (cpf.length !== 11) return NextResponse.json({ erro: 'CPF inválido' })
+  if (cpf.length !== 11) return NextResponse.json({ erro: 'CPF inválido — passe ?cpf=...' })
 
-  const [localize, score] = await Promise.all([
-    get(`/localize/v3/cpf?cpf=${cpf}&idFinalidade=${FINALIDADE}`).catch(e => ({ erro: e.message })),
-    get(`/score/v3/pf/credito/${cpf}`).catch(e => ({ erro: e.message })),
+  const [localize, score, acoes] = await Promise.allSettled([
+    get(`/localize/v3/cpf?cpf=${cpf}&idFinalidade=${FINALIDADE}`),
+    get(`/score/v3/pf/credito/${cpf}`),
+    get(`/score/v3/pf/acoes/${cpf}`),
   ])
 
-  return NextResponse.json({ localize, score })
+  return NextResponse.json({
+    cpf,
+    localize: localize.status === 'fulfilled' ? localize.value : { erro: (localize as any).reason?.message },
+    score:    score.status    === 'fulfilled' ? score.value    : { erro: (score as any).reason?.message },
+    acoes:    acoes.status    === 'fulfilled' ? acoes.value    : { erro: (acoes as any).reason?.message },
+    // Extração tentada com paths atuais — para diagnóstico
+    _extraido: {
+      nome_cab:  null, // preenchido abaixo
+      caminhos_testados: [
+        'cabecalho.nome',
+        'cabecalho.nomeCompleto',
+        'resposta.nome',
+        'resposta.nomeCompleto',
+        'resposta.dadosCadastrais.nome',
+        'resposta.ocorrencias.cadastro.nome',
+        'resposta.cadastro.nome',
+        'resposta.identificacao.nome',
+      ],
+    },
+  })
 }

@@ -3,9 +3,10 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Car, Search, History, Wallet, BarChart3,
-  Users, LogOut, Menu, X, ChevronDown, Home, Shield, User, Building2
+  Search, History, Wallet, BarChart3,
+  Users, LogOut, Menu, X, ChevronDown, Home, Shield
 } from 'lucide-react'
+import { LogoHorizontal, LogoIcon } from '@/components/LogoFichaAuto'
 
 const navItems = [
   { href: '/dashboard',                 icon: Home,      label: 'Home'          },
@@ -49,13 +50,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="p-5 border-b border-brand-border">
-        <Link href="/dashboard/consultar" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
-            <Car className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-bold text-brand-dark text-sm">
-            Ficha Auto
-          </span>
+        <Link href="/dashboard/consultar" className="flex items-center">
+          <LogoHorizontal height={32} />
         </Link>
       </div>
 
@@ -138,10 +134,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Menu className="w-5 h-5 text-brand-dark" />
           </button>
           <div className="flex items-center gap-1.5">
-            <div className="w-6 h-6 rounded gradient-hero flex items-center justify-center">
-              <Car className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="font-bold text-sm text-brand-dark">Ficha Auto</span>
+            <LogoHorizontal height={28} />
           </div>
           <Link href="/dashboard/carteira" className="text-xs font-semibold text-brand-green bg-brand-green-light px-2.5 py-1 rounded-full">
             7 consultas
