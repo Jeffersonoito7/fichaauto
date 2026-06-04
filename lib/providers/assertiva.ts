@@ -107,55 +107,101 @@ export async function consultarHistoricoVeiculosPorCpf(cpf: string) {
 /** Dados cadastrais básicos — nome, endereço, telefone, e-mail, filiação */
 export async function consultarCpfBasico(cpf: string) {
   const data = await get(`/localize/v3/cpf?cpf=${limpaCpf(cpf)}&idFinalidade=${FINALIDADE}`)
-  const cad  = data?.resposta?.ocorrencias?.cadastro ?? data?.resposta?.cadastro ?? {}
-  const tels = data?.resposta?.ocorrencias?.telefones ?? data?.resposta?.telefones ?? []
-  const mails = data?.resposta?.ocorrencias?.emails ?? data?.resposta?.emails ?? []
+
+  // v3: nome fica no cabecalho; dados detalhados no cadastro
+  const cab  = data?.cabecalho ?? {}
+  const cad  = data?.resposta?.ocorrencias?.cadastro
+            ?? data?.resposta?.cadastro
+            ?? {}
+  const tels  = data?.resposta?.ocorrencias?.telefones
+             ?? data?.resposta?.telefones
+             ?? []
+  const mails = data?.resposta?.ocorrencias?.emails
+             ?? data?.resposta?.emails
+             ?? []
+  const ends  = data?.resposta?.ocorrencias?.enderecos
+             ?? data?.resposta?.enderecos
+             ?? []
+  const end0  = Array.isArray(ends) && ends.length ? ends[0] : {}
+
+  const nome = cab?.nome
+            ?? cab?.nomeCompleto
+            ?? cad?.nome
+            ?? cad?.nomeCompleto
+            ?? cad?.nomePessoa
+
   return {
-    nome:           cad?.nome          ?? cad?.nomeCompleto,
-    nomeCompleto:   cad?.nome          ?? cad?.nomeCompleto,
-    situacaoCpf:    cad?.situacaoCadastral ?? cad?.situacao,
-    situacao:       cad?.situacaoCadastral ?? cad?.situacao,
-    dataNascimento: cad?.dataNascimento,
-    telefone:       Array.isArray(tels) && tels.length ? (tels[0]?.numero ?? tels[0]?.telefone) : undefined,
+    nome,
+    nomeCompleto:   nome,
+    situacaoCpf:    cad?.situacaoCadastral ?? cad?.situacao ?? cab?.situacao,
+    situacao:       cad?.situacaoCadastral ?? cad?.situacao ?? cab?.situacao,
+    dataNascimento: cad?.dataNascimento    ?? cab?.dataNascimento,
+    sexo:           cad?.sexo              ?? cab?.sexo,
+    idade:          cad?.idade             ?? cab?.idade,
+    nomeMae:        cad?.nomeMae ?? cad?.mae ?? cad?.nomeDaMae,
+    telefone:       Array.isArray(tels) && tels.length
+                      ? (tels[0]?.numero ?? tels[0]?.telefone ?? tels[0]?.ddd + tels[0]?.numeroTelefone)
+                      : undefined,
     telefones:      tels,
-    email:          Array.isArray(mails) && mails.length ? (mails[0]?.email) : undefined,
+    email:          Array.isArray(mails) && mails.length
+                      ? (mails[0]?.email ?? mails[0]?.enderecoEmail)
+                      : undefined,
     emails:         mails,
-    ...data,
+    logradouro:     end0?.logradouro  ?? end0?.nomeLogradouro ?? end0?.endereco,
+    numero:         end0?.numero      ?? end0?.numeroLogradouro,
+    bairro:         end0?.bairro      ?? end0?.nomeBairro,
+    municipio:      end0?.municipio   ?? end0?.cidade ?? end0?.nomeMunicipio,
+    uf:             end0?.uf          ?? end0?.estado ?? end0?.siglaUf,
+    cep:            end0?.cep,
+    enderecoCompleto: end0?.logradouro
+      ? `${end0?.logradouro ?? ''}, ${end0?.numero ?? ''} - ${end0?.bairro ?? ''}, ${end0?.municipio ?? ''}/${end0?.uf ?? ''}`
+      : undefined,
+    _raw: data,
   }
 }
 
 /** Score de crédito */
 export async function consultarScoreCpf(cpf: string) {
   const data = await get(`/score/v3/pf/credito/${limpaCpf(cpf)}`)
-  const pontos = data?.resposta?.score?.pontos ?? data?.resposta?.score
+  const sc = data?.resposta?.score ?? {}
+  const pontos = sc?.pontuacao ?? sc?.pontos ?? sc?.valor
+              ?? (typeof sc === 'number' ? sc : null)
+              ?? data?.resposta?.pontuacao
   return {
-    score:    pontos,
+    score:     pontos,
     pontuacao: pontos,
-    ...data,
+    faixa:     sc?.faixa ?? sc?.classificacao,
+    rendaPresumida: data?.resposta?.rendaPresumida?.valor ?? data?.resposta?.rendaPresumida,
+    protestos: data?.resposta?.protestosPublicos?.qtdProtestos
+            ?? data?.resposta?.protestosPublicos?.sumQuantidade
+            ?? 0,
+    _raw: data,
   }
 }
 
 /** Processos judiciais (ações PF) */
 export async function consultarProcessosCpf(cpf: string) {
   const data = await get(`/score/v3/pf/acoes/${limpaCpf(cpf)}`)
-  const qtd  = data?.resposta?.acoes?.qtdAcoes ?? data?.resposta?.acoes?.quantidade ?? 0
+  const ac = data?.resposta?.acoes ?? {}
+  const qtd = ac?.qtdAcoes ?? ac?.quantidade ?? ac?.total
+           ?? (Array.isArray(ac) ? ac.length : 0)
   return {
     total:     qtd,
     quantidade: qtd,
-    ...data,
+    lista:     ac?.acoes ?? ac?.lista ?? [],
+    _raw: data,
   }
 }
 
 /** Protestos em cartório — retornados junto ao endpoint de score */
 export async function consultarProtestosCpf(cpf: string) {
   const data = await get(`/score/v3/pf/credito/${limpaCpf(cpf)}`)
-  const qtd  = data?.resposta?.protestosPublicos?.qtdProtestos
-             ?? data?.resposta?.protestosPublicos?.sumQuantidade
-             ?? 0
+  const pp = data?.resposta?.protestosPublicos ?? {}
+  const qtd = pp?.qtdProtestos ?? pp?.sumQuantidade ?? pp?.quantidade ?? 0
   return {
     total:     qtd,
     quantidade: qtd,
-    ...data,
+    _raw: data,
   }
 }
 
@@ -172,10 +218,14 @@ export async function consultarTelefonesCpf(cpf: string) {
 /** Renda presumida */
 export async function consultarRendaCpf(cpf: string) {
   const data = await get(`/score/v3/pf/credito/${limpaCpf(cpf)}`)
+  const rp = data?.resposta?.rendaPresumida ?? {}
+  const val = rp?.valor ?? rp?.faixaRenda ?? rp?.renda
   return {
-    renda:  data?.resposta?.rendaPresumida?.valor,
-    valor:  data?.resposta?.rendaPresumida?.valor,
-    ...data,
+    renda:         val,
+    valor:         val,
+    rendaPresumida: val,
+    faixaRenda:    rp?.faixaRenda ?? rp?.descricao,
+    _raw: data,
   }
 }
 
@@ -209,40 +259,110 @@ export async function consultarRelacionamentosCpf(cpf: string) {
 // MÓDULOS — EMPRESAS (CNPJ)
 // ═══════════════════════════════════════════════════════════════
 
-/** Dados cadastrais da empresa */
+/** Dados cadastrais da empresa — normalizado */
 export async function consultarCnpjBasico(cnpj: string) {
-  return get(`/localize/v3/cnpj?cnpj=${limpaCnpj(cnpj)}&idFinalidade=${FINALIDADE}`)
+  const data = await get(`/localize/v3/cnpj?cnpj=${limpaCnpj(cnpj)}&idFinalidade=${FINALIDADE}`)
+
+  const cab = data?.cabecalho ?? {}
+  const cad = data?.resposta?.ocorrencias?.cadastro
+           ?? data?.resposta?.cadastro
+           ?? {}
+  const tels  = data?.resposta?.ocorrencias?.telefones
+             ?? data?.resposta?.telefones
+             ?? []
+  const mails = data?.resposta?.ocorrencias?.emails
+             ?? data?.resposta?.emails
+             ?? []
+
+  const razaoSocial = cab?.razaoSocial
+                   ?? cab?.nome
+                   ?? cad?.razaoSocial
+                   ?? cad?.nome
+
+  return {
+    razaoSocial,
+    nome:             razaoSocial,
+    nomeFantasia:     cad?.nomeFantasia   ?? cad?.nomeEmpresa,
+    situacaoCadastral: cad?.situacaoCadastral ?? cad?.situacao ?? cab?.situacao,
+    situacao:         cad?.situacaoCadastral ?? cad?.situacao ?? cab?.situacao,
+    dataAbertura:     cad?.dataAbertura   ?? cad?.dataFundacao ?? cab?.dataAbertura,
+    cnae:             cad?.cnae           ?? cad?.cnaePrincipal ?? cad?.cnaeDescricao,
+    cnaePrincipal:    cad?.cnae           ?? cad?.cnaePrincipal,
+    naturezaJuridica: cad?.naturezaJuridica ?? cad?.tipo,
+    porte:            cad?.porte          ?? cad?.porteEmpresa,
+    capitalSocial:    cad?.capitalSocial,
+    optanteSimples:   cad?.optanteSimples ?? cad?.simplesNacional,
+    simplesNacional:  cad?.optanteSimples ?? cad?.simplesNacional,
+    logradouro:       cad?.logradouro     ?? cad?.nomeLogradouro,
+    numero:           cad?.numero         ?? cad?.numeroLogradouro,
+    bairro:           cad?.bairro         ?? cad?.nomeBairro,
+    municipio:        cad?.municipio      ?? cad?.cidade ?? cad?.nomeMunicipio,
+    uf:               cad?.uf             ?? cad?.estado ?? cad?.siglaUf,
+    cep:              cad?.cep,
+    telefone:         cad?.telefone
+                   ?? (Array.isArray(tels) && tels.length ? (tels[0]?.numero ?? tels[0]?.ddd + tels[0]?.telefone) : undefined),
+    email:            cad?.email
+                   ?? (Array.isArray(mails) && mails.length ? (mails[0]?.email ?? mails[0]?.enderecoEmail) : undefined),
+    _raw: data,
+  }
 }
 
-/** Quadro societário */
+/** Quadro societário — normalizado */
 export async function consultarQsaCnpj(cnpj: string) {
-  return get(`/localize/v3/cnpj?cnpj=${limpaCnpj(cnpj)}&idFinalidade=${FINALIDADE}`)
+  const data = await get(`/localize/v3/cnpj?cnpj=${limpaCnpj(cnpj)}&idFinalidade=${FINALIDADE}`)
+  const raw  = data?.resposta?.ocorrencias?.socios
+            ?? data?.resposta?.ocorrencias?.quadroSocietario
+            ?? data?.resposta?.socios
+            ?? data?.resposta?.quadroSocietario
+            ?? []
+  const lista = Array.isArray(raw) ? raw : []
+  return {
+    socios: lista,
+    qsa:    lista,
+    lista,
+    _raw: data,
+  }
 }
 
 /** Score de crédito empresarial */
 export async function consultarScoreCnpj(cnpj: string) {
   const data = await get(`/score/v3/pj/credito/${limpaCnpj(cnpj)}`)
-  const pontos = data?.resposta?.score?.pontos ?? data?.resposta?.score
-  return { score: pontos, pontuacao: pontos, ...data }
+  const sc = data?.resposta?.score ?? {}
+  const pontos = sc?.pontuacao ?? sc?.pontos ?? sc?.valor
+              ?? (typeof sc === 'number' ? sc : null)
+  return {
+    score:     pontos,
+    pontuacao: pontos,
+    faixa:     sc?.faixa ?? sc?.classificacao,
+    _raw: data,
+  }
 }
 
 /** Processos judiciais da empresa */
 export async function consultarProcessosCnpj(cnpj: string) {
   const data = await get(`/score/v3/pj/acoes/${limpaCnpj(cnpj)}`)
-  const qtd  = data?.resposta?.acoes?.qtdAcoes ?? 0
-  return { total: qtd, quantidade: qtd, ...data }
+  const ac  = data?.resposta?.acoes ?? {}
+  const qtd = ac?.qtdAcoes ?? ac?.quantidade ?? ac?.total
+           ?? (Array.isArray(ac) ? ac.length : 0)
+  return { total: qtd, quantidade: qtd, _raw: data }
 }
 
 /** Protestos da empresa */
 export async function consultarProtestosCnpj(cnpj: string) {
   const data = await get(`/score/v3/pj/credito/${limpaCnpj(cnpj)}`)
-  const qtd  = data?.resposta?.protestosPublicos?.qtdProtestos ?? 0
-  return { total: qtd, quantidade: qtd, ...data }
+  const pp  = data?.resposta?.protestosPublicos ?? {}
+  const qtd = pp?.qtdProtestos ?? pp?.sumQuantidade ?? pp?.quantidade ?? 0
+  return { total: qtd, quantidade: qtd, _raw: data }
 }
 
 /** Empresas relacionadas */
 export async function consultarRelacionadasCnpj(cnpj: string) {
-  return get(`/localize/v3/cnpj?cnpj=${limpaCnpj(cnpj)}&idFinalidade=${FINALIDADE}`)
+  const data = await get(`/localize/v3/cnpj?cnpj=${limpaCnpj(cnpj)}&idFinalidade=${FINALIDADE}`)
+  const raw  = data?.resposta?.ocorrencias?.empresasRelacionadas
+            ?? data?.resposta?.empresasRelacionadas
+            ?? []
+  const lista = Array.isArray(raw) ? raw : []
+  return { empresas: lista, lista, _raw: data }
 }
 
 // ═══════════════════════════════════════════════════════════════
