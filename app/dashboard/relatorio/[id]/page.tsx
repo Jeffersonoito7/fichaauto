@@ -2,82 +2,111 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import {
-  ArrowLeft, Download, Share2, Car, ShieldCheck, ShieldAlert,
-  AlertTriangle, CheckCircle2, XCircle, Clock, Loader2, Printer
-} from 'lucide-react'
+import { ArrowLeft, Download, ChevronDown, Loader2, XCircle } from 'lucide-react'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface ReportData {
-  placa:       any
-  binFederal:  any
-  sinistro:    any
-  gravame:     any
-  leilao:      any
-  chassi:      any
-  fipe:        any
-  erros:       string[]
+  placa: any; binFederal: any; sinistro: any
+  gravame: any; leilao: any; chassi: any
+  binEstadual: any; fipe: any; erros: string[]
 }
+
+type TipoCard = 'normal' | 'alerta' | 'atencao'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function val(v: any) { return v ?? 'Não informado' }
-
-function StatusIcon({ status }: { status: 'ok' | 'alert' | 'warning' }) {
-  if (status === 'ok')      return <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
-  if (status === 'alert')   return <XCircle      className="w-4 h-4 text-brand-danger shrink-0" />
-  return <AlertTriangle className="w-4 h-4 text-brand-warning shrink-0" />
+function val(v: any, fallback = 'Não informado') {
+  return (v === null || v === undefined || v === '') ? fallback : String(v)
+}
+function num(v: any) {
+  return parseFloat(String(v ?? 0).replace(/[^\d,.-]/g, '').replace(',', '.')) || 0
+}
+function tipoRestr(s: string): TipoCard {
+  const u = (s ?? '').toUpperCase()
+  if (!u || u === 'NADA CONSTA' || u === 'SEM RESTRICAO' || u === 'SEM RESTRIÇÃO' || u === 'NORMAL') return 'normal'
+  if (u.includes('ALIEN') || u.includes('FIDUCIARIA') || u.includes('ONUS') || u.includes('ÔNUS')) return 'atencao'
+  return 'alerta'
+}
+function tipoMoeda(v: any): TipoCard { return num(v) > 0 ? 'alerta' : 'normal' }
+function moedaBR(v: any) {
+  const n = num(v)
+  return n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'NADA CONSTA'
 }
 
-function StatusIconBig({ ok }: { ok: boolean }) {
-  return (
-    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${ok ? 'bg-brand-green' : 'bg-brand-danger'}`}>
-      {ok ? <ShieldCheck className="w-5 h-5 text-white" /> : <ShieldAlert className="w-5 h-5 text-white" />}
-    </div>
-  )
+// ─── Score ────────────────────────────────────────────────────────────────────
+function calcScore(data: ReportData): number {
+  let s = 100
+  const j = JSON.stringify(data ?? {}).toUpperCase()
+  if (j.includes('RENAJUD')) s -= 20
+  if (j.includes('ALIENAC') && !j.includes('BAIXADO')) s -= 10
+  if (j.includes('ROUBO') && !j.includes('NADA CONSTA') && !j.includes('NAO EXISTEM')) s -= 30
+  if (j.includes('SINISTRO') && j.includes('CONSTA') && !j.includes('NADA CONSTA') && !j.includes('NAO EXISTEM')) s -= 15
+  const lr = data.leilao?.resposta ?? data.leilao ?? {}
+  const lTotal = (lr?.baseA?.length ?? 0) + (lr?.baseB?.length ?? 0) + (lr?.remarketing?.length ?? 0) + (lr?.lotes?.length ?? 0)
+  if (lTotal > 0) s -= 15
+  return Math.max(s, 10)
 }
 
+// ─── Componentes ──────────────────────────────────────────────────────────────
 function ScoreRing({ score }: { score: number }) {
   const r = 40, c = 2 * Math.PI * r
   const offset = c - (score / 100) * c
-  const color = score >= 80 ? '#00A651' : score >= 60 ? '#F59E0B' : '#EF4444'
-  const label = score >= 80 ? 'Baixo risco' : score >= 60 ? 'Risco médio' : 'Alto risco'
+  const color = score >= 70 ? '#4ade80' : score >= 50 ? '#fbbf24' : '#f87171'
+  const label = score >= 70 ? 'Baixo risco' : score >= 50 ? 'Risco médio' : 'Alto risco'
   return (
-    <div className="flex flex-col items-center">
-      <svg width="96" height="96" viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="8" />
+    <div className="flex flex-col items-center shrink-0">
+      <svg width="86" height="86" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r={r} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="8" />
         <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="8"
           strokeLinecap="round" strokeDasharray={c} strokeDashoffset={offset}
           transform="rotate(-90 50 50)" />
         <text x="50" y="46" textAnchor="middle" fill="white" fontSize="20" fontWeight="800">{score}</text>
-        <text x="50" y="62" textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="9">/ 100</text>
+        <text x="50" y="62" textAnchor="middle" fill="rgba(255,255,255,0.55)" fontSize="9">/ 100</text>
       </svg>
-      <span className="text-xs font-semibold mt-1 text-white/80">{label}</span>
+      <span className="text-[10px] font-semibold text-white/60 mt-0.5">{label}</span>
     </div>
   )
 }
 
-// Calcula score baseado nos dados reais
-function calcScore(data: ReportData): number {
-  let score = 100
-  const p = data.placa
-  if (!p) return 50
-
-  const temRenajud   = JSON.stringify(p).toUpperCase().includes('RENAJUD')
-  const temAlienacao = JSON.stringify(p).toUpperCase().includes('ALIEN')
-  const temRoubo     = data.binFederal && JSON.stringify(data.binFederal).toUpperCase().includes('ROUBO')
-  const temSinistro  = data.sinistro   && JSON.stringify(data.sinistro).toUpperCase().includes('SINISTRO')
-  const temLeilao    = data.leilao     && JSON.stringify(data.leilao).toUpperCase().includes('LEILÃO')
-
-  if (temRenajud)   score -= 20
-  if (temAlienacao) score -= 10
-  if (temRoubo)     score -= 30
-  if (temSinistro)  score -= 15
-  if (temLeilao)    score -= 15
-
-  return Math.max(score, 10)
+function SecaoAcordion({
+  titulo, normal = 0, alerta = 0, atencao = 0, defaultAberto = false, children
+}: {
+  titulo: string; normal?: number; alerta?: number; atencao?: number; defaultAberto?: boolean; children: React.ReactNode
+}) {
+  const [aberto, setAberto] = useState(defaultAberto)
+  return (
+    <div className="border border-brand-border rounded-xl overflow-hidden mb-3 shadow-card">
+      <button
+        onClick={() => setAberto(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-3.5 bg-white hover:bg-brand-gray-light transition-colors"
+      >
+        <div className="flex items-center gap-3 flex-wrap text-left">
+          <span className="font-bold text-sm text-brand-blue">{titulo}</span>
+          <span className="text-xs font-semibold text-green-600">{normal}&nbsp;NORMAL</span>
+          <span className={`text-xs font-semibold ${alerta > 0 ? 'text-red-600' : 'text-brand-gray'}`}>{alerta}&nbsp;ALERTA</span>
+          <span className={`text-xs font-semibold ${atencao > 0 ? 'text-amber-500' : 'text-brand-gray'}`}>{atencao}&nbsp;ATENÇÃO</span>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-brand-gray shrink-0 transition-transform ${aberto ? 'rotate-180' : ''}`} />
+      </button>
+      {aberto && (
+        <div className="px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 border-t border-brand-border bg-gray-50/40">
+          {children}
+        </div>
+      )}
+    </div>
+  )
 }
 
-// ─── Componente principal ─────────────────────────────────────────────────────
+function CardStatus({ titulo, valor, tipo }: { titulo: string; valor: string; tipo: TipoCard }) {
+  const bg = tipo === 'normal' ? 'bg-green-600' : tipo === 'alerta' ? 'bg-red-700' : 'bg-amber-500'
+  return (
+    <div className={`${bg} text-white rounded-lg p-4`}>
+      <p className="text-[9px] font-bold uppercase tracking-widest mb-2 pb-1.5 border-b border-white/20 leading-none">{titulo}</p>
+      <p className="text-[13px] font-semibold leading-snug">{valor}</p>
+    </div>
+  )
+}
+
+// ─── Página principal ─────────────────────────────────────────────────────────
 export default function RelatorioPage() {
   const { id } = useParams<{ id: string }>()
   const [data, setData]       = useState<ReportData | null>(null)
@@ -107,10 +136,8 @@ export default function RelatorioPage() {
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
       <Loader2 className="w-10 h-10 text-brand-green animate-spin" />
-      <div className="text-center">
-        <p className="font-semibold text-brand-dark">Consultando veículo...</p>
-        <p className="text-sm text-brand-gray mt-1">Aguarde, estamos buscando os dados em tempo real</p>
-      </div>
+      <p className="font-semibold text-brand-dark">Consultando veículo...</p>
+      <p className="text-sm text-brand-gray">Aguarde, buscando dados em tempo real</p>
     </div>
   )
 
@@ -125,352 +152,342 @@ export default function RelatorioPage() {
 
   if (!data) return null
 
-  const p      = data.placa     ?? {}
-  const score  = calcScore(data)
-  const agora  = new Date().toLocaleString('pt-BR')
+  // ─── Extração de dados ──────────────────────────────────────────────────────
+  const raw    = data.placa ?? {}
+  const pDesc  = raw.resposta?.descricao       ?? raw
+  const pIdent = raw.resposta?.identificadores ?? raw
+  const pMov   = raw.resposta?.movimentacao    ?? raw
+  const pRestr = raw.resposta?.restricoes      ?? raw
+  const pFicha = raw.resposta?.fichaTecnica    ?? raw
 
-  // Dados de identificação — resposta aninhada v3
-  const pDesc  = p.resposta?.descricao       ?? p
-  const pIdent = p.resposta?.identificadores ?? p
-  const pMov   = p.resposta?.movimentacao    ?? p
-  const pRestr = p.resposta?.restricoes      ?? p
+  const mm      = val(pDesc.marcaModelo ?? pDesc.marca, 'VEÍCULO')
+  const cor     = val(pDesc.cor, '')
+  const anoFab  = val(pDesc.anoFabricacao ?? pDesc.ano, '')
+  const anoMod  = val(pDesc.anoModelo, '')
+  const anoStr  = anoFab && anoMod ? `${anoFab}/${anoMod}` : anoFab
+  const placaFmt = val(pIdent.placa ?? id).toUpperCase()
 
-  // Módulos secundários — null = não consultado / erro
-  const binFederalNull = data.binFederal === null || data.binFederal === undefined
-  const sinistroNull   = data.sinistro   === null || data.sinistro   === undefined
-  const gravameNull    = data.gravame    === null || data.gravame    === undefined
-  const leilaoNull     = data.leilao     === null || data.leilao     === undefined
+  // Situação
+  const situacaoV = val(pMov.situacao ?? pMov.situacaoVeiculo, 'EM CIRCULAÇÃO').toUpperCase()
+  const situacaoC = val(pRestr.situacaoChassi, 'NORMAL').toUpperCase()
 
-  const bin  = data.binFederal ?? {}
-  const sin  = data.sinistro   ?? {}
-  const grav = data.gravame    ?? {}
-  const lei  = data.leilao     ?? {}
-  const chassiD = data.chassi  ?? {}
-
-  // Extração dos dados dos módulos — suporte a resposta aninhada v3
-  const binResp  = bin?.resposta  ?? bin  ?? {}
-  const sinResp  = sin?.resposta  ?? sin  ?? {}
-  const gravResp = grav?.resposta ?? grav ?? {}
-  const leiResp  = lei?.resposta  ?? lei  ?? {}
-
-  // Gravame — lista de financiamentos
-  const gravames = Array.isArray(gravResp?.gravames ?? gravResp?.listaGravames)
-    ? (gravResp?.gravames ?? gravResp?.listaGravames)
-    : []
-
-  // Leilão — 3 bases
-  const leilaoBaseA      = Array.isArray(leiResp?.baseA ?? leiResp?.historicoBaseA)      ? (leiResp?.baseA ?? leiResp?.historicoBaseA)            : []
-  const leilaoBaseB      = Array.isArray(leiResp?.baseB ?? leiResp?.historicoBaseB)      ? (leiResp?.baseB ?? leiResp?.historicoBaseB)            : []
-  const leilaoRemark     = Array.isArray(leiResp?.remarketing ?? leiResp?.historicoRem)  ? (leiResp?.remarketing ?? leiResp?.historicoRem)        : []
-  const leilaoLotes      = Array.isArray(leiResp?.lotes ?? leiResp?.leiloes)             ? (leiResp?.lotes ?? leiResp?.leiloes)                   : []
-
-  const restricoes = [
-    { label: 'Restrição Estadual 01', valor: val(pRestr.restricaoEstadual01 ?? pRestr.rest01 ?? 'NADA CONSTA'), ok: !(pRestr.restricaoEstadual01 ?? '').toString().toUpperCase().includes('CONSTA') === false },
-    { label: 'Restrição Estadual 02', valor: val(pRestr.restricaoEstadual02 ?? pRestr.rest02 ?? 'NADA CONSTA'), ok: true },
-    { label: 'Restrição Estadual 03', valor: val(pRestr.restricaoEstadual03 ?? pRestr.rest03 ?? 'NADA CONSTA'), ok: true },
-    { label: 'Restrição Estadual 04', valor: val(pRestr.restricaoEstadual04 ?? pRestr.rest04 ?? 'NADA CONSTA'), ok: true },
+  // Restrições DETRAN (consulta-base)
+  const rDETRAN = [
+    val(pRestr.restricaoEstadual01 ?? pRestr.rest01, 'NADA CONSTA').toUpperCase(),
+    val(pRestr.restricaoEstadual02 ?? pRestr.rest02, 'NADA CONSTA').toUpperCase(),
+    val(pRestr.restricaoEstadual03 ?? pRestr.rest03, 'NADA CONSTA').toUpperCase(),
+    val(pRestr.restricaoEstadual04 ?? pRestr.rest04, 'NADA CONSTA').toUpperCase(),
   ]
 
-  const temRenajud   = JSON.stringify(pRestr).toUpperCase().includes('RENAJUD')
-  const temAlienacao = JSON.stringify(pRestr).toUpperCase().includes('ALIEN')
-  const temSinistro  = !sinistroNull && JSON.stringify(sinResp).toUpperCase().includes('CONSTA') && !JSON.stringify(sinResp).toUpperCase().includes('NADA CONSTA')
-  const temRoubo     = !binFederalNull && JSON.stringify(binResp).toUpperCase().includes('ROUBO') && !JSON.stringify(binResp).toUpperCase().includes('NADA CONSTA')
-  const temLeilao    = leilaoBaseA.length > 0 || leilaoBaseB.length > 0 || leilaoRemark.length > 0 || leilaoLotes.length > 0
+  // BIN Federal
+  const binFedNull = !data.binFederal
+  const binFedJ    = JSON.stringify(data.binFederal ?? {}).toUpperCase()
+  const temRenajud = binFedJ.includes('RENAJUD') || rDETRAN.some(r => r.includes('RENAJUD'))
+  const temRoubo   = !binFedNull && binFedJ.includes('ROUBO') && !binFedJ.includes('NADA CONSTA') && !binFedJ.includes('NAO EXISTEM')
 
-  const marcaModelo = val(pDesc.marcaModelo ?? pDesc.marca ?? pDesc.modelo ?? 'Veículo')
-  const placa       = val(pIdent.placa ?? id)
-  const ano         = val(pDesc.anoFabricacao ?? pDesc.ano ?? '')
-  const anoModelo   = val(pDesc.anoModelo ?? '')
-  const anoStr      = ano && anoModelo ? `${ano}/${anoModelo}` : val(pDesc.anoFabricacao ?? pDesc.ano ?? '')
+  // BIN Estadual
+  const binEst     = data.binEstadual ?? null
+  const binEstNull = !binEst
+  const binEstResp = binEst?.resposta ?? binEst ?? {}
+
+  const rDENATRAN = [
+    val(binEstResp?.restricoes?.restricaoDenatran01 ?? binEstResp?.restricaoDenatran01 ?? binEstResp?.restricaoDenatran1, '').toUpperCase() || 'SEM RESTRICAO',
+    val(binEstResp?.restricoes?.restricaoDenatran02 ?? binEstResp?.restricaoDenatran02 ?? binEstResp?.restricaoDenatran2, '').toUpperCase() || 'SEM RESTRICAO',
+    val(binEstResp?.restricoes?.restricaoDenatran03 ?? binEstResp?.restricaoDenatran03 ?? binEstResp?.restricaoDenatran3, '').toUpperCase() || 'SEM RESTRICAO',
+    val(binEstResp?.restricoes?.restricaoDenatran04 ?? binEstResp?.restricaoDenatran04 ?? binEstResp?.restricaoDenatran4, '').toUpperCase() || 'SEM RESTRICAO',
+  ]
+
+  // Multas individuais (do BIN Estadual)
+  const multasRaw = binEstResp?.multas?.lista ?? binEstResp?.multas?.infrações
+                 ?? binEstResp?.infrações ?? binEstResp?.listaMultas
+                 ?? binEstResp?.multas
+  const multasLista: any[] = Array.isArray(multasRaw) ? multasRaw : []
+
+  // Comunicação de venda
+  const comunicVendaRaw = binEstResp?.comunicacaoVenda?.situacao
+                       ?? binEstResp?.comunicacaoVenda
+                       ?? binEstResp?.comunicacao?.situacao
+                       ?? binEstResp?.comunicacao
+  const comunicVenda = val(comunicVendaRaw, binEstNull ? 'NÃO CONSULTADO' : 'NADA CONSTA').toUpperCase()
+
+  // Alterações de características
+  const altRaw = binEstResp?.alteracoes ?? binEstResp?.alteracoesCaracteristicas ?? {}
+  const alteracoes = {
+    COMBUSTÍVEL: val(altRaw?.combustivel ?? altRaw?.tipoCombustivel, 'Sem Alteração'),
+    CHASSI:      val(altRaw?.chassi      ?? altRaw?.numeroChassi,    'Sem Alteração'),
+    MOTOR:       val(altRaw?.motor       ?? altRaw?.numeroMotor,     'Sem Alteração'),
+    COR:         val(altRaw?.cor         ?? altRaw?.corVeiculo,      'Sem Alteração'),
+  }
+
+  // Sinistro
+  const sinistroNull = !data.sinistro
+  const sinistroJ    = JSON.stringify(data.sinistro ?? {}).toUpperCase()
+  const temSinistro  = !sinistroNull && sinistroJ.includes('CONSTA') && !sinistroJ.includes('NADA CONSTA') && !sinistroJ.includes('NAO EXISTEM') && !sinistroJ.includes('NÃO EXISTEM')
+  const sinistroResp = data.sinistro?.resposta ?? data.sinistro ?? {}
+  const sinistroDesc = val(
+    data.sinistro?.cabecalho?.resultado ?? sinistroResp?.situacao ?? sinistroResp?.resultado,
+    sinistroNull ? 'NÃO CONSULTADO' : temSinistro ? 'CONSTA INDÍCIO' : 'Não Existem Indícios de Sinistro'
+  ).toUpperCase()
+
+  // Leilão
+  const leilaoNull = !data.leilao
+  const leilResp   = data.leilao?.resposta ?? data.leilao ?? {}
+  const leilaoBaseA   = Array.isArray(leilResp?.baseA   ?? leilResp?.historicoBaseA)  ? (leilResp?.baseA   ?? leilResp?.historicoBaseA)  : []
+  const leilaoBaseB   = Array.isArray(leilResp?.baseB   ?? leilResp?.historicoBaseB)  ? (leilResp?.baseB   ?? leilResp?.historicoBaseB)  : []
+  const leilaoRemark  = Array.isArray(leilResp?.remarketing ?? leilResp?.historicoRem) ? (leilResp?.remarketing ?? leilResp?.historicoRem) : []
+  const leilaoLotes   = Array.isArray(leilResp?.lotes   ?? leilResp?.leiloes)         ? (leilResp?.lotes   ?? leilResp?.leiloes)         : []
+  const todosLeilao   = [...leilaoBaseA, ...leilaoBaseB, ...leilaoRemark, ...leilaoLotes]
+  const temLeilao     = todosLeilao.length > 0
+
+  // Gravame
+  const gravameNull = !data.gravame
+  const gravResp    = data.gravame?.resposta ?? data.gravame ?? {}
+  const gravames: any[] = Array.isArray(gravResp?.gravames ?? gravResp?.listaGravames) ? (gravResp?.gravames ?? gravResp?.listaGravames) : []
+
+  // Débitos (consulta-base)
+  const licenciamento  = num(raw.licenciamento)
+  const ipvaVal        = num(raw.ipva)
+  const multasTotal    = num(raw.multas ?? raw.totalMultas)
+  const dpvat          = val(raw.dpvat, 'NAODISPONIVEL').toUpperCase()
+
+  // Score
+  const score = calcScore(data)
+  const agora = new Date().toLocaleString('pt-BR')
+
+  // ─── Contadores ───────────────────────────────────────────────────────────────
+  const situacaoVTipo: TipoCard = (situacaoV === 'CIRCULACAO' || situacaoV === 'EM CIRCULAÇÃO' || situacaoV === 'EM CIRCULACAO') ? 'normal' : 'alerta'
+  const situacaoCTipo: TipoCard = situacaoC === 'NORMAL' ? 'normal' : 'alerta'
+  const altTipos = Object.values(alteracoes).map(v => v === 'Sem Alteração' ? 'normal' as TipoCard : 'alerta' as TipoCard)
+
+  const gCards: TipoCard[] = [
+    situacaoVTipo, situacaoCTipo,
+    temLeilao ? 'alerta' : 'normal',
+    binFedNull ? 'atencao' : temRoubo ? 'alerta' : 'normal',
+    sinistroNull ? 'atencao' : temSinistro ? 'alerta' : 'normal',
+    altTipos.some(t => t !== 'normal') ? 'alerta' : 'normal',
+    temRenajud ? 'alerta' : 'normal',
+    comunicVenda.includes('NADA') || comunicVenda.includes('NÃO CONSULTADO') ? 'normal' : 'atencao',
+    rDENATRAN.some(r => tipoRestr(r) === 'alerta') ? 'alerta' : rDENATRAN.some(r => tipoRestr(r) === 'atencao') ? 'atencao' : 'normal',
+  ]
+
+  function cnt(cards: TipoCard[], tipo: TipoCard) { return cards.filter(c => c === tipo).length }
+
+  const todosRestr = [...rDETRAN, ...rDENATRAN]
+  const gravNormal   = gravames.filter((g: any) => { const s = (g.situacao ?? g.tipo ?? g.tipoGravame ?? '').toUpperCase(); return s.includes('BAIXADO') || s.includes('HISTORICO') || s.includes('HISTÓRICO') }).length
+  const gravAtencao  = gravames.filter((g: any) => { const s = (g.situacao ?? g.tipo ?? g.tipoGravame ?? '').toUpperCase(); return s.includes('ATUAL') || s.includes('ATIVO') || s.includes('ALIEN') }).length
 
   return (
     <div className="max-w-4xl mx-auto">
 
       {/* Topbar */}
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="p-2 rounded-lg hover:bg-brand-gray-light transition-colors">
             <ArrowLeft className="w-4 h-4 text-brand-gray" />
           </Link>
           <div>
             <h1 className="text-xl font-bold text-brand-dark font-mono">{id}</h1>
-            <p className="text-xs text-brand-gray flex items-center gap-1">
-              <Clock className="w-3 h-3" /> {agora}
-            </p>
+            <p className="text-xs text-brand-gray">{agora}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 px-3 py-2 text-xs text-brand-gray border border-brand-border rounded-lg hover:bg-brand-gray-light transition-colors">
-            <Share2 className="w-3.5 h-3.5" /> Compartilhar
-          </button>
-          <a href={`/api/pdf/${id}`} target="_blank"
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-brand-green hover:bg-brand-green-dark text-white rounded-lg transition-colors">
-            <Download className="w-3.5 h-3.5" /> Baixar PDF
-          </a>
-        </div>
+        <a href={`/api/pdf/${id}`} target="_blank"
+           className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue/90 text-white rounded-xl transition-colors">
+          <Download className="w-4 h-4" /> Visualizar PDF Completo
+        </a>
       </div>
 
-      {/* Banner do veículo */}
-      <div className="rounded-2xl p-6 text-white mb-4"
+      {/* Banner */}
+      <div className="rounded-2xl p-5 text-white mb-4"
            style={{ background: 'linear-gradient(135deg, #007A3D 0%, #00A651 60%, #005C2E 100%)' }}>
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <p className="text-white/60 text-xs mb-1 uppercase tracking-wide">Consulta Veicular</p>
-            <h2 className="text-2xl font-extrabold">{marcaModelo}</h2>
-            <p className="text-3xl font-mono font-extrabold mt-1">{placa}</p>
-            {anoStr && <p className="text-white/70 text-sm mt-1">Ano {anoStr}</p>}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-white/55 text-[10px] uppercase tracking-widest mb-0.5">Ano Modelo {anoStr}</p>
+            <h2 className="text-xl font-extrabold uppercase leading-tight">{mm}</h2>
+            <p className="text-3xl font-mono font-extrabold tracking-[0.25em] mt-1">{placaFmt}</p>
+            {cor && <p className="text-white/55 text-xs mt-1">Cor {cor.toUpperCase()}</p>}
           </div>
           <ScoreRing score={score} />
         </div>
-
-        {/* 7 ícones de status */}
-        <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 mt-5 pt-5 border-t border-white/20">
-          {[
-            { label: 'DETRAN',       ok: !temRenajud },
-            { label: 'RESTRIÇÕES',   ok: !temAlienacao && !temRenajud },
-            { label: 'ALIENAÇÃO',    ok: !temAlienacao },
-            { label: 'SINISTRO',     ok: !temSinistro },
-            { label: 'ROUBO/FURTO',  ok: !temRoubo },
-            { label: 'LEILÃO',       ok: !temLeilao },
-            { label: 'ALTERAÇÕES',   ok: true },
-          ].map(s => (
-            <div key={s.label} className="flex flex-col items-center gap-1.5">
-              <StatusIconBig ok={s.ok} />
-              <span className="text-[9px] text-white/70 text-center leading-tight font-medium">{s.label}</span>
-            </div>
-          ))}
-        </div>
       </div>
 
-      {/* Erros da API — módulos não contratados ou com falha */}
-      {data.erros && data.erros.length > 0 && (
+      {/* Erros da API */}
+      {data.erros?.length > 0 && (
         <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-          <p className="text-xs font-semibold text-yellow-800 mb-2">Módulos não retornaram dados:</p>
+          <p className="text-xs font-semibold text-yellow-800 mb-1">Módulos com falha:</p>
           {data.erros.map((e: string, i: number) => (
-            <p key={i} className="text-xs text-yellow-700 leading-relaxed">{e}</p>
+            <p key={i} className="text-xs text-yellow-700">{e}</p>
           ))}
-          <p className="text-xs text-yellow-600 mt-2">Verifique se esses módulos estão contratados no painel Assertiva.</p>
         </div>
       )}
 
-      <div className="space-y-4">
+      {/* ── GERAL ──────────────────────────────────────────────────────────── */}
+      <SecaoAcordion titulo="GERAL"
+        normal={cnt(gCards, 'normal')} alerta={cnt(gCards, 'alerta')} atencao={cnt(gCards, 'atencao')}
+        defaultAberto>
+        <CardStatus titulo="Situação do Veículo" valor={situacaoV} tipo={situacaoVTipo} />
+        <CardStatus titulo="Situação Chassi" valor={situacaoC}
+          tipo={situacaoCTipo} />
+        <CardStatus titulo="Histórico de Leilão"
+          valor={leilaoNull ? 'Não consultado' : temLeilao ? 'Existem registros de histórico de Leilão' : 'Nada consta'}
+          tipo={leilaoNull ? 'atencao' : temLeilao ? 'alerta' : 'normal'} />
+        <CardStatus titulo="Histórico Roubo/Furto"
+          valor={binFedNull ? 'Não consultado' : temRoubo ? 'CONSTA OCORRÊNCIA' : 'Não Existem Registros de histórico de Roubo/Furto'}
+          tipo={binFedNull ? 'atencao' : temRoubo ? 'alerta' : 'normal'} />
+        <CardStatus titulo="Indício de Sinistro"
+          valor={sinistroNull ? 'Não consultado' : temSinistro ? 'CONSTA INDÍCIO' : 'Não localizamos registros que mostre algum Indício de Sinistro'}
+          tipo={sinistroNull ? 'atencao' : temSinistro ? 'alerta' : 'normal'} />
+        <CardStatus titulo="Alterações de Características"
+          valor={altTipos.every(t => t === 'normal') ? 'Não Existem alterações de Características' : 'CONSTA ALTERAÇÃO'}
+          tipo={altTipos.some(t => t !== 'normal') ? 'alerta' : 'normal'} />
+        <CardStatus titulo="RENAJUD"
+          valor={temRenajud ? 'CONSTA RESTRIÇÃO RENAJUD' : 'NADA CONSTA'}
+          tipo={temRenajud ? 'alerta' : 'normal'} />
+        <CardStatus titulo="Comun. Venda" valor={comunicVenda}
+          tipo={comunicVenda.includes('NADA') || comunicVenda.includes('NÃO CONSULTADO') ? 'normal' : 'atencao'} />
+        <CardStatus titulo="Restrições DENATRAN"
+          valor={rDENATRAN.some(r => tipoRestr(r) !== 'normal') ? 'Existem Registros críticos' : 'NADA CONSTA'}
+          tipo={rDENATRAN.some(r => tipoRestr(r) === 'alerta') ? 'alerta' : rDENATRAN.some(r => tipoRestr(r) === 'atencao') ? 'atencao' : 'normal'} />
+        <CardStatus titulo="Restrições DETRAN"
+          valor={rDETRAN.some(r => tipoRestr(r) !== 'normal') ? 'Existem Registros críticos' : 'NADA CONSTA'}
+          tipo={rDETRAN.some(r => tipoRestr(r) === 'alerta') ? 'alerta' : rDETRAN.some(r => tipoRestr(r) === 'atencao') ? 'atencao' : 'normal'} />
+      </SecaoAcordion>
 
-        {/* Identificação */}
-        <div className="card p-6">
-          <h3 className="font-semibold text-brand-dark mb-4 flex items-center gap-2">
-            <Car className="w-4 h-4 text-brand-green" /> Identificação
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {[
-              ['Placa',         val(pIdent.placa ?? id)],
-              ['Marca/Modelo',  val(pDesc.marcaModelo ?? pDesc.marca)],
-              ['Ano',           anoStr],
-              ['Cor',           val(pDesc.cor)],
-              ['Renavam',       val(pIdent.renavam)],
-              ['Chassi',        val(pIdent.chassi)],
-              ['Motor',         val(pIdent.numeroMotor ?? pIdent.motor)],
-              ['Município/UF',  val(pMov.municipio && pMov.uf ? `${pMov.municipio}/${pMov.uf}` : pMov.municipio ?? pMov.uf)],
-              ['Combustível',   val(pDesc.combustivel)],
-            ].map(([label, valor]) => (
-              <div key={label}>
-                <p className="text-xs text-brand-gray">{label}</p>
-                <p className="text-sm font-medium text-brand-dark font-mono break-all">{valor}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* ── RESTRIÇÕES ─────────────────────────────────────────────────────── */}
+      <SecaoAcordion titulo="RESTRIÇÕES"
+        normal={todosRestr.filter(r => tipoRestr(r) === 'normal').length}
+        alerta={todosRestr.filter(r => tipoRestr(r) === 'alerta').length}
+        atencao={todosRestr.filter(r => tipoRestr(r) === 'atencao').length}>
+        {rDETRAN.map((r, i) => (
+          <CardStatus key={`d${i}`} titulo={`DETRAN - RESTRIÇÃO ${i + 1}`} valor={r} tipo={tipoRestr(r)} />
+        ))}
+        {rDENATRAN.map((r, i) => (
+          <CardStatus key={`dn${i}`} titulo={`DENATRAN - RESTRIÇÃO ${i + 1}`} valor={r} tipo={tipoRestr(r)} />
+        ))}
+      </SecaoAcordion>
 
-        {/* Débitos e Restrições */}
-        <div className="card p-6">
-          <h3 className="font-semibold text-brand-dark mb-4">Débitos e Restrições</h3>
-          <div className="grid md:grid-cols-2 gap-2">
-            {[
-              { label: 'Licenciamento', valor: val(p.licenciamento ?? 'R$ 0,00'),         ok: true },
-              { label: 'IPVA',          valor: val(p.ipva ?? 'R$ 0,00'),                  ok: true },
-              { label: 'DPVAT',         valor: val(p.dpvat ?? 'NÃO DISPONÍVEL'),          ok: null },
-              { label: 'Multas',        valor: val(p.multas ?? p.totalMultas ?? 'R$ 0,00'), ok: true },
-            ].map(r => (
-              <div key={r.label} className="flex items-center justify-between p-3 bg-brand-gray-light rounded-lg">
-                <span className="text-xs text-brand-gray">{r.label}</span>
-                <div className="flex items-center gap-1.5">
-                  {r.ok === true  && <CheckCircle2 className="w-4 h-4 text-brand-green" />}
-                  {r.ok === false && <XCircle      className="w-4 h-4 text-brand-danger" />}
-                  {r.ok === null  && <AlertTriangle className="w-4 h-4 text-brand-warning" />}
-                  <span className="text-xs font-medium text-brand-dark">{r.valor}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2 p-3 bg-brand-green-light rounded-lg flex items-center justify-between">
-            <span className="text-xs font-medium text-brand-gray">Situação do Veículo</span>
-            <span className="text-xs font-bold text-brand-green">{val(pMov.situacao ?? pMov.situacaoVeiculo ?? 'EM CIRCULAÇÃO')}</span>
-          </div>
-        </div>
+      {/* ── HISTÓRICO LEILÃO ───────────────────────────────────────────────── */}
+      <SecaoAcordion titulo="HISTÓRICO LEILÃO"
+        normal={!leilaoNull && !temLeilao ? 1 : 0}
+        alerta={todosLeilao.length}
+        atencao={leilaoNull ? 1 : 0}>
+        {leilaoNull ? (
+          <CardStatus titulo="HISTÓRICO DE LEILÃO" valor="NÃO CONSULTADO NESTA PESQUISA" tipo="atencao" />
+        ) : todosLeilao.length === 0 ? (
+          <CardStatus titulo="HISTÓRICO DE LEILÃO" valor="NADA CONSTA" tipo="normal" />
+        ) : todosLeilao.map((l: any, i: number) => {
+          const dataL  = val(l.data ?? l.dataLeilao ?? l.dataCadastro, '')
+          const desc   = val(l.descricao ?? l.orgao ?? l.comarca ?? l.vara ?? l.leilaoeiro ?? l.evento, '')
+          const linha  = [dataL, desc].filter(Boolean).join(' ')
+          return <CardStatus key={i} titulo={`LEILÃO ${i + 1}`} valor={linha || '---'} tipo="alerta" />
+        })}
+      </SecaoAcordion>
 
-        {/* Roubo/Furto */}
-        <div className="card p-6">
-          <h3 className="font-semibold text-brand-dark mb-3">Histórico de Roubo e Furto</h3>
-          {binFederalNull ? (
-            <div className="flex items-center gap-2 p-3 bg-brand-gray-light rounded-lg">
-              <AlertTriangle className="w-5 h-5 text-brand-gray" />
-              <span className="text-sm text-brand-gray">Não consultado nesta pesquisa</span>
-            </div>
-          ) : (
-            <div className={`flex items-center gap-2 p-3 rounded-lg ${temRoubo ? 'bg-red-50' : 'bg-brand-green-light'}`}>
-              {temRoubo ? <XCircle className="w-5 h-5 text-brand-danger" /> : <CheckCircle2 className="w-5 h-5 text-brand-green" />}
-              <span className={`text-sm font-semibold ${temRoubo ? 'text-brand-danger' : 'text-brand-green'}`}>
-                {temRoubo ? 'CONSTA OCORRÊNCIA' : 'NADA CONSTA'}
-              </span>
-            </div>
-          )}
-        </div>
+      {/* ── HISTÓRICO ROUBO/FURTO ──────────────────────────────────────────── */}
+      <SecaoAcordion titulo="HISTÓRICO ROUBO/FURTO"
+        normal={!binFedNull && !temRoubo ? 1 : 0}
+        alerta={temRoubo ? 1 : 0}
+        atencao={0}>
+        <CardStatus titulo="HISTÓRICO DE ROUBO/FURTO"
+          valor={binFedNull ? 'NÃO CONSULTADO' : temRoubo ? 'CONSTA OCORRÊNCIA' : 'NADA CONSTA'}
+          tipo={binFedNull ? 'atencao' : temRoubo ? 'alerta' : 'normal'} />
+      </SecaoAcordion>
 
-        {/* Gravame */}
-        <div className="card p-6">
-          <h3 className="font-semibold text-brand-dark mb-4">Histórico de Gravame</h3>
-          {gravameNull ? (
-            <div className="flex items-center gap-2 p-3 bg-brand-gray-light rounded-lg">
-              <AlertTriangle className="w-5 h-5 text-brand-gray" />
-              <span className="text-sm text-brand-gray">Não consultado nesta pesquisa</span>
-            </div>
-          ) : gravames.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-brand-gray border-b border-brand-border">
-                    <th className="pb-2 font-medium">Data</th>
-                    <th className="pb-2 font-medium">UF</th>
-                    <th className="pb-2 font-medium">Situação</th>
-                    <th className="pb-2 font-medium">Agente Financeiro</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-brand-border">
-                  {gravames.map((g: any, i: number) => (
-                    <tr key={i}>
-                      <td className="py-2.5 text-xs text-brand-dark">{val(g.data ?? g.dataGravame)}</td>
-                      <td className="py-2.5 text-xs text-brand-dark">{val(g.uf)}</td>
-                      <td className="py-2.5">
-                        <span className="text-xs font-semibold text-brand-green">{val(g.situacao ?? g.tipoGravame)}</span>
-                      </td>
-                      <td className="py-2.5 text-xs text-brand-gray">{val(g.nome ?? g.agente ?? g.nomeAgente)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 p-3 bg-brand-green-light rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-brand-green" />
-              <span className="text-sm font-semibold text-brand-green">NADA CONSTA</span>
-            </div>
-          )}
-        </div>
+      {/* ── ALTERAÇÃO CARACTERÍSTICAS ──────────────────────────────────────── */}
+      <SecaoAcordion titulo="ALTERAÇÃO CARACTERÍSTICAS"
+        normal={altTipos.filter(t => t === 'normal').length}
+        alerta={altTipos.filter(t => t === 'alerta').length}
+        atencao={0}>
+        {(Object.entries(alteracoes) as [string, string][]).map(([k, v], i) => (
+          <CardStatus key={k} titulo={k} valor={v.toUpperCase()} tipo={altTipos[i]} />
+        ))}
+      </SecaoAcordion>
 
-        {/* Sinistro */}
-        <div className="card p-6">
-          <h3 className="font-semibold text-brand-dark mb-3">Indício de Sinistro</h3>
-          {sinistroNull ? (
-            <div className="flex items-center gap-2 p-3 bg-brand-gray-light rounded-lg">
-              <AlertTriangle className="w-5 h-5 text-brand-gray" />
-              <span className="text-sm text-brand-gray">Não consultado nesta pesquisa</span>
-            </div>
-          ) : (
-            <div className={`flex items-center gap-2 p-3 rounded-lg ${temSinistro ? 'bg-red-50' : 'bg-brand-green-light'}`}>
-              {temSinistro ? <XCircle className="w-5 h-5 text-brand-danger" /> : <CheckCircle2 className="w-5 h-5 text-brand-green" />}
-              <span className={`text-sm font-semibold ${temSinistro ? 'text-brand-danger' : 'text-brand-green'}`}>
-                {temSinistro ? 'INDÍCIO DETECTADO' : 'NADA CONSTA'}
-              </span>
-            </div>
-          )}
-          <p className="text-xs text-brand-gray mt-2">
-            Esta informação representa indícios baseados em fontes de dados. Realize uma vistoria física para confirmar.
-          </p>
-        </div>
+      {/* ── COMUNIC. VENDA ─────────────────────────────────────────────────── */}
+      <SecaoAcordion titulo="COMUNIC. VENDA" normal={1} alerta={0} atencao={0}>
+        <CardStatus titulo="COMUN. VENDA" valor={comunicVenda} tipo="normal" />
+      </SecaoAcordion>
 
-        {/* Leilão */}
-        <div className="card p-6">
-          <h3 className="font-semibold text-brand-dark mb-4">Histórico de Leilão</h3>
-          {leilaoNull ? (
-            <div className="flex items-center gap-2 p-3 bg-brand-gray-light rounded-lg">
-              <AlertTriangle className="w-5 h-5 text-brand-gray" />
-              <span className="text-sm text-brand-gray">Não consultado nesta pesquisa</span>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {[
-                { label: 'BASE A',      items: leilaoBaseA  },
-                { label: 'BASE B',      items: leilaoBaseB  },
-                { label: 'REMARKETING', items: leilaoRemark },
-              ].map(({ label, items }) => (
-                <div key={label} className="flex items-center justify-between p-3 bg-brand-gray-light rounded-lg">
-                  <span className="text-xs font-medium text-brand-dark">{label}</span>
-                  <div className="flex items-center gap-1.5">
-                    {items.length > 0
-                      ? <><XCircle className="w-4 h-4 text-brand-danger" /><span className="text-xs font-medium text-brand-danger">CONSTA ({items.length})</span></>
-                      : <><CheckCircle2 className="w-4 h-4 text-brand-green" /><span className="text-xs font-medium text-brand-green">NADA CONSTA</span></>
-                    }
-                  </div>
-                </div>
-              ))}
-              {leilaoLotes.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-xs font-semibold text-brand-danger mb-2">{leilaoLotes.length} registro(s) de leilão encontrado(s)</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Decodificador de Chassi */}
-        {chassiD && Object.keys(chassiD).length > 2 && (
-          <div className="card p-6">
-            <h3 className="font-semibold text-brand-dark mb-4">Decodificador de Chassi</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {[
-                ['Identificação', chassiD.identificacaoCompleta ?? chassiD.ident],
-                ['Fabricante',    chassiD.fabricante],
-                ['Modelo',        chassiD.modelo],
-                ['Veículo',       chassiD.veiculo],
-                ['Transmissão',   chassiD.transmissao],
-                ['Combustível',   chassiD.combustivel],
-                ['Carroceria',    chassiD.carroceria],
-                ['País/Local',    chassiD.pais ?? chassiD.local],
-                ['Cód. FIPE',     chassiD.codigoFipe],
-              ].filter(([, v]) => v).map(([label, valor]) => (
-                <div key={String(label)}>
-                  <p className="text-xs text-brand-gray">{label}</p>
-                  <p className="text-sm font-medium text-brand-dark">{String(valor)}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* ── DÉBITOS ────────────────────────────────────────────────────────── */}
+      <SecaoAcordion titulo="DÉBITOS"
+        normal={licenciamento === 0 && multasTotal === 0 ? 1 : 0}
+        alerta={[licenciamento, multasTotal, ipvaVal].filter(v => v > 0).length}
+        atencao={0}>
+        <CardStatus titulo="LICENCIAMENTO"
+          valor={licenciamento > 0 ? licenciamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : 'NADA CONSTA'}
+          tipo={tipoMoeda(licenciamento)} />
+        <CardStatus titulo="DPVAT" valor={dpvat} tipo="atencao" />
+        <CardStatus titulo="MULTAS" valor={moedaBR(multasTotal)} tipo={tipoMoeda(multasTotal)} />
+        {ipvaVal > 0 && (
+          <CardStatus titulo="IPVA" valor={moedaBR(ipvaVal)} tipo="alerta" />
         )}
+      </SecaoAcordion>
 
-        {/* FIPE */}
-        {data.fipe && (
-          <div className="card p-6">
-            <h3 className="font-semibold text-brand-dark mb-4">Tabela FIPE</h3>
-            {data.fipe.preco && (
-              <div className="p-4 bg-brand-green-light rounded-xl mb-4">
-                <p className="text-xs text-brand-gray">Valor atual</p>
-                <p className="text-2xl font-extrabold text-brand-green">
-                  {typeof data.fipe.preco === 'string' ? data.fipe.preco : `R$ ${Number(data.fipe.preco).toLocaleString('pt-BR')}`}
-                </p>
-              </div>
-            )}
-          </div>
+      {/* ── MULTAS (individuais) ───────────────────────────────────────────── */}
+      {multasLista.length > 0 && (
+        <SecaoAcordion titulo="MULTAS" normal={0} alerta={0} atencao={multasLista.length}>
+          {multasLista.map((m: any, i: number) => {
+            const dataM = val(m.data ?? m.dataInfracao ?? m.dataMulta, '')
+            const valor = m.valor ? `R$ ${num(m.valor).toFixed(2)}` : ''
+            const tit   = [dataM, valor].filter(Boolean).join(' - ')
+            const desc  = val(m.descricao ?? m.infracao ?? m.tipoInfracao ?? m.natureza, '---').toUpperCase()
+            return <CardStatus key={i} titulo={tit || `MULTA ${i + 1}`} valor={desc} tipo="atencao" />
+          })}
+        </SecaoAcordion>
+      )}
+
+      {/* ── INDÍCIO DE SINISTRO ────────────────────────────────────────────── */}
+      <SecaoAcordion titulo="INDÍCIO DE SINISTRO"
+        normal={!sinistroNull && !temSinistro ? 1 : 0}
+        alerta={temSinistro ? 1 : 0}
+        atencao={sinistroNull ? 1 : 0}>
+        <CardStatus titulo="INDÍCIO DE SINISTRO"
+          valor={sinistroNull ? 'NÃO CONSULTADO' : sinistroDesc}
+          tipo={sinistroNull ? 'atencao' : temSinistro ? 'alerta' : 'normal'} />
+      </SecaoAcordion>
+
+      {/* ── INFORMAÇÕES ADICIONAIS ─────────────────────────────────────────── */}
+      <SecaoAcordion titulo="INFORMAÇÕES ADICIONAIS"
+        normal={1}
+        alerta={[licenciamento, multasTotal].filter(v => v > 0).length}
+        atencao={0}>
+        <CardStatus titulo="OBS GERAIS" valor={val(raw.obsGerais, 'NADA CONSTA').toUpperCase()} tipo="normal" />
+        {licenciamento > 0 && (
+          <CardStatus
+            titulo="LICENCIAMENTO"
+            valor={`Venc. - valor R$ ${licenciamento.toFixed(2)} - atual R$ ${licenciamento.toFixed(2)}`}
+            tipo="alerta" />
         )}
+        {multasTotal > 0 && (
+          <CardStatus
+            titulo="MULTA"
+            valor={`Venc. - valor R$${multasTotal.toFixed(2)} - atual R$${multasTotal.toFixed(2)}`}
+            tipo="alerta" />
+        )}
+      </SecaoAcordion>
 
-        {/* Aviso legal */}
-        <div className="card p-4 bg-brand-gray-light">
-          <p className="text-xs text-brand-gray leading-relaxed">
-            Esta consulta veicular não tem caráter pericial e não substitui a perícia oficial.
-            As informações têm validade apenas para o momento de sua realização e são oriundas de bases públicas e privadas.
-            A Ficha Auto não se responsabiliza por informações publicadas após a emissão desta consulta.
-          </p>
-        </div>
+      {/* ── GRAVAME ────────────────────────────────────────────────────────── */}
+      <SecaoAcordion titulo="GRAVAME"
+        normal={gravameNull ? 0 : gravames.length === 0 ? 1 : gravNormal}
+        alerta={0}
+        atencao={gravAtencao}>
+        {gravameNull ? (
+          <CardStatus titulo="GRAVAME" valor="NÃO CONSULTADO" tipo="atencao" />
+        ) : gravames.length === 0 ? (
+          <CardStatus titulo="GRAVAME" valor="NADA CONSTA" tipo="normal" />
+        ) : gravames.map((g: any, i: number) => {
+          const banco  = val(g.nome ?? g.agente ?? g.nomeAgente ?? g.nomeFinanciador, '---').toUpperCase()
+          const dataG  = val(g.data ?? g.dataGravame ?? g.dataInclusao, '')
+          const sitG   = val(g.situacao ?? g.tipoGravame ?? g.tipo ?? g.status, '---').toUpperCase()
+          const isAtual = sitG.includes('ATUAL') || sitG.includes('ATIVO') || sitG.includes('ALIEN')
+          const tit    = [dataG, banco].filter(Boolean).join(' ')
+          return (
+            <CardStatus key={i} titulo={tit || `GRAVAME ${i + 1}`}
+              valor={isAtual ? `ATUAL - ${sitG}` : `HISTÓRICO - ${sitG}`}
+              tipo={isAtual ? 'atencao' : 'normal'} />
+          )
+        })}
+      </SecaoAcordion>
 
-      </div>
     </div>
   )
 }
