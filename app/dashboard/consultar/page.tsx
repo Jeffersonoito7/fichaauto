@@ -31,17 +31,31 @@ function maskCnpj(v: string) {
   return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`
 }
 
+function isMercosul(p: string) {
+  const c = p.replace(/[^A-Z0-9]/gi, '').toUpperCase()
+  return c.length >= 5 && /[A-Z]/.test(c[4])
+}
+
 export default function ConsultarPage() {
   const router  = useRouter()
   const [aba, setAba]         = useState<Aba>('veiculo')
   const [subTipo, setSubTipo] = useState<'placa' | 'chassi'>('placa')
   const [valor, setValor]     = useState('')
   const [loading, setLoading] = useState(false)
+  const [mercosul, setMercosul] = useState(true)
 
   function handleChange(v: string) {
-    if (aba === 'veiculo')  setValor(subTipo === 'placa' ? formatPlaca(v) : v.toUpperCase().slice(0, 17))
-    if (aba === 'cpf')      setValor(formatCpf(v))
-    if (aba === 'cnpj')     setValor(formatCnpj(v))
+    if (aba === 'veiculo' && subTipo === 'placa') {
+      const fmt = formatPlaca(v)
+      setValor(fmt)
+      if (fmt.length >= 5) setMercosul(isMercosul(fmt))
+    } else if (aba === 'veiculo') {
+      setValor(v.toUpperCase().slice(0, 17))
+    } else if (aba === 'cpf') {
+      setValor(formatCpf(v))
+    } else if (aba === 'cnpj') {
+      setValor(formatCnpj(v))
+    }
   }
 
   function isValido() {
@@ -112,7 +126,9 @@ export default function ConsultarPage() {
   }
 
   const placeholders: Record<Aba, string> = {
-    veiculo: subTipo === 'placa' ? 'ABC1D23 ou ABC1234' : 'Ex: 93HFC2630HZ104454',
+    veiculo: subTipo === 'placa'
+      ? (mercosul ? 'ABC1D23' : 'ABC-1234')
+      : 'Ex: 93HFC2630HZ104454',
     cpf:     '000.000.000-00',
     cnpj:    '00.000.000/0001-00',
   }
@@ -142,21 +158,38 @@ export default function ConsultarPage() {
 
         {/* Sub-abas veículo */}
         {aba === 'veiculo' && (
-          <div className="flex gap-2 mb-5">
-            {(['placa', 'chassi'] as const).map(t => (
+          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+            <div className="flex gap-2">
+              {(['placa', 'chassi'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => { setSubTipo(t); setValor('') }}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                    subTipo === t
+                      ? 'border-brand-green bg-brand-green-light text-brand-green'
+                      : 'border-brand-border text-brand-gray hover:border-brand-green/40'
+                  }`}
+                >
+                  {t === 'placa' ? <Car className="w-3.5 h-3.5" /> : <Hash className="w-3.5 h-3.5" />}
+                  {t === 'placa' ? 'Por Placa' : 'Por Chassi'}
+                </button>
+              ))}
+            </div>
+
+            {/* Toggle Mercosul */}
+            {subTipo === 'placa' && (
               <button
-                key={t}
-                onClick={() => { setSubTipo(t); setValor('') }}
-                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                  subTipo === t
-                    ? 'border-brand-green bg-brand-green-light text-brand-green'
-                    : 'border-brand-border text-brand-gray hover:border-brand-green/40'
-                }`}
+                type="button"
+                onClick={() => setMercosul(m => !m)}
+                className="flex items-center gap-2 text-xs font-medium text-brand-gray select-none"
               >
-                {t === 'placa' ? <Car className="w-3.5 h-3.5" /> : <Hash className="w-3.5 h-3.5" />}
-                {t === 'placa' ? 'Por Placa' : 'Por Chassi'}
+                <span className={mercosul ? 'text-brand-dark font-semibold' : ''}>Mercosul</span>
+                <div className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${mercosul ? 'bg-brand-green' : 'bg-brand-gray-light border border-brand-border'}`}>
+                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${mercosul ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </div>
+                <span className={!mercosul ? 'text-brand-dark font-semibold' : ''}>Antiga</span>
               </button>
-            ))}
+            )}
           </div>
         )}
 

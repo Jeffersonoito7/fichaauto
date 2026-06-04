@@ -126,20 +126,43 @@ export default function RelatorioPage() {
   if (!data) return null
 
   const p      = data.placa     ?? {}
-  const bin    = data.binFederal ?? {}
-  const sin    = data.sinistro   ?? {}
-  const grav   = data.gravame    ?? {}
-  const lei    = data.leilao     ?? {}
-  const chassiD = data.chassi   ?? {}
   const score  = calcScore(data)
   const agora  = new Date().toLocaleString('pt-BR')
 
-  // Suporte à resposta aninhada v3 da Assertiva
-  const pDesc  = p.resposta?.descricao     ?? p
+  // Dados de identificação — resposta aninhada v3
+  const pDesc  = p.resposta?.descricao       ?? p
   const pIdent = p.resposta?.identificadores ?? p
-  const pMov   = p.resposta?.movimentacao  ?? p
-  const pRestr = p.resposta?.restricoes    ?? p
-  const pFicha = p.resposta?.fichaTecnica  ?? {}
+  const pMov   = p.resposta?.movimentacao    ?? p
+  const pRestr = p.resposta?.restricoes      ?? p
+
+  // Módulos secundários — null = não consultado / erro
+  const binFederalNull = data.binFederal === null || data.binFederal === undefined
+  const sinistroNull   = data.sinistro   === null || data.sinistro   === undefined
+  const gravameNull    = data.gravame    === null || data.gravame    === undefined
+  const leilaoNull     = data.leilao     === null || data.leilao     === undefined
+
+  const bin  = data.binFederal ?? {}
+  const sin  = data.sinistro   ?? {}
+  const grav = data.gravame    ?? {}
+  const lei  = data.leilao     ?? {}
+  const chassiD = data.chassi  ?? {}
+
+  // Extração dos dados dos módulos — suporte a resposta aninhada v3
+  const binResp  = bin?.resposta  ?? bin  ?? {}
+  const sinResp  = sin?.resposta  ?? sin  ?? {}
+  const gravResp = grav?.resposta ?? grav ?? {}
+  const leiResp  = lei?.resposta  ?? lei  ?? {}
+
+  // Gravame — lista de financiamentos
+  const gravames = Array.isArray(gravResp?.gravames ?? gravResp?.listaGravames)
+    ? (gravResp?.gravames ?? gravResp?.listaGravames)
+    : []
+
+  // Leilão — 3 bases
+  const leilaoBaseA      = Array.isArray(leiResp?.baseA ?? leiResp?.historicoBaseA)      ? (leiResp?.baseA ?? leiResp?.historicoBaseA)            : []
+  const leilaoBaseB      = Array.isArray(leiResp?.baseB ?? leiResp?.historicoBaseB)      ? (leiResp?.baseB ?? leiResp?.historicoBaseB)            : []
+  const leilaoRemark     = Array.isArray(leiResp?.remarketing ?? leiResp?.historicoRem)  ? (leiResp?.remarketing ?? leiResp?.historicoRem)        : []
+  const leilaoLotes      = Array.isArray(leiResp?.lotes ?? leiResp?.leiloes)             ? (leiResp?.lotes ?? leiResp?.leiloes)                   : []
 
   const restricoes = [
     { label: 'Restrição Estadual 01', valor: val(pRestr.restricaoEstadual01 ?? pRestr.rest01 ?? 'NADA CONSTA'), ok: !(pRestr.restricaoEstadual01 ?? '').toString().toUpperCase().includes('CONSTA') === false },
@@ -150,9 +173,9 @@ export default function RelatorioPage() {
 
   const temRenajud   = JSON.stringify(pRestr).toUpperCase().includes('RENAJUD')
   const temAlienacao = JSON.stringify(pRestr).toUpperCase().includes('ALIEN')
-  const temSinistro  = JSON.stringify(sin).toUpperCase().includes('CONSTA') && !JSON.stringify(sin).toUpperCase().includes('NADA CONSTA')
-  const temRoubo     = JSON.stringify(bin).toUpperCase().includes('ROUBO') && !JSON.stringify(bin).toUpperCase().includes('NADA CONSTA')
-  const temLeilao    = JSON.stringify(lei).toUpperCase().includes('LOTE')
+  const temSinistro  = !sinistroNull && JSON.stringify(sinResp).toUpperCase().includes('CONSTA') && !JSON.stringify(sinResp).toUpperCase().includes('NADA CONSTA')
+  const temRoubo     = !binFederalNull && JSON.stringify(binResp).toUpperCase().includes('ROUBO') && !JSON.stringify(binResp).toUpperCase().includes('NADA CONSTA')
+  const temLeilao    = leilaoBaseA.length > 0 || leilaoBaseB.length > 0 || leilaoRemark.length > 0 || leilaoLotes.length > 0
 
   const marcaModelo = val(pDesc.marcaModelo ?? pDesc.marca ?? pDesc.modelo ?? 'Veículo')
   const placa       = val(pIdent.placa ?? id)
@@ -219,6 +242,17 @@ export default function RelatorioPage() {
         </div>
       </div>
 
+      {/* Erros da API — módulos não contratados ou com falha */}
+      {data.erros && data.erros.length > 0 && (
+        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+          <p className="text-xs font-semibold text-yellow-800 mb-2">Módulos não retornaram dados:</p>
+          {data.erros.map((e: string, i: number) => (
+            <p key={i} className="text-xs text-yellow-700 leading-relaxed">{e}</p>
+          ))}
+          <p className="text-xs text-yellow-600 mt-2">Verifique se esses módulos estão contratados no painel Assertiva.</p>
+        </div>
+      )}
+
       <div className="space-y-4">
 
         {/* Identificação */}
@@ -276,20 +310,30 @@ export default function RelatorioPage() {
         {/* Roubo/Furto */}
         <div className="card p-6">
           <h3 className="font-semibold text-brand-dark mb-3">Histórico de Roubo e Furto</h3>
-          <div className={`flex items-center gap-2 p-3 rounded-lg ${temRoubo ? 'bg-red-50' : 'bg-brand-green-light'}`}>
-            {temRoubo
-              ? <XCircle className="w-5 h-5 text-brand-danger" />
-              : <CheckCircle2 className="w-5 h-5 text-brand-green" />}
-            <span className={`text-sm font-semibold ${temRoubo ? 'text-brand-danger' : 'text-brand-green'}`}>
-              {temRoubo ? 'CONSTA OCORRÊNCIA' : 'NADA CONSTA'}
-            </span>
-          </div>
+          {binFederalNull ? (
+            <div className="flex items-center gap-2 p-3 bg-brand-gray-light rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-brand-gray" />
+              <span className="text-sm text-brand-gray">Não consultado nesta pesquisa</span>
+            </div>
+          ) : (
+            <div className={`flex items-center gap-2 p-3 rounded-lg ${temRoubo ? 'bg-red-50' : 'bg-brand-green-light'}`}>
+              {temRoubo ? <XCircle className="w-5 h-5 text-brand-danger" /> : <CheckCircle2 className="w-5 h-5 text-brand-green" />}
+              <span className={`text-sm font-semibold ${temRoubo ? 'text-brand-danger' : 'text-brand-green'}`}>
+                {temRoubo ? 'CONSTA OCORRÊNCIA' : 'NADA CONSTA'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Gravame */}
         <div className="card p-6">
           <h3 className="font-semibold text-brand-dark mb-4">Histórico de Gravame</h3>
-          {Array.isArray(grav.gravames) && grav.gravames.length > 0 ? (
+          {gravameNull ? (
+            <div className="flex items-center gap-2 p-3 bg-brand-gray-light rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-brand-gray" />
+              <span className="text-sm text-brand-gray">Não consultado nesta pesquisa</span>
+            </div>
+          ) : gravames.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -301,14 +345,14 @@ export default function RelatorioPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-brand-border">
-                  {grav.gravames.map((g: any, i: number) => (
+                  {gravames.map((g: any, i: number) => (
                     <tr key={i}>
-                      <td className="py-2.5 text-xs text-brand-dark">{val(g.data)}</td>
+                      <td className="py-2.5 text-xs text-brand-dark">{val(g.data ?? g.dataGravame)}</td>
                       <td className="py-2.5 text-xs text-brand-dark">{val(g.uf)}</td>
                       <td className="py-2.5">
-                        <span className="text-xs font-semibold text-brand-green">{val(g.situacao)}</span>
+                        <span className="text-xs font-semibold text-brand-green">{val(g.situacao ?? g.tipoGravame)}</span>
                       </td>
-                      <td className="py-2.5 text-xs text-brand-gray">{val(g.nome ?? g.agente)}</td>
+                      <td className="py-2.5 text-xs text-brand-gray">{val(g.nome ?? g.agente ?? g.nomeAgente)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -325,14 +369,19 @@ export default function RelatorioPage() {
         {/* Sinistro */}
         <div className="card p-6">
           <h3 className="font-semibold text-brand-dark mb-3">Indício de Sinistro</h3>
-          <div className={`flex items-center gap-2 p-3 rounded-lg ${temSinistro ? 'bg-red-50' : 'bg-brand-green-light'}`}>
-            {temSinistro
-              ? <XCircle className="w-5 h-5 text-brand-danger" />
-              : <CheckCircle2 className="w-5 h-5 text-brand-green" />}
-            <span className={`text-sm font-semibold ${temSinistro ? 'text-brand-danger' : 'text-brand-green'}`}>
-              {temSinistro ? 'INDÍCIO DETECTADO' : 'NADA CONSTA'}
-            </span>
-          </div>
+          {sinistroNull ? (
+            <div className="flex items-center gap-2 p-3 bg-brand-gray-light rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-brand-gray" />
+              <span className="text-sm text-brand-gray">Não consultado nesta pesquisa</span>
+            </div>
+          ) : (
+            <div className={`flex items-center gap-2 p-3 rounded-lg ${temSinistro ? 'bg-red-50' : 'bg-brand-green-light'}`}>
+              {temSinistro ? <XCircle className="w-5 h-5 text-brand-danger" /> : <CheckCircle2 className="w-5 h-5 text-brand-green" />}
+              <span className={`text-sm font-semibold ${temSinistro ? 'text-brand-danger' : 'text-brand-green'}`}>
+                {temSinistro ? 'INDÍCIO DETECTADO' : 'NADA CONSTA'}
+              </span>
+            </div>
+          )}
           <p className="text-xs text-brand-gray mt-2">
             Esta informação representa indícios baseados em fontes de dados. Realize uma vistoria física para confirmar.
           </p>
@@ -341,17 +390,35 @@ export default function RelatorioPage() {
         {/* Leilão */}
         <div className="card p-6">
           <h3 className="font-semibold text-brand-dark mb-4">Histórico de Leilão</h3>
-          <div className="space-y-2">
-            {['BASE A', 'BASE B', 'REMARKETING'].map(base => (
-              <div key={base} className="flex items-center justify-between p-3 bg-brand-gray-light rounded-lg">
-                <span className="text-xs font-medium text-brand-dark">{base}</span>
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-brand-green" />
-                  <span className="text-xs font-medium text-brand-green">NADA CONSTA</span>
+          {leilaoNull ? (
+            <div className="flex items-center gap-2 p-3 bg-brand-gray-light rounded-lg">
+              <AlertTriangle className="w-5 h-5 text-brand-gray" />
+              <span className="text-sm text-brand-gray">Não consultado nesta pesquisa</span>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {[
+                { label: 'BASE A',      items: leilaoBaseA  },
+                { label: 'BASE B',      items: leilaoBaseB  },
+                { label: 'REMARKETING', items: leilaoRemark },
+              ].map(({ label, items }) => (
+                <div key={label} className="flex items-center justify-between p-3 bg-brand-gray-light rounded-lg">
+                  <span className="text-xs font-medium text-brand-dark">{label}</span>
+                  <div className="flex items-center gap-1.5">
+                    {items.length > 0
+                      ? <><XCircle className="w-4 h-4 text-brand-danger" /><span className="text-xs font-medium text-brand-danger">CONSTA ({items.length})</span></>
+                      : <><CheckCircle2 className="w-4 h-4 text-brand-green" /><span className="text-xs font-medium text-brand-green">NADA CONSTA</span></>
+                    }
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+              {leilaoLotes.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-brand-danger mb-2">{leilaoLotes.length} registro(s) de leilão encontrado(s)</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Decodificador de Chassi */}
@@ -391,16 +458,6 @@ export default function RelatorioPage() {
                 </p>
               </div>
             )}
-          </div>
-        )}
-
-        {/* Erros da API (informativo, não crítico) */}
-        {data.erros && data.erros.length > 0 && (
-          <div className="card p-4 border-brand-warning bg-yellow-50">
-            <p className="text-xs font-semibold text-brand-warning mb-1">Módulos com falha parcial</p>
-            {data.erros.map((e, i) => (
-              <p key={i} className="text-xs text-brand-gray">{e}</p>
-            ))}
           </div>
         )}
 
