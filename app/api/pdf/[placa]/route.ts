@@ -195,16 +195,20 @@ function tabelaGen(cols: string[], linhas: string[][]): string {
    PÁGINA 1 — identificação, características, débitos
 ════════════════════════════════════════════════════════════════════════════ */
 function pag1(placa: string, data: any, agora: string, proto: string): string {
-  const p = normalizaPlacaV3(data.placa)
-  const j = JSON.stringify(data).toUpperCase()
+  const p    = normalizaPlacaV3(data.placa)
+  const deb  = debitosBinEst(data)
+  const restOutrasUFs = restricoesBinEst(data)
+  const binFed = normalizaBinFederalV3(data.binFederal)
+  const leilao = normalizaLeilaoV3(data.leilao)
+  const sinistro = normalizaSinistroV3(data.sinistro)
 
-  const temRenajud          = j.includes('RENAJUD')
-  const temAlienacao        = j.includes('ALIEN')
-  const temAlienacaoFiduc   = j.includes('FIDUCIARIA') || j.includes('FIDUCIÁRIA')
-  const temSinistro         = j.includes('SINISTRO')   && !j.includes('NADA CONSTA')
-  const temRoubo            = j.includes('ROUBO')      && !j.includes('NADA CONSTA')
-  const temLeilao           = j.includes('LOTE')       || (j.includes('LEILÃO') && !j.includes('NADA CONSTA'))
-  const temAlteracoes       = j.includes('ALTERACAO')  && !j.includes('SEM ALTERACAO') && !j.includes('NADA CONSTA')
+  const temRenajud        = binFed.restricoes.some(r => r.toUpperCase().includes('RENAJUD')) || binFed.renajud.length > 0
+  const temAlienacao      = binFed.restricoes.some(r => r.toUpperCase().includes('ALIEN'))
+  const temAlienacaoFiduc = binFed.restricoes.some(r => r.toUpperCase().includes('FIDUCI'))
+  const temRoubo          = binFed.rouboFurto.length > 0
+  const temSinistro       = sinistro.temSinistro
+  const temLeilao         = leilao.todos.length > 0
+  const temAlteracoes     = false
 
   // três estados por ícone
   const stDetran:    Status = temRenajud   ? 'error' : 'ok'
@@ -216,10 +220,11 @@ function pag1(placa: string, data: any, agora: string, proto: string): string {
   const stAlteracoes:Status = temAlteracoes ? 'warn' : 'ok'
 
   const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
-  const rest1 = v(p.restricaoEstadual01, 'NADA CONSTA')
-  const rest2 = v(p.restricaoEstadual02, temRenajud ? 'RENAJUD' : 'NADA CONSTA')
-  const rest3 = v(p.restricaoEstadual03, temAlienacao ? 'ALIENACAO FIDUCIARIA' : 'NADA CONSTA')
-  const rest4 = v(p.restricaoEstadual04, 'NADA CONSTA')
+  // Usa restricoes do BIN Estadual (outrasUFs); fallback para consulta-base
+  const rest1 = restOutrasUFs[0] ?? v(p.restricaoEstadual01, 'NADA CONSTA')
+  const rest2 = restOutrasUFs[1] ?? v(p.restricaoEstadual02, 'NADA CONSTA')
+  const rest3 = restOutrasUFs[2] ?? v(p.restricaoEstadual03, 'NADA CONSTA')
+  const rest4 = restOutrasUFs[3] ?? v(p.restricaoEstadual04, 'NADA CONSTA')
 
   return `
 <div class="pg">
@@ -273,25 +278,25 @@ function pag1(placa: string, data: any, agora: string, proto: string): string {
       <td width="18%" style="font-weight:700;border:1px solid #ddd;padding:4px 6px">Rest. Estadual 01</td>
       <td width="32%" style="border:1px solid #ddd;padding:4px 6px;color:${cor(rest1)};font-weight:700">${rest1}</td>
       <td width="15%" style="font-weight:700;border:1px solid #ddd;padding:4px 6px">$ Licenciamento</td>
-      <td style="border:1px solid #ddd;padding:4px 6px">${moeda(p.licenciamento)}</td>
+      <td style="border:1px solid #ddd;padding:4px 6px">${moeda(deb.licenciamento)}</td>
     </tr>
     <tr style="background:#f7f7f7">
       <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">Rest. Estadual 02</td>
       <td style="border:1px solid #ddd;padding:4px 6px;color:${cor(rest2)};font-weight:700">${rest2}</td>
       <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">$ IPVA</td>
-      <td style="border:1px solid #ddd;padding:4px 6px">${moeda(p.ipva)}</td>
+      <td style="border:1px solid #ddd;padding:4px 6px">${moeda(deb.ipva)}</td>
     </tr>
     <tr style="background:#fff">
       <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">Rest. Estadual 03</td>
       <td style="border:1px solid #ddd;padding:4px 6px;color:${cor(rest3)};font-weight:700">${rest3}</td>
       <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">$ DPVAT</td>
-      <td style="border:1px solid #ddd;padding:4px 6px;color:#d97706;font-weight:700">${v(p.dpvat, 'NAODISPONIVEL')}</td>
+      <td style="border:1px solid #ddd;padding:4px 6px;color:#d97706;font-weight:700">${moeda(deb.dpvat)}</td>
     </tr>
     <tr style="background:#f7f7f7">
       <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">Rest. Estadual 04</td>
       <td style="border:1px solid #ddd;padding:4px 6px;color:${cor(rest4)};font-weight:700">${rest4}</td>
       <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">$ MULTAS</td>
-      <td style="border:1px solid #ddd;padding:4px 6px">${moeda(p.multas ?? p.totalMultas)}</td>
+      <td style="border:1px solid #ddd;padding:4px 6px">${moeda(deb.multasTotal)}</td>
     </tr>
     <tr style="background:#fff">
       <td style="font-weight:700;border:1px solid #ddd;padding:4px 6px">Situação Veículo</td>
@@ -316,19 +321,20 @@ function pag1(placa: string, data: any, agora: string, proto: string): string {
 function pag2(placa: string, data: any, agora: string, proto: string): string {
   const p    = normalizaPlacaV3(data.placa)
   const mm   = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
-  const j    = JSON.stringify(data).toUpperCase()
+  const bin  = normalizaBinFederalV3(data.binFederal)
+  const restOutrasUFs = restricoesBinEst(data)
 
-  const temRenajud   = j.includes('RENAJUD')
-  const temAlienacao = j.includes('ALIEN')
-  const temRoubo     = j.includes('ROUBO') && !j.includes('NADA CONSTA')
+  const temRenajud   = bin.restricoes.some(r => r.toUpperCase().includes('RENAJUD')) || bin.renajud.length > 0
+  const temAlienacao = bin.restricoes.some(r => r.toUpperCase().includes('ALIEN'))
+  const temRoubo     = bin.rouboFurto.length > 0
 
-  const rest1 = v(p.restricaoEstadual01, 'NADA CONSTA')
-  const rest2 = v(p.restricaoEstadual02, temRenajud ? 'RENAJUD' : 'NADA CONSTA')
-  const rest3 = v(p.restricaoEstadual03, temAlienacao ? 'ALIENACAO FIDUCIARIA' : 'NADA CONSTA')
-  const rest4 = v(p.restricaoEstadual04, 'SEM RESTRICAO')
+  // Usa restricoes BIN Estadual; fallback para consulta-base
+  const rest1 = restOutrasUFs[0] ?? v(p.restricaoEstadual01, 'NADA CONSTA')
+  const rest2 = restOutrasUFs[1] ?? v(p.restricaoEstadual02, 'NADA CONSTA')
+  const rest3 = restOutrasUFs[2] ?? v(p.restricaoEstadual03, 'NADA CONSTA')
+  const rest4 = restOutrasUFs[3] ?? v(p.restricaoEstadual04, 'NADA CONSTA')
 
   const gravames: any[]  = normalizaGravameV3(data.gravame)
-  const bin              = normalizaBinFederalV3(data.binFederal)
   const binNaoConsultado = data.binFederal === null || data.binFederal === undefined
 
   return `
@@ -412,14 +418,13 @@ function pag2(placa: string, data: any, agora: string, proto: string): string {
 
   ${secTitle('Histórico de Gravame')}
   ${tabelaGen(
-    ['Data', 'UF', 'Situação', 'Status', 'Nome'],
+    ['Restrição', 'Agente Financeiro', 'Devedor', 'Status'],
     gravames.length > 0
       ? gravames.map((g: any) => [
-          v(g.data ?? g.dataInclusao, '---'),
-          v(g.uf, '---'),
-          v(g.situacao, '---'),
-          v(g.status ?? g.situacao, '---'),
-          v(g.nome ?? g.agente ?? g.nomeFinanciador, '---'),
+          v(g.restricaoFinanceira ?? g.restricao ?? g.situacao ?? g.tipoGravame, '---'),
+          v(g.agenteFinanceiro ?? g.nome ?? g.agente ?? g.nomeFinanciador, '---'),
+          v(g.nomeFinanciado ?? g.nomeDevedor ?? g.devedor, '---'),
+          v(g.status ?? g.situacao ?? '', '---'),
         ])
       : []
   )}
@@ -436,21 +441,21 @@ function pag3(placa: string, data: any, agora: string, proto: string): string {
   const cd  = data.chassi ?? {}
   const mm  = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
 
-  const leilaoNaoConsultado = data.leilao === null || data.leilao === undefined
+  const leilaoNaoConsultado   = data.leilao   === null || data.leilao   === undefined
   const sinistroNaoConsultado = data.sinistro === null || data.sinistro === undefined
 
   const leil    = normalizaLeilaoV3(data.leilao)
   const sinistro = normalizaSinistroV3(data.sinistro)
 
-  const leilHdr = ['Data', 'Lote', 'Veículo', 'Placa', 'Chassi', 'Condição']
+  // API v3: historicoLeilao[] tem {data, numero, comitente, leiloeiro, uf}
+  const leilHdr = ['Data', 'Nº', 'Comitente / Órgão', 'Leiloeiro', 'UF']
   function leilLinhas(arr: any[]): string[][] {
     return arr.map((r: any) => [
       v(r.data ?? r.dataLeilao ?? r.dataCadastro, '---'),
-      v(r.lote ?? r.numeroLote, '---'),
-      v(r.veiculo ?? r.marcaModelo ?? r.descricao, '---'),
-      v(r.placa, '---'),
-      v(r.chassi, '---'),
-      v(r.condicao ?? r.situacaoVeiculo ?? r.estado, '---'),
+      v(r.numero ?? r.lote ?? r.numeroLote, '---'),
+      v(r.comitente ?? r.orgao ?? r.comarca ?? r.vara ?? r.descricao, '---'),
+      v(r.leiloeiro ?? r.leilaoeiro, '---'),
+      v(r.uf, '---'),
     ])
   }
   function leilRes(arr: any[], naoConsultado: boolean): string {
@@ -476,24 +481,9 @@ function pag3(placa: string, data: any, agora: string, proto: string): string {
 
   <p style="font-size:10px;font-weight:700;text-transform:uppercase;
             border-bottom:1.5px solid #444;padding-bottom:3px;margin:8px 0 4px">
-    HISTÓRICO DE LEILÃO BASE A:&nbsp;${leilRes(leil.baseA, leilaoNaoConsultado)}
+    HISTÓRICO DE LEILÃO:&nbsp;${leilRes(leil.todos, leilaoNaoConsultado)}
   </p>
-  ${tabelaGen(leilHdr, leilaoNaoConsultado ? [] : leilLinhas(leil.baseA))}
-
-  <p style="font-size:10px;font-weight:700;text-transform:uppercase;
-            border-bottom:1.5px solid #444;padding-bottom:3px;margin:8px 0 4px">
-    HISTÓRICO DE LEILÃO BASE B:&nbsp;${leilRes(leil.baseB, leilaoNaoConsultado)}
-  </p>
-  ${tabelaGen(leilHdr, leilaoNaoConsultado ? [] : leilLinhas(leil.baseB))}
-
-  <p style="font-size:10px;font-weight:700;text-transform:uppercase;
-            border-bottom:1.5px solid #444;padding-bottom:3px;margin:8px 0 4px">
-    HISTÓRICO DE REMARKETING:&nbsp;${leilRes(leil.remarketing, leilaoNaoConsultado)}
-  </p>
-  ${tabelaGen(leilHdr, leilaoNaoConsultado ? [] : leilLinhas(leil.remarketing))}
-  <p style="font-size:8px;color:#555;margin-bottom:8px">
-    *Remarketing automotivo contempla um evento onde o proprietário do veículo opta por realizar a venda de seu veículo utilizando a plataforma de um leiloeiro privado
-  </p>
+  ${tabelaGen(leilHdr, leilaoNaoConsultado ? [] : leilLinhas(leil.todos))}
 
   ${secTitle('Decodificador de Chassi')}
   <table width="100%" cellpadding="4" cellspacing="0"
@@ -528,15 +518,16 @@ function pag3(placa: string, data: any, agora: string, proto: string): string {
    PÁGINA 4 — informações adicionais
 ════════════════════════════════════════════════════════════════════════════ */
 function pag4(placa: string, data: any, agora: string, proto: string): string {
-  const p  = normalizaPlacaV3(data.placa)
-  const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
-  const j  = JSON.stringify(data).toUpperCase()
-  const temRenajud = j.includes('RENAJUD')
-  const temRoubo   = j.includes('ROUBO') && !j.includes('NADA CONSTA')
+  const p   = normalizaPlacaV3(data.placa)
+  const mm  = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
+  const deb = debitosBinEst(data)
+  const bin = normalizaBinFederalV3(data.binFederal)
+  const temRenajud = bin.restricoes.some(r => r.toUpperCase().includes('RENAJUD')) || bin.renajud.length > 0
+  const temRoubo   = bin.rouboFurto.length > 0
 
   const infos: [string, string, string][] = [
-    ['MULTAS DETRAN',        `R$ ${moeda(p.multas ?? p.totalMultas)}`, '#16a34a'],
-    ['IPVALicenciamento',    moeda(p.ipva),                            '#16a34a'],
+    ['MULTAS DETRAN',        `R$ ${moeda(deb.multasTotal)}`,          '#16a34a'],
+    ['IPVA / Licenciamento', `IPVA: ${moeda(deb.ipva)} | Lic: ${moeda(deb.licenciamento)}`, '#16a34a'],
     ['OBS GERAIS',           v(p.obsGerais, 'NADA CONSTA'),            '#16a34a'],
     ['debitos',              v(p.debitos, 'Sem débitos'),               '#16a34a'],
     ['Ocorrência',
@@ -814,45 +805,85 @@ function normalizaPlacaV3(raw: any): any {
 function normalizaGravameV3(raw: any): any[] {
   if (!raw) return []
   const resp = raw.resposta ?? raw
-  const lista = resp.gravames ?? resp.listaGravames ?? resp.historicoGravames ?? []
-  return Array.isArray(lista) ? lista : []
+  // API v3 retorna resp.gravame como objeto único, não array
+  if (Array.isArray(resp.gravames ?? resp.listaGravames ?? resp.historicoGravames)) {
+    return resp.gravames ?? resp.listaGravames ?? resp.historicoGravames
+  }
+  const obj = resp.gravame
+  if (obj && typeof obj === 'object' && Object.keys(obj).length > 0) return [obj]
+  return []
 }
 
-function normalizaLeilaoV3(raw: any): { baseA: any[]; baseB: any[]; remarketing: any[] } {
-  if (!raw) return { baseA: [], baseB: [], remarketing: [] }
+function normalizaLeilaoV3(raw: any): { todos: any[] } {
+  if (!raw) return { todos: [] }
   const resp = raw.resposta ?? raw
-  const baseA      = Array.isArray(resp?.baseA      ?? resp?.historicoBaseA)  ? (resp?.baseA      ?? resp?.historicoBaseA)  : []
-  const baseB      = Array.isArray(resp?.baseB      ?? resp?.historicoBaseB)  ? (resp?.baseB      ?? resp?.historicoBaseB)  : []
-  const remarketing = Array.isArray(resp?.remarketing ?? resp?.historicoRem)  ? (resp?.remarketing ?? resp?.historicoRem)   : []
-  const lotes      = Array.isArray(resp?.lotes       ?? resp?.leiloes)        ? (resp?.lotes       ?? resp?.leiloes)        : []
-  return { baseA: [...baseA, ...lotes], baseB, remarketing }
+  // API v3 retorna resp.historicoLeilao[]
+  if (Array.isArray(resp?.historicoLeilao) && resp.historicoLeilao.length > 0) {
+    return { todos: resp.historicoLeilao }
+  }
+  const todos = [
+    ...(Array.isArray(resp?.baseA)       ? resp.baseA       : []),
+    ...(Array.isArray(resp?.baseB)       ? resp.baseB       : []),
+    ...(Array.isArray(resp?.remarketing) ? resp.remarketing : []),
+    ...(Array.isArray(resp?.lotes)       ? resp.lotes       : []),
+    ...(Array.isArray(resp?.leiloes)     ? resp.leiloes     : []),
+  ]
+  return { todos }
 }
 
-function normalizaBinFederalV3(raw: any): { renajud: any[]; rouboFurto: any[]; situacao: string } {
-  if (!raw) return { renajud: [], rouboFurto: [], situacao: 'NAO_CONSULTADO' }
-  const resp   = raw.resposta ?? raw
-  const renajud = resp?.renajud?.restricoes ?? resp?.restricoesRenajud
-                ?? (Array.isArray(resp?.renajud) ? resp.renajud : [])
-  const roubo  = resp?.rouboFurto?.ocorrencias ?? resp?.ocorrenciasRouboFurto
-               ?? (Array.isArray(resp?.rouboFurto) ? resp.rouboFurto : [])
+function normalizaBinFederalV3(raw: any): { renajud: any[]; rouboFurto: any[]; restricoes: string[]; situacao: string } {
+  if (!raw) return { renajud: [], rouboFurto: [], restricoes: [], situacao: 'NAO_CONSULTADO' }
+  const resp = raw.resposta ?? raw
+
+  // API v3: resp.restricoes é array de strings ["ALIENACAO FIDUCIARIA","RENAINF","RENAJUD"]
+  const restricoesArr: string[] = Array.isArray(resp?.restricoes) ? resp.restricoes : []
+
+  // Tenta sub-estruturas detalhadas; fallback para strings do array
+  const renajudDetalhado = resp?.renajud?.restricoes ?? resp?.restricoesRenajud
+                        ?? (Array.isArray(resp?.renajud) ? resp.renajud : null)
+  const rouboDetalhado   = resp?.rouboFurto?.ocorrencias ?? resp?.ocorrenciasRouboFurto
+                        ?? (Array.isArray(resp?.rouboFurto) ? resp.rouboFurto : null)
+
+  const renajud   = renajudDetalhado   ?? restricoesArr.filter(r => r.toUpperCase().includes('RENAJUD')).map(r => ({ descricao: r }))
+  const rouboFurto = rouboDetalhado    ?? restricoesArr.filter(r => r.toUpperCase().includes('ROUBO') || r.toUpperCase().includes('FURTO')).map(r => ({ descricao: r }))
+
   const situacao = raw?.cabecalho?.resultado ?? resp?.situacao ?? resp?.resultado ?? 'SEM INFORMACAO'
   return {
-    renajud:   Array.isArray(renajud) ? renajud : [],
-    rouboFurto: Array.isArray(roubo)  ? roubo   : [],
-    situacao: String(situacao).toUpperCase(),
+    renajud:    Array.isArray(renajud)    ? renajud    : [],
+    rouboFurto: Array.isArray(rouboFurto) ? rouboFurto : [],
+    restricoes: restricoesArr,
+    situacao:   String(situacao).toUpperCase(),
   }
 }
 
 function normalizaSinistroV3(raw: any): { temSinistro: boolean; descricao: string } {
   if (!raw) return { temSinistro: false, descricao: 'NAO_CONSULTADO' }
-  const j = JSON.stringify(raw).toUpperCase()
-  const temSinistro = j.includes('CONSTA') && !j.includes('NADA CONSTA')
+  // API v3: resp.indicioSinistro é boolean
+  const temSinistro = raw.resposta?.indicioSinistro === true
+    || (JSON.stringify(raw).toUpperCase().includes('CONSTA') && !JSON.stringify(raw).toUpperCase().includes('NADA CONSTA'))
   const resp = raw.resposta ?? raw
   const desc = raw?.cabecalho?.resultado ?? resp?.situacao ?? resp?.resultado
   return {
     temSinistro,
-    descricao: String(desc ?? (temSinistro ? 'CONSTA INDÍCIO' : 'NADA CONSTA')).toUpperCase(),
+    descricao: String(desc ?? (temSinistro ? 'CONSTA INDÍCIO DE SINISTRO' : 'NÃO EXISTEM INDÍCIOS DE SINISTRO')).toUpperCase(),
   }
+}
+
+// Lê débitos do binEstadual.debitosPendentes (fonte correta na v3)
+function debitosBinEst(data: any) {
+  const d = data.binEstadual?.resposta?.debitosPendentes ?? {}
+  return {
+    ipva:          d.ipva          ?? '0,00',
+    licenciamento: d.licenciamento ?? '0,00',
+    multasTotal:   d.multas?.total ?? (typeof d.multas === 'string' ? d.multas : '0,00'),
+    dpvat:         d.dpvat         ?? 'NAODISPONIVEL',
+  }
+}
+
+// Restrições outrasUFs do binEstadual
+function restricoesBinEst(data: any): string[] {
+  const r = data.binEstadual?.resposta?.restricoes?.outrasUFs
+  return Array.isArray(r) ? r : []
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
