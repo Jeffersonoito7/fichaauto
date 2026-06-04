@@ -1,0 +1,40 @@
+import { NextRequest, NextResponse } from 'next/server'
+
+const BASE_URL  = 'https://api.assertivasolucoes.com.br'
+const TOKEN_URL = 'https://api.assertivasolucoes.com.br/oauth2/v3/token'
+const FINALIDADE = 2
+
+async function getToken() {
+  const basic = Buffer.from(
+    `${process.env.ASSERTIVA_LOGIN ?? ''}:${process.env.ASSERTIVA_PASSWORD ?? ''}`
+  ).toString('base64')
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Authorization': `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=client_credentials',
+    cache: 'no-store',
+  })
+  const j = await res.json()
+  return j.access_token ?? j.token
+}
+
+async function get(path: string) {
+  const token = await getToken()
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  })
+  return res.json()
+}
+
+export async function GET(req: NextRequest) {
+  const cpf = req.nextUrl.searchParams.get('cpf')?.replace(/\D/g, '') ?? ''
+  if (cpf.length !== 11) return NextResponse.json({ erro: 'CPF inválido' })
+
+  const [localize, score] = await Promise.all([
+    get(`/localize/v3/cpf?cpf=${cpf}&idFinalidade=${FINALIDADE}`).catch(e => ({ erro: e.message })),
+    get(`/score/v3/pf/credito/${cpf}`).catch(e => ({ erro: e.message })),
+  ])
+
+  return NextResponse.json({ localize, score })
+}
