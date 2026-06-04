@@ -8,7 +8,7 @@ import { ArrowLeft, Download, ChevronDown, Loader2, XCircle } from 'lucide-react
 interface ReportData {
   placa: any; binFederal: any; sinistro: any
   gravame: any; leilao: any; chassi: any
-  binEstadual: any; fipe: any; erros: string[]
+  binEstadual: any; fipe: any; precificador: any; erros: string[]
 }
 
 type TipoCard = 'normal' | 'alerta' | 'atencao'
@@ -273,6 +273,24 @@ export default function RelatorioPage() {
   const multasTotal   = num(debitos?.multas?.total ?? debitos?.multas ?? raw.multas ?? raw.totalMultas)
   const dpvat         = val(debitos?.dpvat, 'NAODISPONIVEL').toUpperCase()
 
+  // Precificador (Assertiva) — valor FIPE e mercado
+  const precNull  = !data.precificador
+  const precResp  = data.precificador?.resposta ?? data.precificador ?? {}
+  const precObj   = precResp?.precificador ?? precResp?.fipe ?? precResp ?? {}
+  const fipeAssertiva = {
+    codigoFipe:    val(precObj?.codigoFipe    ?? precObj?.codigo    ?? precObj?.codigoTabela, ''),
+    referencia:    val(precObj?.referenciaFipe ?? precObj?.referencia ?? precObj?.mesReferencia, ''),
+    valorFipe:     precObj?.valorFipe    ?? precObj?.valor    ?? precObj?.precoFipe    ?? precResp?.valorFipe    ?? null,
+    valorMercado:  precObj?.valorMercado ?? precObj?.valorVenda ?? precObj?.valorEstimado ?? precResp?.valorMercado ?? null,
+    desvalorizacao: val(precObj?.desvalorizacao ?? precObj?.percentualDesvalorizacao, ''),
+  }
+  // Fallback para BrasilAPI (grátis)
+  const fipeBrasil = data.fipe
+  const fipeValor  = fipeAssertiva.valorFipe  ?? fipeBrasil?.price  ?? fipeBrasil?.valor  ?? null
+  const fipeMercado = fipeAssertiva.valorMercado ?? null
+  const fipeCodigo  = fipeAssertiva.codigoFipe   ?? fipeBrasil?.codeFipe ?? fipeBrasil?.codigo ?? null
+  const fipeRef     = fipeAssertiva.referencia    ?? fipeBrasil?.referenceMonth ?? fipeBrasil?.referencia ?? null
+
   // Score
   const score = calcScore(data)
   const agora = new Date().toLocaleString('pt-BR')
@@ -493,6 +511,34 @@ export default function RelatorioPage() {
             titulo="MULTA"
             valor={`Venc. - valor R$${multasTotal.toFixed(2)} - atual R$${multasTotal.toFixed(2)}`}
             tipo="alerta" />
+        )}
+      </SecaoAcordion>
+
+      {/* ── FIPE / PRECIFICADOR ───────────────────────────────────────────── */}
+      <SecaoAcordion titulo="FIPE / PRECIFICADOR"
+        normal={fipeValor ? 1 : 0}
+        alerta={0}
+        atencao={precNull && !fipeBrasil ? 1 : 0}>
+        {!fipeValor && !fipeMercado ? (
+          <CardStatus titulo="TABELA FIPE" valor="NÃO DISPONÍVEL" tipo="atencao" />
+        ) : (
+          <>
+            {fipeValor && (
+              <CardStatus titulo="VALOR FIPE" valor={`R$ ${num(fipeValor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} tipo="normal" />
+            )}
+            {fipeMercado && (
+              <CardStatus titulo="VALOR MERCADO" valor={`R$ ${num(fipeMercado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} tipo="normal" />
+            )}
+            {fipeCodigo && (
+              <CardStatus titulo="CÓDIGO FIPE" valor={String(fipeCodigo).toUpperCase()} tipo="normal" />
+            )}
+            {fipeRef && (
+              <CardStatus titulo="REFERÊNCIA" valor={String(fipeRef).toUpperCase()} tipo="normal" />
+            )}
+            {fipeAssertiva.desvalorizacao && fipeAssertiva.desvalorizacao !== 'Não informado' && (
+              <CardStatus titulo="DESVALORIZAÇÃO" valor={fipeAssertiva.desvalorizacao.toUpperCase()} tipo="atencao" />
+            )}
+          </>
         )}
       </SecaoAcordion>
 
