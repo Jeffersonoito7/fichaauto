@@ -77,22 +77,25 @@ function SecaoAcordion({
   titulo: string; normal?: number; alerta?: number; atencao?: number; defaultAberto?: boolean; children: React.ReactNode
 }) {
   const [aberto, setAberto] = useState(defaultAberto)
+  const temProblema = alerta > 0 || atencao > 0
   return (
-    <div className="border border-brand-border rounded-xl overflow-hidden mb-3 shadow-card">
+    <div className="rounded-xl overflow-hidden mb-3 shadow-md border border-gray-200">
       <button
         onClick={() => setAberto(v => !v)}
-        className="w-full flex items-center justify-between px-5 py-3.5 bg-white hover:bg-brand-gray-light transition-colors"
+        className={`w-full flex items-center justify-between px-5 py-4 transition-colors ${
+          temProblema ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-700 hover:bg-gray-600'
+        }`}
       >
         <div className="flex items-center gap-3 flex-wrap text-left">
-          <span className="font-bold text-sm text-brand-blue">{titulo}</span>
-          <span className="text-xs font-semibold text-green-600">{normal}&nbsp;NORMAL</span>
-          <span className={`text-xs font-semibold ${alerta > 0 ? 'text-red-600' : 'text-brand-gray'}`}>{alerta}&nbsp;ALERTA</span>
-          <span className={`text-xs font-semibold ${atencao > 0 ? 'text-amber-500' : 'text-brand-gray'}`}>{atencao}&nbsp;ATENÇÃO</span>
+          <span className="font-extrabold text-base text-white tracking-wide">{titulo}</span>
+          <span className="text-[11px] font-bold bg-green-500/30 text-green-300 border border-green-500/40 px-2.5 py-0.5 rounded-full">{normal} NORMAL</span>
+          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${alerta > 0 ? 'bg-red-500/30 text-red-300 border-red-500/40' : 'bg-white/10 text-white/40 border-white/10'}`}>{alerta} ALERTA</span>
+          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${atencao > 0 ? 'bg-amber-500/30 text-amber-300 border-amber-500/40' : 'bg-white/10 text-white/40 border-white/10'}`}>{atencao} ATENÇÃO</span>
         </div>
-        <ChevronDown className={`w-4 h-4 text-brand-gray shrink-0 transition-transform ${aberto ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-5 h-5 text-white/60 shrink-0 transition-transform ${aberto ? 'rotate-180' : ''}`} />
       </button>
       {aberto && (
-        <div className="px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 border-t border-brand-border bg-gray-50/40">
+        <div className="px-4 pb-4 pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 bg-gray-50">
           {children}
         </div>
       )}
@@ -101,11 +104,15 @@ function SecaoAcordion({
 }
 
 function CardStatus({ titulo, valor, tipo }: { titulo: string; valor: string; tipo: TipoCard }) {
-  const bg = tipo === 'normal' ? 'bg-green-600' : tipo === 'alerta' ? 'bg-red-700' : 'bg-amber-500'
+  const styles = {
+    normal:  { bg: 'bg-green-600',  border: 'border-green-700',  badge: 'bg-green-700/60' },
+    alerta:  { bg: 'bg-red-700',    border: 'border-red-800',    badge: 'bg-red-800/60'   },
+    atencao: { bg: 'bg-amber-500',  border: 'border-amber-600',  badge: 'bg-amber-600/60' },
+  }[tipo]
   return (
-    <div className={`${bg} text-white rounded-lg p-4`}>
-      <p className="text-[9px] font-bold uppercase tracking-widest mb-2 pb-1.5 border-b border-white/20 leading-none">{titulo}</p>
-      <p className="text-[13px] font-semibold leading-snug">{valor}</p>
+    <div className={`${styles.bg} text-white rounded-xl p-4 min-h-[90px] flex flex-col`}>
+      <p className={`text-[10px] font-extrabold uppercase tracking-[0.12em] mb-3 pb-2 border-b ${styles.border} leading-none opacity-90`}>{titulo}</p>
+      <p className="text-[15px] font-bold leading-snug mt-auto">{valor}</p>
     </div>
   )
 }
