@@ -327,7 +327,9 @@ function pag2(placa: string, data: any, agora: string, proto: string): string {
   const rest3 = v(p.restricaoEstadual03, temAlienacao ? 'ALIENACAO FIDUCIARIA' : 'NADA CONSTA')
   const rest4 = v(p.restricaoEstadual04, 'SEM RESTRICAO')
 
-  const gravames: any[] = normalizaGravameV3(data.gravame)
+  const gravames: any[]  = normalizaGravameV3(data.gravame)
+  const bin              = normalizaBinFederalV3(data.binFederal)
+  const binNaoConsultado = data.binFederal === null || data.binFederal === undefined
 
   return `
 <div class="pg">
@@ -374,14 +376,39 @@ function pag2(placa: string, data: any, agora: string, proto: string): string {
     </tr>
   </table>
 
-  ${secTitle('Histórico de Roubo e Furto')}
-  <p style="font-size:10px;font-weight:700;color:${temRoubo ? '#dc2626' : '#16a34a'};margin-bottom:4px">
-    ${temRoubo ? 'CONSTA OCORRÊNCIA' : 'NADA CONSTA'}
+  ${secTitle('BIN Federal — Roubo, Furto e RENAJUD')}
+  <p style="font-size:10px;font-weight:700;color:${binNaoConsultado ? '#888' : (temRoubo || temRenajud) ? '#dc2626' : '#16a34a'};margin-bottom:4px">
+    ${binNaoConsultado ? 'NÃO CONSULTADO NESTA PESQUISA'
+       : (temRoubo && temRenajud) ? 'CONSTA OCORRÊNCIA DE ROUBO/FURTO E RENAJUD'
+       : temRoubo ? 'CONSTA OCORRÊNCIA DE ROUBO/FURTO'
+       : temRenajud ? 'CONSTA RESTRIÇÃO RENAJUD'
+       : 'NADA CONSTA'}
   </p>
+  ${bin.renajud.length > 0 ? `
+  <p style="font-size:9px;font-weight:700;margin:4px 0 2px;color:#dc2626">Restrições RENAJUD:</p>
   ${tabelaGen(
-    ['Data Ocorrência', 'Órgão', 'Boletim', 'Município', 'Ocorrência'],
-    []
-  )}
+    ['Tipo', 'Data', 'Órgão', 'Situação'],
+    bin.renajud.map((r: any) => [
+      v(r.tipo ?? r.tipoRestricao ?? r.descricao, '---'),
+      v(r.data ?? r.dataInclusao, '---'),
+      v(r.orgao ?? r.nomeTribunal ?? r.tribunal, '---'),
+      v(r.situacao ?? r.status, '---'),
+    ])
+  )}` : ''}
+  ${bin.rouboFurto.length > 0 ? `
+  <p style="font-size:9px;font-weight:700;margin:4px 0 2px;color:#dc2626">Ocorrências de Roubo/Furto:</p>
+  ${tabelaGen(
+    ['Data', 'Órgão', 'Boletim', 'Município', 'Tipo'],
+    bin.rouboFurto.map((r: any) => [
+      v(r.data ?? r.dataOcorrencia, '---'),
+      v(r.orgao ?? r.delegacia, '---'),
+      v(r.boletim ?? r.numeroBo, '---'),
+      v(r.municipio ?? r.cidade, '---'),
+      v(r.tipo ?? r.tipoOcorrencia ?? r.ocorrencia, '---'),
+    ])
+  )}` : (!binNaoConsultado && !temRoubo) ? `
+  ${tabelaGen(['Data Ocorrência', 'Órgão', 'Boletim', 'Município', 'Ocorrência'], [])}
+  ` : ''}
 
   ${secTitle('Histórico de Gravame')}
   ${tabelaGen(
@@ -405,19 +432,32 @@ function pag2(placa: string, data: any, agora: string, proto: string): string {
    PÁGINA 3 — sinistro, leilão (3 bases), chassi
 ════════════════════════════════════════════════════════════════════════════ */
 function pag3(placa: string, data: any, agora: string, proto: string): string {
-  const p  = normalizaPlacaV3(data.placa)
-  const cd = data.chassi ?? {}
-  const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
-  const j  = JSON.stringify(data).toUpperCase()
+  const p   = normalizaPlacaV3(data.placa)
+  const cd  = data.chassi ?? {}
+  const mm  = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
 
-  const temSinistro = j.includes('SINISTRO') && !j.includes('NADA CONSTA')
-  const temLeilao   = j.includes('LOTE') || (j.includes('LEILÃO') && !j.includes('NADA CONSTA'))
+  const leilaoNaoConsultado = data.leilao === null || data.leilao === undefined
+  const sinistroNaoConsultado = data.sinistro === null || data.sinistro === undefined
 
-  const leilaoVazio: string[][] = []
-  const leilHdr = ['Data', 'Lote', 'Veiculo', 'Placa', 'Chassi', 'Condição do Veículo']
+  const leil    = normalizaLeilaoV3(data.leilao)
+  const sinistro = normalizaSinistroV3(data.sinistro)
 
-  function leilaoResult(ok: boolean) {
-    return `<span style="font-weight:700;color:${ok ? '#16a34a' : '#dc2626'}">${ok ? 'NADA CONSTA' : 'CONSTA'}</span>`
+  const leilHdr = ['Data', 'Lote', 'Veículo', 'Placa', 'Chassi', 'Condição']
+  function leilLinhas(arr: any[]): string[][] {
+    return arr.map((r: any) => [
+      v(r.data ?? r.dataLeilao ?? r.dataCadastro, '---'),
+      v(r.lote ?? r.numeroLote, '---'),
+      v(r.veiculo ?? r.marcaModelo ?? r.descricao, '---'),
+      v(r.placa, '---'),
+      v(r.chassi, '---'),
+      v(r.condicao ?? r.situacaoVeiculo ?? r.estado, '---'),
+    ])
+  }
+  function leilRes(arr: any[], naoConsultado: boolean): string {
+    if (naoConsultado) return `<span style="color:#888;font-weight:700">NÃO CONSULTADO</span>`
+    return arr.length > 0
+      ? `<span style="color:#dc2626;font-weight:700">CONSTA (${arr.length} registro${arr.length > 1 ? 's' : ''})</span>`
+      : `<span style="color:#16a34a;font-weight:700">NADA CONSTA</span>`
   }
 
   return `
@@ -426,8 +466,8 @@ function pag3(placa: string, data: any, agora: string, proto: string): string {
   ${banner(mm, placa)}
 
   ${secTitle('Indício de Sinistro')}
-  <p style="font-size:10px;font-weight:700;color:${temSinistro ? '#dc2626' : '#16a34a'};margin-bottom:4px">
-    ${temSinistro ? 'CONSTA INDÍCIO' : 'NADA CONSTA'}
+  <p style="font-size:10px;font-weight:700;color:${sinistroNaoConsultado ? '#888' : sinistro.temSinistro ? '#dc2626' : '#16a34a'};margin-bottom:4px">
+    ${sinistroNaoConsultado ? 'NÃO CONSULTADO NESTA PESQUISA' : sinistro.descricao}
   </p>
   <p style="font-size:8.5px;color:#555;margin-bottom:8px;line-height:1.5">
     ATENÇÃO: ESTA INFORMAÇÃO REPRESENTA INDÍCIOS BASEADOS EM FONTES DE DADOS.<br>
@@ -436,21 +476,21 @@ function pag3(placa: string, data: any, agora: string, proto: string): string {
 
   <p style="font-size:10px;font-weight:700;text-transform:uppercase;
             border-bottom:1.5px solid #444;padding-bottom:3px;margin:8px 0 4px">
-    HISTÓRICO DE LEILÃO BASE A:&nbsp;${leilaoResult(!temLeilao)}
+    HISTÓRICO DE LEILÃO BASE A:&nbsp;${leilRes(leil.baseA, leilaoNaoConsultado)}
   </p>
-  ${tabelaGen(leilHdr, leilaoVazio)}
+  ${tabelaGen(leilHdr, leilaoNaoConsultado ? [] : leilLinhas(leil.baseA))}
 
   <p style="font-size:10px;font-weight:700;text-transform:uppercase;
             border-bottom:1.5px solid #444;padding-bottom:3px;margin:8px 0 4px">
-    HISTÓRICO DE LEILÃO BASE B:&nbsp;${leilaoResult(!temLeilao)}
+    HISTÓRICO DE LEILÃO BASE B:&nbsp;${leilRes(leil.baseB, leilaoNaoConsultado)}
   </p>
-  ${tabelaGen(leilHdr, leilaoVazio)}
+  ${tabelaGen(leilHdr, leilaoNaoConsultado ? [] : leilLinhas(leil.baseB))}
 
   <p style="font-size:10px;font-weight:700;text-transform:uppercase;
             border-bottom:1.5px solid #444;padding-bottom:3px;margin:8px 0 4px">
-    HISTÓRICO DE REMARKETING:&nbsp;${leilaoResult(!temLeilao)}
+    HISTÓRICO DE REMARKETING:&nbsp;${leilRes(leil.remarketing, leilaoNaoConsultado)}
   </p>
-  ${tabelaGen(leilHdr, leilaoVazio)}
+  ${tabelaGen(leilHdr, leilaoNaoConsultado ? [] : leilLinhas(leil.remarketing))}
   <p style="font-size:8px;color:#555;margin-bottom:8px">
     *Remarketing automotivo contempla um evento onde o proprietário do veículo opta por realizar a venda de seu veículo utilizando a plataforma de um leiloeiro privado
   </p>
@@ -776,6 +816,43 @@ function normalizaGravameV3(raw: any): any[] {
   const resp = raw.resposta ?? raw
   const lista = resp.gravames ?? resp.listaGravames ?? resp.historicoGravames ?? []
   return Array.isArray(lista) ? lista : []
+}
+
+function normalizaLeilaoV3(raw: any): { baseA: any[]; baseB: any[]; remarketing: any[] } {
+  if (!raw) return { baseA: [], baseB: [], remarketing: [] }
+  const resp = raw.resposta ?? raw
+  const baseA      = Array.isArray(resp?.baseA      ?? resp?.historicoBaseA)  ? (resp?.baseA      ?? resp?.historicoBaseA)  : []
+  const baseB      = Array.isArray(resp?.baseB      ?? resp?.historicoBaseB)  ? (resp?.baseB      ?? resp?.historicoBaseB)  : []
+  const remarketing = Array.isArray(resp?.remarketing ?? resp?.historicoRem)  ? (resp?.remarketing ?? resp?.historicoRem)   : []
+  const lotes      = Array.isArray(resp?.lotes       ?? resp?.leiloes)        ? (resp?.lotes       ?? resp?.leiloes)        : []
+  return { baseA: [...baseA, ...lotes], baseB, remarketing }
+}
+
+function normalizaBinFederalV3(raw: any): { renajud: any[]; rouboFurto: any[]; situacao: string } {
+  if (!raw) return { renajud: [], rouboFurto: [], situacao: 'NAO_CONSULTADO' }
+  const resp   = raw.resposta ?? raw
+  const renajud = resp?.renajud?.restricoes ?? resp?.restricoesRenajud
+                ?? (Array.isArray(resp?.renajud) ? resp.renajud : [])
+  const roubo  = resp?.rouboFurto?.ocorrencias ?? resp?.ocorrenciasRouboFurto
+               ?? (Array.isArray(resp?.rouboFurto) ? resp.rouboFurto : [])
+  const situacao = raw?.cabecalho?.resultado ?? resp?.situacao ?? resp?.resultado ?? 'SEM INFORMACAO'
+  return {
+    renajud:   Array.isArray(renajud) ? renajud : [],
+    rouboFurto: Array.isArray(roubo)  ? roubo   : [],
+    situacao: String(situacao).toUpperCase(),
+  }
+}
+
+function normalizaSinistroV3(raw: any): { temSinistro: boolean; descricao: string } {
+  if (!raw) return { temSinistro: false, descricao: 'NAO_CONSULTADO' }
+  const j = JSON.stringify(raw).toUpperCase()
+  const temSinistro = j.includes('CONSTA') && !j.includes('NADA CONSTA')
+  const resp = raw.resposta ?? raw
+  const desc = raw?.cabecalho?.resultado ?? resp?.situacao ?? resp?.resultado
+  return {
+    temSinistro,
+    descricao: String(desc ?? (temSinistro ? 'CONSTA INDÍCIO' : 'NADA CONSTA')).toUpperCase(),
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
