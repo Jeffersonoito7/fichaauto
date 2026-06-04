@@ -1,20 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// FIPE pública — sem custo, sem débito de crédito
-// Usa a API da FIPE via parallelum.com.br (espelho público gratuito)
+const ASSERT_BASE  = 'https://api.assertivasolucoes.com.br'
+const TOKEN_URL    = 'https://api.assertivasolucoes.com.br/oauth2/v3/token'
 
-const FIPE_BASE = 'https://parallelum.com.br/fipe/api/v2'
+let _token: string | null = null
+let _exp = 0
 
-async function getJson(url: string) {
-  const res = await fetch(url, { next: { revalidate: 86400 } }) // cache 24h
-  if (!res.ok) throw new Error(`FIPE ${res.status}`)
-  return res.json()
+async function getAssertToken() {
+  if (_token && Date.now() < _exp) return _token
+  const basic = Buffer.from(
+    `${process.env.ASSERTIVA_LOGIN ?? ''}:${process.env.ASSERTIVA_PASSWORD ?? ''}`
+  ).toString('base64')
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${basic}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'grant_type=client_credentials',
+    cache: 'no-store',
+  })
+  const j = await res.json()
+  _token = j.access_token ?? j.token
+  _exp   = Date.now() + ((j.expires_in ?? 3600) * 1000) - 300_000
+  return _token!
 }
 
-// Detecta tipo pelo formato da placa (Mercosul = letras+num+letra+2num, antiga = 3L+4N)
-function tipoVeiculo(placa: string): 'carros' | 'motos' | 'caminhoes' {
-  // Simplificado: tenta carros primeiro, fallback por error
-  return 'carros'
+async function assertGet(path: string) {
+  const token = await getAssertToken()
+  const res = await fetch(`${ASSERT_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`Assertiva ${res.status}`)
+  return res.json()
 }
 
 export async function GET(
@@ -25,57 +44,36 @@ export async function GET(
   const placa = placaRaw.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
 
   try {
-    // Consulta Assertiva para pegar marca/modelo/ano (já temos a API)
-    // Usa a placa para buscar dados na FIPE via marca+modelo
-    // Como não temos direto placa→FIPE, retornamos os dados disponíveis
-
-    // Tenta buscar via Assertiva sinistro que já retorna valor FIPE
-    const token = await getAssertToken()
-    const res = await fetch(
-      `https://gateway.assertivasolucoes.com.br/veiculos/v1/precificador/${placa}`,
-      {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        cache: 'no-store',
-      }
+    // 1. Consulta base para obter protocolo + dados básicos do veículo
+    const base = await assertGet(
+      `/veiculos/v3/consulta-base?tipo=placa&documento=${placa}&idFinalidade=2`
     )
+    const protocolo   = base?.cabecalho?.protocolo
+    const descricao   = base?.resposta?.descricao ?? {}
 
-    if (!res.ok) throw new Error(`precificador ${res.status}`)
-    const data = await res.json()
+    // 2. Precificador (sinistro + FIPE) — requer protocolo da consulta-base
+    let fipeData: any = {}
+    if (protocolo) {
+      try {
+        fipeData = await assertGet(
+          `/veiculos/v3/demais-consultas?tipo=placa&documento=${placa}&consulta=precificador&protocolo=${protocolo}&idFinalidade=2`
+        )
+      } catch { /* precificador pode não estar contratado */ }
+    }
+
+    const prec = fipeData?.resposta ?? fipeData
 
     return NextResponse.json({
       placa,
-      valorFipe:     data?.valorFipe       ?? data?.fipe?.valor     ?? data?.precificacao?.valorFipe ?? null,
-      valorMercado:  data?.valorMercado     ?? data?.precificacao?.valorMercado ?? null,
-      marcaModelo:   data?.marcaModelo      ?? data?.modelo         ?? null,
-      anoModelo:     data?.anoModelo        ?? data?.ano            ?? null,
-      codigoFipe:    data?.codigoFipe       ?? data?.fipe?.codigo   ?? null,
-      mesReferencia: data?.mesReferencia    ?? null,
+      valorFipe:     prec?.valorFipe     ?? prec?.fipe?.valor     ?? prec?.precificacao?.valorFipe ?? null,
+      valorMercado:  prec?.valorMercado   ?? prec?.precificacao?.valorMercado ?? null,
+      marcaModelo:   prec?.marcaModelo    ?? descricao?.marcaModelo ?? null,
+      anoModelo:     prec?.anoModelo      ?? descricao?.anoModelo   ?? null,
+      codigoFipe:    prec?.codigoFipe     ?? prec?.fipe?.codigo     ?? null,
+      mesReferencia: prec?.mesReferencia  ?? null,
       fonte:         'assertiva',
     })
   } catch {
     return NextResponse.json({ erro: 'Consulta FIPE indisponível', placa }, { status: 200 })
   }
-}
-
-// Reutiliza token Assertiva
-const TOKEN_URL = 'https://plataforma.assertivasolucoes.com.br/oauth2/v3/token'
-let _token: string | null = null
-let _exp = 0
-
-async function getAssertToken() {
-  if (_token && Date.now() < _exp) return _token
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      login:      process.env.ASSERTIVA_LOGIN    ?? '',
-      password:   process.env.ASSERTIVA_PASSWORD ?? '',
-      grant_type: 'client_credentials',
-    }),
-    cache: 'no-store',
-  })
-  const j = await res.json()
-  _token = j.access_token ?? j.token
-  _exp   = Date.now() + ((j.expires_in ?? 3600) * 1000) - 300_000
-  return _token!
 }
