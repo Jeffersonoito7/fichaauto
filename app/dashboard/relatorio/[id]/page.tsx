@@ -5,10 +5,20 @@ import Link from 'next/link'
 import { ArrowLeft, Download, ChevronDown, Loader2, XCircle } from 'lucide-react'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
+interface ProcessoDatajud {
+  numero: string; tribunal: string; classe: string
+  assuntos: string[]; dataAjuizamento: string; orgaoJulgador: string
+  risco: 'alto' | 'medio' | 'baixo'
+}
+interface ResultadoDatajud {
+  total: number; altoRisco: number; medioRisco: number
+  processos: ProcessoDatajud[]; nomeUsado: string
+}
 interface ReportData {
   placa: any; binFederal: any; sinistro: any
   gravame: any; leilao: any; chassi: any
-  binEstadual: any; fipe: any; precificador: any; erros: string[]
+  binEstadual: any; fipe: any; precificador: any
+  datajud: ResultadoDatajud | null; erros: string[]
 }
 
 type TipoCard = 'normal' | 'alerta' | 'atencao'
@@ -47,7 +57,12 @@ function calcScore(data: ReportData): number {
   const lTotal = Array.isArray(lr?.historicoLeilao) ? lr.historicoLeilao.length
     : (lr?.baseA?.length ?? 0) + (lr?.baseB?.length ?? 0) + (lr?.remarketing?.length ?? 0) + (lr?.lotes?.length ?? 0)
   if (lTotal > 0) s -= 15
-  return Math.max(s, 10)
+  // Penalidade por processos judiciais do proprietário
+  if (data.datajud) {
+    if (data.datajud.altoRisco > 0)  s -= Math.min(data.datajud.altoRisco * 10, 25)
+    if (data.datajud.medioRisco > 0) s -= Math.min(data.datajud.medioRisco * 5, 10)
+  }
+  return Math.max(s, 5)
 }
 
 // ─── Componentes ──────────────────────────────────────────────────────────────
@@ -552,6 +567,52 @@ export default function RelatorioPage() {
           </>
         )}
       </SecaoAcordion>
+
+      {/* ── PROCESSOS JUDICIAIS — ANTIFRAUDE (DataJud CNJ) ────────────────── */}
+      {(() => {
+        const dj = data.datajud
+        if (!dj) return (
+          <SecaoAcordion titulo="PROCESSOS JUDICIAIS — ANTIFRAUDE" normal={0} alerta={0} atencao={1}>
+            <CardStatus titulo="PROCESSOS JUDICIAIS" valor="NOME DO PROPRIETÁRIO NÃO DISPONÍVEL" tipo="atencao" />
+          </SecaoAcordion>
+        )
+        const djCards: TipoCard[] = dj.processos.map(p =>
+          p.risco === 'alto' ? 'alerta' : p.risco === 'medio' ? 'atencao' : 'normal'
+        )
+        if (dj.total === 0) djCards.push('normal')
+        return (
+          <SecaoAcordion
+            titulo="PROCESSOS JUDICIAIS — ANTIFRAUDE"
+            normal={djCards.filter(c => c === 'normal').length}
+            alerta={djCards.filter(c => c === 'alerta').length}
+            atencao={djCards.filter(c => c === 'atencao').length}
+          >
+            {dj.total === 0 ? (
+              <CardStatus
+                titulo={`CONSULTA: ${dj.nomeUsado}`}
+                valor="NENHUM PROCESSO ENCONTRADO NOS TRIBUNAIS CONSULTADOS"
+                tipo="normal"
+              />
+            ) : dj.processos.map((p, i) => {
+              const assuntosStr = p.assuntos.slice(0, 2).join(' · ') || p.classe
+              const linha = [p.dataAjuizamento, p.tribunal, p.orgaoJulgador].filter(Boolean).join(' — ')
+              return (
+                <CardStatus
+                  key={i}
+                  titulo={`${p.numero}`}
+                  valor={`${assuntosStr.toUpperCase()}\n${linha}`}
+                  tipo={p.risco === 'alto' ? 'alerta' : p.risco === 'medio' ? 'atencao' : 'normal'}
+                />
+              )
+            })}
+            <div className="col-span-full mt-1 px-1">
+              <p className="text-[10px] text-gray-400">
+                Fonte: DataJud CNJ · Pesquisa por nome: {dj.nomeUsado} · Tribunais: TJSP, TJRJ, TJMG, TJRS, TJPR, TJBA, TJGO, TJCE, TJSC, TJPE
+              </p>
+            </div>
+          </SecaoAcordion>
+        )
+      })()}
 
       {/* ── GRAVAME ────────────────────────────────────────────────────────── */}
       <SecaoAcordion titulo="GRAVAME"
