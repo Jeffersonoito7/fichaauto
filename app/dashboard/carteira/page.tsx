@@ -114,8 +114,8 @@ export default function CarteiraPage() {
         const supabase = createClient()
         supabase.auth.getUser().then(({ data: { user } }) => {
           if (!user) return
-          supabase.from('perfis').select('saldo_consultas').eq('user_id', user.id).single()
-            .then(({ data: p }) => setSaldo(p?.saldo_consultas ?? 0))
+          supabase.from('perfis' as any).select('saldo_consultas').eq('user_id', user.id).single()
+            .then(({ data: p }: { data: any }) => setSaldo(p?.saldo_consultas ?? 0))
         })
       } else setErro('Pagamento ainda não identificado. Aguarde alguns instantes.')
     } catch { setErro('Erro ao verificar. Tente novamente.') }
