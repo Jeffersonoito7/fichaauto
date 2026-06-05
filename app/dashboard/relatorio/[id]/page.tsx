@@ -120,9 +120,10 @@ function CardStatus({ titulo, valor, tipo }: { titulo: string; valor: string; ti
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function RelatorioPage() {
   const { id } = useParams<{ id: string }>()
-  const [data, setData]       = useState<ReportData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [erro, setErro]       = useState('')
+  const [data, setData]         = useState<ReportData | null>(null)
+  const [loading, setLoading]   = useState(true)
+  const [erro, setErro]         = useState('')
+  const [semSaldo, setSemSaldo] = useState(false)
 
   useEffect(() => {
     async function buscar() {
@@ -133,6 +134,7 @@ export default function RelatorioPage() {
           body: JSON.stringify({ placa: id }),
         })
         const json = await res.json()
+        if (res.status === 402) { setSemSaldo(true); setErro(json.error); return }
         if (!res.ok) throw new Error(json.error || 'Erro na consulta')
         setData(json)
       } catch (e: any) {
@@ -149,6 +151,15 @@ export default function RelatorioPage() {
       <Loader2 className="w-10 h-10 text-brand-green animate-spin" />
       <p className="font-semibold text-brand-dark">Consultando veículo...</p>
       <p className="text-sm text-brand-gray">Aguarde, buscando dados em tempo real</p>
+    </div>
+  )
+
+  if (semSaldo) return (
+    <div className="max-w-lg mx-auto text-center py-20">
+      <XCircle className="w-12 h-12 text-brand-warning mx-auto mb-4" />
+      <h2 className="text-xl font-bold text-brand-dark mb-2">Saldo insuficiente</h2>
+      <p className="text-brand-gray mb-6">Você não tem consultas disponíveis. Recarregue sua carteira para continuar.</p>
+      <Link href="/dashboard/carteira" className="btn-primary px-6 py-3">Ir para carteira</Link>
     </div>
   )
 
