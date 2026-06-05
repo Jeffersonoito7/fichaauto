@@ -48,10 +48,22 @@ export async function GET(
     const base = await assertGet(
       `/veiculos/v3/consulta-base?tipo=placa&documento=${placa}&idFinalidade=2`
     )
-    const protocolo   = base?.cabecalho?.protocolo
-    const descricao   = base?.resposta?.descricao ?? {}
+    const protocolo = base?.cabecalho?.protocolo
+    const cab       = base?.cabecalho ?? {}
+    const resp      = base?.resposta  ?? {}
+    const desc      = resp?.descricao ?? resp?.dadosCadastrais ?? resp?.identificacao ?? resp ?? {}
 
-    // 2. Precificador (sinistro + FIPE) — requer protocolo da consulta-base
+    // Extrair dados de identificação do veículo
+    const marca      = cab?.marca      ?? desc?.marca      ?? resp?.marca      ?? null
+    const modelo     = cab?.modelo     ?? desc?.modelo     ?? resp?.modelo     ?? null
+    const anoFab     = cab?.anoFabricacao ?? desc?.anoFabricacao ?? resp?.anoFabricacao ?? null
+    const anoMod     = cab?.anoModelo  ?? desc?.anoModelo  ?? resp?.anoModelo  ?? null
+    const cor        = cab?.cor        ?? desc?.cor        ?? resp?.cor        ?? null
+    const combustivel = cab?.combustivel ?? desc?.combustivel ?? resp?.combustivel ?? null
+    const renavam    = cab?.renavam    ?? desc?.renavam    ?? resp?.renavam    ?? null
+    const chassi     = cab?.chassi     ?? desc?.chassi     ?? resp?.chassi     ?? null
+
+    // 2. Precificador — requer protocolo
     let fipeData: any = {}
     if (protocolo) {
       try {
@@ -61,17 +73,17 @@ export async function GET(
       } catch { /* precificador pode não estar contratado */ }
     }
 
-    const prec = fipeData?.resposta ?? fipeData
+    const prec      = fipeData?.resposta ?? fipeData ?? {}
+    const precObj   = prec?.precificador ?? prec?.fipe ?? prec ?? {}
 
     return NextResponse.json({
       placa,
-      valorFipe:     prec?.valorFipe     ?? prec?.fipe?.valor     ?? prec?.precificacao?.valorFipe ?? null,
-      valorMercado:  prec?.valorMercado   ?? prec?.precificacao?.valorMercado ?? null,
-      marcaModelo:   prec?.marcaModelo    ?? descricao?.marcaModelo ?? null,
-      anoModelo:     prec?.anoModelo      ?? descricao?.anoModelo   ?? null,
-      codigoFipe:    prec?.codigoFipe     ?? prec?.fipe?.codigo     ?? null,
-      mesReferencia: prec?.mesReferencia  ?? null,
-      fonte:         'assertiva',
+      marca, modelo, anoFab, anoMod, cor, combustivel, renavam, chassi,
+      valorFipe:     precObj?.valorFipe    ?? precObj?.valor   ?? prec?.valorFipe    ?? null,
+      valorMercado:  precObj?.valorMercado ?? prec?.valorMercado ?? null,
+      codigoFipe:    precObj?.codigoFipe   ?? precObj?.codigo  ?? null,
+      mesReferencia: precObj?.referenciaFipe ?? precObj?.referencia ?? prec?.mesReferencia ?? null,
+      fonte: 'assertiva',
     })
   } catch {
     return NextResponse.json({ erro: 'Consulta FIPE indisponível', placa }, { status: 200 })
