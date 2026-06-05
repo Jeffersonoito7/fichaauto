@@ -43,11 +43,11 @@ export default function CarteiraPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
       supabase
-        .from('perfis')
+        .from('perfis' as any)
         .select('saldo_consultas')
         .eq('user_id', user.id)
         .single()
-        .then(({ data }) => {
+        .then(({ data }: { data: any }) => {
           setSaldo(data?.saldo_consultas ?? 0)
         })
     })
@@ -66,8 +66,8 @@ export default function CarteiraPage() {
           const supabase = createClient()
           supabase.auth.getUser().then(({ data: { user } }) => {
             if (!user) return
-            supabase.from('perfis').select('saldo_consultas').eq('user_id', user.id).single()
-              .then(({ data: p }) => setSaldo(p?.saldo_consultas ?? 0))
+            supabase.from('perfis' as any).select('saldo_consultas').eq('user_id', user.id).single()
+              .then(({ data: p }: { data: any }) => setSaldo(p?.saldo_consultas ?? 0))
           })
         }
       } catch { /* ignora erros de rede no poll */ }
