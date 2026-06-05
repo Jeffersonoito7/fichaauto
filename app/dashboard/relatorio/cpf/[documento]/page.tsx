@@ -176,13 +176,14 @@ export default function RelatorioCpfPage() {
   const scoreColor = scoreVal >= 700 ? 'text-green-600' : scoreVal >= 400 ? 'text-yellow-600' : 'text-red-600'
   const scoreLabel = scoreVal >= 700 ? 'Baixo Risco' : scoreVal >= 400 ? 'Risco Moderado' : 'Alto Risco'
 
-  const statusGrid = [
-    { label: 'Situação CPF',        status: (cpfOk ? 'ok' : 'error')  as const, detalhe: sit },
-    { label: 'Score de Crédito',    status: (scoreVal >= 700 ? 'ok' : scoreVal >= 400 ? 'warn' : 'error') as const, detalhe: `${scoreVal} / 1000` },
-    { label: 'Processos Judiciais', status: (totalProc > 0 ? 'error' : 'ok')  as const, detalhe: totalProc > 0 ? `${totalProc} processo(s)` : 'Nada consta' },
-    { label: 'Protestos',           status: (totalProt > 0 ? 'error' : 'ok')  as const, detalhe: totalProt > 0 ? `${totalProt} protesto(s)` : 'Nada consta' },
-    { label: 'PEP',                 status: (isPep ? 'error' : 'ok')  as const, detalhe: isPep ? 'Pessoa Politicamente Exposta' : 'Não identificado' },
-    { label: 'Participação Soc.',   status: (empresas.length > 0 ? 'warn' : 'ok') as const, detalhe: empresas.length > 0 ? `${empresas.length} empresa(s)` : 'Nenhuma' },
+  type S = 'ok' | 'warn' | 'error'
+  const statusGrid: { label: string; status: S; detalhe: string }[] = [
+    { label: 'Situação CPF',        status: cpfOk ? 'ok' : 'error', detalhe: sit },
+    { label: 'Score de Crédito',    status: scoreVal >= 700 ? 'ok' : scoreVal >= 400 ? 'warn' : 'error', detalhe: `${scoreVal} / 1000` },
+    { label: 'Processos Judiciais', status: totalProc > 0 ? 'error' : 'ok', detalhe: totalProc > 0 ? `${totalProc} processo(s)` : 'Nada consta' },
+    { label: 'Protestos',           status: totalProt > 0 ? 'error' : 'ok', detalhe: totalProt > 0 ? `${totalProt} protesto(s)` : 'Nada consta' },
+    { label: 'PEP',                 status: isPep ? 'error' : 'ok', detalhe: isPep ? 'Pessoa Politicamente Exposta' : 'Não identificado' },
+    { label: 'Participação Soc.',   status: empresas.length > 0 ? 'warn' : 'ok', detalhe: empresas.length > 0 ? `${empresas.length} empresa(s)` : 'Nenhuma' },
   ]
 
   return (
