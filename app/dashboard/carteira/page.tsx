@@ -4,6 +4,7 @@ import {
   Wallet, Zap, Copy, CheckCircle2, Clock,
   ArrowUpRight, ArrowDownLeft, Loader2, QrCode, RefreshCw
 } from 'lucide-react'
+import { createClient } from '@/lib/supabase-client'
 
 const RECARGAS = [
   { id: 'r5',  consultas: 5,  preco: 129.90, destaque: false, economia: null },
@@ -34,9 +35,23 @@ export default function CarteiraPage() {
   const [pixData, setPixData]     = useState<PixData | null>(null)
   const [erro, setErro]           = useState<string | null>(null)
   const [verificando, setVerif]   = useState(false)
+  const [consultasAtual, setSaldo] = useState<number | null>(null)
   const pollRef                   = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const consultasAtual = 7
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase
+        .from('perfis')
+        .select('saldo_consultas')
+        .eq('user_id', user.id)
+        .single()
+        .then(({ data }) => {
+          setSaldo(data?.saldo_consultas ?? 0)
+        })
+    })
+  }, [])
 
   // Polling para detectar pagamento confirmado
   useEffect(() => {
@@ -48,6 +63,12 @@ export default function CarteiraPage() {
         if (data.status === 'pago') {
           clearInterval(pollRef.current!)
           setStep('confirmado')
+          const supabase = createClient()
+          supabase.auth.getUser().then(({ data: { user } }) => {
+            if (!user) return
+            supabase.from('perfis').select('saldo_consultas').eq('user_id', user.id).single()
+              .then(({ data: p }) => setSaldo(p?.saldo_consultas ?? 0))
+          })
         }
       } catch { /* ignora erros de rede no poll */ }
     }, 5000)
@@ -88,8 +109,15 @@ export default function CarteiraPage() {
     try {
       const res  = await fetch(`/api/pix/status/${pixData.txid}`)
       const data = await res.json()
-      if (data.status === 'pago') setStep('confirmado')
-      else setErro('Pagamento ainda não identificado. Aguarde alguns instantes.')
+      if (data.status === 'pago') {
+        setStep('confirmado')
+        const supabase = createClient()
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (!user) return
+          supabase.from('perfis').select('saldo_consultas').eq('user_id', user.id).single()
+            .then(({ data: p }) => setSaldo(p?.saldo_consultas ?? 0))
+        })
+      } else setErro('Pagamento ainda não identificado. Aguarde alguns instantes.')
     } catch { setErro('Erro ao verificar. Tente novamente.') }
     finally { setVerif(false) }
   }
@@ -209,7 +237,9 @@ export default function CarteiraPage() {
         <div className="flex items-start justify-between">
           <div>
             <p className="text-white/60 text-sm">Consultas disponíveis</p>
-            <p className="text-5xl font-extrabold mt-1">{consultasAtual}</p>
+            <p className="text-5xl font-extrabold mt-1">
+              {consultasAtual === null ? <Loader2 className="w-8 h-8 animate-spin opacity-60" /> : consultasAtual}
+            </p>
             <p className="text-white/60 text-sm mt-1">créditos restantes</p>
           </div>
           <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center">
