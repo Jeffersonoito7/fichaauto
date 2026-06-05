@@ -6,11 +6,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase-client'
 
-const RECARGAS = [
-  { id: 'r5',  consultas: 5,  preco: 129.90, destaque: false, economia: null },
-  { id: 'r10', consultas: 10, preco: 197.00, destaque: true,  economia: 'Economize R$ 62,90' },
-  { id: 'r20', consultas: 20, preco: 347.00, destaque: false, economia: 'Economize R$ 151,00' },
-]
+interface Plano { id: string; nome: string; consultas: number; preco: number; destaque: boolean; economia_texto: string | null }
 
 const HISTORICO = [
   { tipo: 'debito',  desc: 'Consulta PKG5A23', valor: '-1 consulta',  data: '06/05/2026 14:33', badge: 'Completa' },
@@ -36,7 +32,14 @@ export default function CarteiraPage() {
   const [erro, setErro]           = useState<string | null>(null)
   const [verificando, setVerif]   = useState(false)
   const [consultasAtual, setSaldo] = useState<number | null>(null)
+  const [planos, setPlanos]       = useState<Plano[]>([])
   const pollRef                   = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    fetch('/api/admin/pacotes').then(r => r.json()).then((data: any[]) => {
+      if (Array.isArray(data)) setPlanos(data.filter(p => p.ativo))
+    })
+  }, [])
 
   useEffect(() => {
     const supabase = createClient()
@@ -90,7 +93,7 @@ export default function CarteiraPage() {
       const res  = await fetch('/api/pix/gerar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planoId: selecionado, userId: null }),
+        body: JSON.stringify({ planoId: selecionado }),
       })
       const data = await res.json()
       if (!res.ok || data.erro) throw new Error(data.erro ?? 'Falha ao gerar PIX')
@@ -143,7 +146,7 @@ export default function CarteiraPage() {
 
   // ─── Tela PIX ─────────────────────────────────────────────────────────────
   if (step === 'pix' && pixData) {
-    const recarga = RECARGAS.find(r => r.id === selecionado)!
+    const recarga = planos.find(r => r.id === selecionado)!
     return (
       <div className="max-w-md mx-auto">
         <h1 className="text-xl font-bold text-brand-dark mb-6">Pagamento via Pix</h1>
@@ -254,7 +257,10 @@ export default function CarteiraPage() {
         <p className="text-brand-gray text-sm mb-4">Pague via Pix e receba as consultas na hora</p>
 
         <div className="space-y-3 mb-4">
-          {RECARGAS.map(r => (
+          {planos.length === 0 && (
+            <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-brand-green opacity-50" /></div>
+          )}
+          {planos.map(r => (
             <button
               key={r.id}
               onClick={() => setSel(r.id === selecionado ? null : r.id)}
@@ -271,14 +277,15 @@ export default function CarteiraPage() {
                   <Zap className={`w-5 h-5 ${r.destaque ? 'text-white' : 'text-brand-blue'}`} />
                 </div>
                 <div>
-                  <p className="font-semibold text-brand-dark">{r.consultas} consultas completas</p>
-                  {r.destaque && <p className="text-xs text-brand-green font-medium">Mais popular</p>}
-                  {r.economia  && <p className="text-xs text-brand-green">{r.economia}</p>}
+                  <p className="font-semibold text-brand-dark">{r.nome}</p>
+                  <p className="text-xs text-brand-gray">{r.consultas} consultas completas</p>
+                  {r.destaque      && <p className="text-xs text-brand-green font-medium">Mais popular</p>}
+                  {r.economia_texto && <p className="text-xs text-brand-green">{r.economia_texto}</p>}
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-xl font-extrabold text-brand-blue">
-                  R$ {r.preco.toFixed(2).replace('.', ',')}
+                  R$ {Number(r.preco).toFixed(2).replace('.', ',')}
                 </p>
                 <p className="text-xs text-brand-gray">
                   R$ {(r.preco / r.consultas).toFixed(2).replace('.', ',')} / consulta
