@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Download, ChevronDown, Loader2, XCircle } from 'lucide-react'
+import { ArrowLeft, Download, ChevronDown, Loader2, XCircle, Lock } from 'lucide-react'
+import { temModulo, planoQueTemModulo, PLANOS, type PlanoId } from '@/lib/products'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface ProcessoDatajud {
@@ -132,6 +133,21 @@ function CardStatus({ titulo, valor, tipo }: { titulo: string; valor: string; ti
   )
 }
 
+function CardBloqueado({ titulo, planoNecessario }: { titulo: string; planoNecessario: PlanoId | null }) {
+  const nome = planoNecessario ? PLANOS[planoNecessario]?.nome : 'Profissional'
+  return (
+    <div className="bg-gray-700 text-white rounded-xl p-4 min-h-[90px] flex flex-col opacity-60 border border-dashed border-gray-500">
+      <div className="flex items-center gap-2 mb-2">
+        <Lock className="w-3.5 h-3.5 text-purple-400" />
+        <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] opacity-70">{titulo}</p>
+      </div>
+      <p className="text-xs text-white/50 mt-auto">
+        Disponível no plano <span className="text-purple-300 font-bold">{nome}</span>
+      </p>
+    </div>
+  )
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function RelatorioPage() {
   const { id } = useParams<{ id: string }>()
@@ -139,6 +155,11 @@ export default function RelatorioPage() {
   const [loading, setLoading]   = useState(true)
   const [erro, setErro]         = useState('')
   const [semSaldo, setSemSaldo] = useState(false)
+  const [plano, setPlano]       = useState<PlanoId | null>(null)
+
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => { if (d?.plano) setPlano(d.plano) }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     async function buscar() {
@@ -689,6 +710,54 @@ export default function RelatorioPage() {
           </SecaoAcordion>
         )
       })()}
+
+      {/* ── ANTI-FRAUDE AVANÇADO (FutureData) ─────────────────────────────── */}
+      <SecaoAcordion
+        titulo="ANTI-FRAUDE AVANÇADO"
+        normal={0}
+        alerta={0}
+        atencao={
+          temModulo(plano, 'placa_recall') ||
+          temModulo(plano, 'placa_sinistro_plus') ||
+          temModulo(plano, 'placa_frota_locadora') ? 0 : 1
+        }
+      >
+        {temModulo(plano, 'placa_recall')
+          ? <CardStatus titulo="RECALL" valor="NENHUM RECALL PENDENTE" tipo="normal" />
+          : <CardBloqueado titulo="RECALL POR PLACA/CHASSI" planoNecessario={planoQueTemModulo('placa_recall')} />}
+
+        {temModulo(plano, 'placa_historico_proprietarios')
+          ? <CardStatus titulo="HISTÓRICO PROPRIETÁRIOS" valor="AGUARDANDO DADO" tipo="normal" />
+          : <CardBloqueado titulo="HISTÓRICO DE PROPRIETÁRIOS" planoNecessario={planoQueTemModulo('placa_historico_proprietarios')} />}
+
+        {temModulo(plano, 'placa_sinistro_plus')
+          ? <CardStatus titulo="SINISTRO PLUS" valor="AGUARDANDO DADO" tipo="normal" />
+          : <CardBloqueado titulo="SINISTRO PLUS (AMPLIADO)" planoNecessario={planoQueTemModulo('placa_sinistro_plus')} />}
+
+        {temModulo(plano, 'placa_frota_locadora')
+          ? <CardStatus titulo="FROTA LOCADORA" valor="AGUARDANDO DADO" tipo="normal" />
+          : <CardBloqueado titulo="HISTÓRICO FROTA LOCADORA" planoNecessario={planoQueTemModulo('placa_frota_locadora')} />}
+
+        {temModulo(plano, 'placa_frota_policial')
+          ? <CardStatus titulo="FROTA POLICIAL" valor="AGUARDANDO DADO" tipo="normal" />
+          : <CardBloqueado titulo="HISTÓRICO FROTA POLICIAL" planoNecessario={planoQueTemModulo('placa_frota_policial')} />}
+
+        {temModulo(plano, 'placa_frota_taxi')
+          ? <CardStatus titulo="FROTA TÁXI" valor="AGUARDANDO DADO" tipo="normal" />
+          : <CardBloqueado titulo="HISTÓRICO TÁXI" planoNecessario={planoQueTemModulo('placa_frota_taxi')} />}
+
+        {temModulo(plano, 'placa_veiculo_crime')
+          ? <CardStatus titulo="VEÍCULO EM CRIME" valor="AGUARDANDO DADO" tipo="normal" />
+          : <CardBloqueado titulo="VEÍCULO UTILIZADO EM CRIME" planoNecessario={planoQueTemModulo('placa_veiculo_crime')} />}
+
+        {temModulo(plano, 'placa_transferencia_seguradora')
+          ? <CardStatus titulo="TRANSF. SEGURADORA" valor="AGUARDANDO DADO" tipo="normal" />
+          : <CardBloqueado titulo="TRANSFERÊNCIA P/ SEGURADORA" planoNecessario={planoQueTemModulo('placa_transferencia_seguradora')} />}
+
+        {temModulo(plano, 'placa_chassi_decoder')
+          ? <CardStatus titulo="DECODIFICADOR VIN" valor="AGUARDANDO DADO" tipo="normal" />
+          : <CardBloqueado titulo="DECODIFICADOR DE CHASSI (VIN)" planoNecessario={planoQueTemModulo('placa_chassi_decoder')} />}
+      </SecaoAcordion>
 
       {/* ── GRAVAME ────────────────────────────────────────────────────────── */}
       <SecaoAcordion titulo="GRAVAME"

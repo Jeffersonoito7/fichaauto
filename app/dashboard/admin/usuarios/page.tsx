@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { Users, Search, Pencil, Loader2, X, Save, ShieldCheck, ShieldOff, Plus, Minus } from 'lucide-react'
+import { PLANOS, todosOsPlanos, type PlanoId } from '@/lib/products'
 
 interface Usuario {
   user_id: string
@@ -14,6 +15,14 @@ interface Usuario {
   pode_lote: boolean
   obs_admin: string | null
   atualizado_em: string | null
+  plano: PlanoId | null
+}
+
+const PLANO_CORES: Record<string, string> = {
+  essencial:     'bg-green-100 text-green-700',
+  profissional:  'bg-blue-100 text-blue-700',
+  seguradora:    'bg-purple-100 text-purple-700',
+  despachante:   'bg-amber-100 text-amber-700',
 }
 
 const PERM_LABELS: { key: keyof Usuario; label: string }[] = [
@@ -53,6 +62,7 @@ export default function UsuariosPage() {
       pode_cnpj: u.pode_cnpj,
       pode_lote: u.pode_lote,
       obs_admin: u.obs_admin ?? '',
+      plano: u.plano,
     })
     setErro(null)
   }
@@ -128,11 +138,17 @@ export default function UsuariosPage() {
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex items-center justify-center gap-1 flex-wrap">
-                      {PERM_LABELS.map(({ key, label }) => (
-                        <span key={key} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${(u as any)[key] ? 'bg-brand-green-light text-brand-green' : 'bg-gray-100 text-gray-400'}`}>
-                          {label}
+                      {u.plano ? (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${PLANO_CORES[u.plano] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {PLANOS[u.plano]?.nome ?? u.plano}
                         </span>
-                      ))}
+                      ) : (
+                        PERM_LABELS.map(({ key, label }) => (
+                          <span key={key} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${(u as any)[key] ? 'bg-brand-green-light text-brand-green' : 'bg-gray-100 text-gray-400'}`}>
+                            {label}
+                          </span>
+                        ))
+                      )}
                     </div>
                   </td>
                   <td className="px-3 py-3 text-center">
@@ -211,27 +227,55 @@ export default function UsuariosPage() {
                 </div>
               </div>
 
-              {/* Permissões */}
+              {/* Plano */}
               <div>
-                <label className="block text-xs text-brand-gray mb-2 font-medium">Permissões de acesso</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {PERM_LABELS.map(({ key, label }) => (
-                    <label key={key} className={`flex items-center gap-2.5 p-3 rounded-xl border-2 cursor-pointer transition-all select-none ${(form as any)[key] ? 'border-brand-green bg-brand-green-light' : 'border-brand-border hover:border-brand-green/40'}`}>
-                      <input
-                        type="checkbox"
-                        checked={!!(form as any)[key]}
-                        onChange={e => setForm(f => ({ ...f, [key]: e.target.checked }))}
-                        className="hidden"
-                      />
-                      {(form as any)[key]
-                        ? <ShieldCheck className="w-4 h-4 text-brand-green shrink-0" />
-                        : <ShieldOff className="w-4 h-4 text-brand-gray shrink-0" />
-                      }
-                      <span className={`text-sm font-medium ${(form as any)[key] ? 'text-brand-green' : 'text-brand-gray'}`}>{label}</span>
-                    </label>
-                  ))}
+                <label className="block text-xs text-brand-gray mb-2 font-medium">Plano do cliente</label>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {([null, 'essencial', 'profissional', 'despachante', 'seguradora'] as const).map(pid => {
+                    const plano = pid ? PLANOS[pid] : null
+                    const ativo = (form as any).plano === pid
+                    return (
+                      <button
+                        key={pid ?? 'sem'}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, plano: pid }))}
+                        className={`p-2.5 rounded-xl border-2 text-left transition-all ${ativo ? 'border-brand-blue bg-brand-blue-light' : 'border-brand-border hover:border-brand-blue/40'}`}
+                      >
+                        <p className={`text-xs font-bold ${ativo ? 'text-brand-blue' : 'text-brand-dark'}`}>
+                          {plano ? plano.nome : 'Sem plano'}
+                        </p>
+                        <p className="text-[10px] text-brand-gray mt-0.5">
+                          {plano ? `R$ ${plano.preco}/mês` : 'Permissões manuais'}
+                        </p>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
+
+              {/* Permissões manuais (fallback quando sem plano) */}
+              {!(form as any).plano && (
+                <div>
+                  <label className="block text-xs text-brand-gray mb-2 font-medium">Permissões manuais</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {PERM_LABELS.map(({ key, label }) => (
+                      <label key={key} className={`flex items-center gap-2.5 p-3 rounded-xl border-2 cursor-pointer transition-all select-none ${(form as any)[key] ? 'border-brand-green bg-brand-green-light' : 'border-brand-border hover:border-brand-green/40'}`}>
+                        <input
+                          type="checkbox"
+                          checked={!!(form as any)[key]}
+                          onChange={e => setForm(f => ({ ...f, [key]: e.target.checked }))}
+                          className="hidden"
+                        />
+                        {(form as any)[key]
+                          ? <ShieldCheck className="w-4 h-4 text-brand-green shrink-0" />
+                          : <ShieldOff className="w-4 h-4 text-brand-gray shrink-0" />
+                        }
+                        <span className={`text-sm font-medium ${(form as any)[key] ? 'text-brand-green' : 'text-brand-gray'}`}>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Status */}
               <label className="flex items-center gap-2 cursor-pointer select-none">

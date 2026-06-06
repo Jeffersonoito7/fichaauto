@@ -7,7 +7,7 @@ export async function PATCH(req: NextRequest, context: any) {
   const svc = createServiceRoleClient() as any
 
   const campos: Record<string, any> = {}
-  const permitidos = ['ativo', 'pode_placa', 'pode_cpf', 'pode_cnpj', 'pode_lote', 'saldo_consultas', 'obs_admin', 'nome']
+  const permitidos = ['ativo', 'pode_placa', 'pode_cpf', 'pode_cnpj', 'pode_lote', 'saldo_consultas', 'obs_admin', 'nome', 'plano']
   for (const k of permitidos) {
     if (k in body) campos[k] = body[k]
   }
