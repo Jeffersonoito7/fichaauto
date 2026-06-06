@@ -38,11 +38,9 @@ export default function CadastroPage() {
 
       {/* Left */}
       <div className="hidden lg:flex lg:w-1/2 gradient-brand flex-col justify-between p-12 text-white">
-        <Link href="/" className="flex items-center gap-2 w-fit">
-          <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
-            <Car className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-bold text-lg">Ficha Auto</span>
+        <Link href="/" className="flex items-center w-fit">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-horizontal.png" alt="Ficha Auto" style={{ height: 38, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
         </Link>
         <div>
           <h2 className="text-4xl font-extrabold mb-4 leading-tight">
@@ -78,11 +76,9 @@ export default function CadastroPage() {
             <ArrowLeft className="w-4 h-4" /> Voltar
           </Link>
 
-          <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
-              <Car className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-brand-dark">Ficha Auto</span>
+          <div className="lg:hidden mb-8">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-horizontal.png" alt="Ficha Auto" style={{ height: 36, objectFit: 'contain' }} />
           </div>
 
           <h1 className="text-2xl font-bold text-brand-dark mb-1">Criar conta</h1>

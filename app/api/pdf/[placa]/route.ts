@@ -60,23 +60,9 @@ function header(agora: string, proto: string, pag: string): string {
   <table width="100%" cellpadding="4" cellspacing="0"
          style="border-bottom:2px solid #333;margin-bottom:0">
     <tr>
-      <td width="110" valign="middle">
-        <table cellpadding="0" cellspacing="0">
-          <tr>
-            <td valign="middle">
-              <div style="width:34px;height:34px;background:${TENANT.cor};border-radius:5px;
-                display:inline-block;text-align:center;vertical-align:middle;line-height:34px">
-                <span style="color:white;font-weight:900;font-size:16px">F</span>
-              </div>
-            </td>
-            <td valign="middle" style="padding-left:5px">
-              <div style="font-size:13px;font-weight:900;color:${TENANT.cor};line-height:1.1">
-                ${TENANT.nome.toUpperCase()}
-              </div>
-              <div style="font-size:7.5px;color:#666">Tecnologia</div>
-            </td>
-          </tr>
-        </table>
+      <td width="130" valign="middle">
+        <img src="https://fichaauto.com.br/logo-horizontal.png"
+             style="height:34px;object-fit:contain;display:block" alt="Ficha Auto" />
       </td>
       <td align="center" valign="middle">
         <div style="font-size:15px;font-weight:700;color:#111">Consulta Veicular</div>

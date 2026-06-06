@@ -40,11 +40,9 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
 
           {/* Logo */}
-          <div className="flex items-center gap-2 mb-10">
-            <div className="w-9 h-9 rounded-xl bg-brand-green flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-bold text-xl text-brand-dark tracking-tight">Ficha Auto</span>
+          <div className="mb-10">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-horizontal.png" alt="Ficha Auto" style={{ height: 44, objectFit: 'contain' }} />
           </div>
 
           <h1 className="text-2xl font-bold text-brand-dark mb-1">Fazer Login</h1>
