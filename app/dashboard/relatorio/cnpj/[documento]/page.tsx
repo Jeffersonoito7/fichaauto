@@ -43,9 +43,9 @@ function Campo({ label, value }: { label: string; value: string }) {
 }
 
 export default function RelatorioCnpjPage() {
-  const { documento } = useParams<{ documento: string }>()
+  const params = useParams<{ documento: string }>()
   const router = useRouter()
-  const cnpj = documento.replace(/\D/g, '')
+  const cnpj = (params?.documento ?? '').replace(/\D/g, '')
 
   const [data, setData]       = useState<any>(null)
   const [loading, setLoading] = useState(true)
