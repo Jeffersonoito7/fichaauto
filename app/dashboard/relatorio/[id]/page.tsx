@@ -321,6 +321,28 @@ export default function RelatorioPage() {
   const score = calcScore(data)
   const agora = new Date().toLocaleString('pt-BR')
 
+  // Identificação
+  const renavam    = val(pIdent.renavam    ?? pDesc.renavam,    '')
+  const chassiNum  = val(pIdent.chassi     ?? pDesc.chassi,     '')
+  const motorNum   = val(pIdent.motor      ?? pDesc.motor       ?? pFicha.motor,      '')
+  const carroceria = val(pFicha.carroceria ?? pDesc.carroceria  ?? pIdent.carroceria, '')
+  const municipio  = val(pDesc.municipio   ?? pIdent.municipio, '')
+  const uf         = val(pDesc.uf          ?? pIdent.uf,         '')
+  const nrProp     = parseInt(String(
+    pDesc.quantidadeProprietarios ?? pMov.quantidadeProprietarios ?? pDesc.nrProprietarios ?? '0'
+  ), 10) || 0
+  // Características técnicas
+  const combustivel = val(pFicha.combustivel ?? pFicha.tipoCombustivel, '')
+  const passageiros = val(pFicha.passageiros ?? pFicha.nrPassageiros,   '')
+  const tipoVeic    = val(pFicha.tipo        ?? pFicha.tipoVeiculo,      '')
+  const especie     = val(pFicha.especie,                                '')
+  const cilindradas = val(pFicha.cilindradas ?? pFicha.cilindrada,       '')
+  const potencia    = val(pFicha.potencia    ?? pFicha.potenciaMotor,    '')
+  const categoria   = val(pFicha.categoria,                              '')
+  const procedencia = val(pFicha.procedencia ?? pFicha.origemVeiculo,    '')
+  const cambio      = val(pFicha.cambio      ?? pFicha.tipoCambio       ?? pDesc.cambio, '')
+  const temFicha    = !!(combustivel || tipoVeic || cilindradas || passageiros || cambio)
+
   // ─── Contadores ───────────────────────────────────────────────────────────────
   const situacaoVTipo: TipoCard = (situacaoV === 'CIRCULACAO' || situacaoV === 'EM CIRCULAÇÃO' || situacaoV === 'EM CIRCULACAO') ? 'normal' : 'alerta'
   const situacaoCTipo: TipoCard = situacaoC === 'NORMAL' ? 'normal' : 'alerta'
@@ -393,6 +415,60 @@ export default function RelatorioPage() {
             <p key={i} className="text-xs text-yellow-700">{e}</p>
           ))}
         </div>
+      )}
+
+      {/* ── IDENTIFICAÇÃO ──────────────────────────────────────────────────── */}
+      <SecaoAcordion
+        titulo="IDENTIFICAÇÃO"
+        normal={[renavam, chassiNum, motorNum, carroceria, municipio, cambio].filter(v => v && v !== 'Não informado').length + 3}
+        alerta={nrProp > 2 ? 1 : 0}
+        atencao={0}
+        defaultAberto
+      >
+        <CardStatus titulo="PLACA"           valor={placaFmt}                                tipo="normal" />
+        <CardStatus titulo="MARCA / MODELO"  valor={mm.toUpperCase()}                        tipo="normal" />
+        <CardStatus titulo="ANO FAB / MOD"   valor={anoStr || 'NÃO INFORMADO'}               tipo="normal" />
+        <CardStatus titulo="COR"             valor={(cor || 'NÃO INFORMADO').toUpperCase()}  tipo="normal" />
+        {renavam    && <CardStatus titulo="RENAVAM"    valor={renavam.toUpperCase()}    tipo="normal" />}
+        {chassiNum  && <CardStatus titulo="CHASSI"     valor={chassiNum.toUpperCase()}  tipo="normal" />}
+        {motorNum   && <CardStatus titulo="Nº MOTOR"   valor={motorNum.toUpperCase()}   tipo="normal" />}
+        {carroceria && <CardStatus titulo="CARROCERIA" valor={carroceria.toUpperCase()} tipo="normal" />}
+        {(municipio || uf) && (
+          <CardStatus titulo="MUNICÍPIO / UF" valor={`${municipio}/${uf}`.toUpperCase()} tipo="normal" />
+        )}
+        <CardStatus
+          titulo="Nº PROPRIETÁRIOS"
+          valor={nrProp > 0 ? `${nrProp} PROPRIETÁRIO(S)` : 'NÃO INFORMADO'}
+          tipo={nrProp > 2 ? 'alerta' : 'normal'}
+        />
+        {nrProp > 2 && (
+          <CardStatus
+            titulo="ALERTA — MÚLTIPLOS PROPRIETÁRIOS"
+            valor={`ATENÇÃO: ${nrProp} PROPRIETÁRIOS REGISTRADOS — VERIFIQUE O HISTÓRICO COMPLETO`}
+            tipo="alerta"
+          />
+        )}
+      </SecaoAcordion>
+
+      {/* ── CARACTERÍSTICAS TÉCNICAS ──────────────────────────────────────── */}
+      {temFicha && (
+        <SecaoAcordion
+          titulo="CARACTERÍSTICAS TÉCNICAS"
+          normal={[combustivel, tipoVeic, especie, cilindradas, potencia, categoria, procedencia, passageiros, cambio].filter(v => v && v !== 'Não informado').length}
+          alerta={0}
+          atencao={0}
+          defaultAberto
+        >
+          {combustivel && <CardStatus titulo="COMBUSTÍVEL" valor={combustivel.toUpperCase()} tipo="normal" />}
+          {cambio      && <CardStatus titulo="CÂMBIO"      valor={cambio.toUpperCase()}      tipo="normal" />}
+          {tipoVeic    && <CardStatus titulo="TIPO"        valor={tipoVeic.toUpperCase()}     tipo="normal" />}
+          {especie     && <CardStatus titulo="ESPÉCIE"     valor={especie.toUpperCase()}      tipo="normal" />}
+          {passageiros && <CardStatus titulo="PASSAGEIROS" valor={passageiros.toUpperCase()}  tipo="normal" />}
+          {cilindradas && <CardStatus titulo="CILINDRADAS" valor={cilindradas.toUpperCase()}  tipo="normal" />}
+          {potencia    && <CardStatus titulo="POTÊNCIA"    valor={potencia.toUpperCase()}     tipo="normal" />}
+          {categoria   && <CardStatus titulo="CATEGORIA"   valor={categoria.toUpperCase()}    tipo="normal" />}
+          {procedencia && <CardStatus titulo="PROCEDÊNCIA" valor={procedencia.toUpperCase()}  tipo="normal" />}
+        </SecaoAcordion>
       )}
 
       {/* ── GERAL ──────────────────────────────────────────────────────────── */}
