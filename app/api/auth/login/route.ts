@@ -1,15 +1,20 @@
 import { NextResponse } from 'next/server'
 
-const CREDENCIAIS = [
-  { email: 'jefferson@fichaauto.com.br', senha: 'Ficha2026!', nome: 'Jefferson Soares', role: 'super_admin' },
-]
+// Credenciais via variáveis de ambiente — configure no Vercel Dashboard
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? ''
+const ADMIN_SENHA = process.env.ADMIN_SENHA ?? ''
+const ADMIN_NOME  = process.env.ADMIN_NOME  ?? 'Administrador'
 
 export async function POST(req: Request) {
   const { email, senha } = await req.json()
 
-  const usuario = CREDENCIAIS.find(
-    c => c.email.toLowerCase() === email?.toLowerCase() && c.senha === senha
-  )
+  if (!ADMIN_EMAIL || !ADMIN_SENHA) {
+    return NextResponse.json({ erro: 'Sistema não configurado.' }, { status: 503 })
+  }
+
+  const usuario = (email?.toLowerCase() === ADMIN_EMAIL.toLowerCase() && senha === ADMIN_SENHA)
+    ? { email: ADMIN_EMAIL, nome: ADMIN_NOME, role: 'super_admin' }
+    : null
 
   if (!usuario) {
     return NextResponse.json({ erro: 'E-mail ou senha incorretos.' }, { status: 401 })

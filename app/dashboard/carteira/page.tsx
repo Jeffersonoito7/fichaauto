@@ -8,11 +8,7 @@ import { createClient } from '@/lib/supabase-client'
 
 interface Plano { id: string; nome: string; consultas: number; preco: number; destaque: boolean; economia_texto: string | null }
 
-const HISTORICO = [
-  { tipo: 'debito',  desc: 'Consulta PKG5A23', valor: '-1 consulta',  data: '06/05/2026 14:33', badge: 'Completa' },
-  { tipo: 'credito', desc: 'Recarga via Pix',  valor: '+10 consultas', data: '01/05/2026 09:10', badge: 'Pix' },
-  { tipo: 'debito',  desc: 'Consulta ABC1D23', valor: '-1 consulta',  data: '29/04/2026 16:45', badge: 'Completa' },
-]
+interface EntradaHistorico { id: string; tipo: string; documento: string; descricao: string; data: string }
 
 interface PixData {
   txid: string
@@ -24,21 +20,28 @@ interface PixData {
 }
 
 export default function CarteiraPage() {
-  const [step, setStep]           = useState<'escolha' | 'pix' | 'confirmado'>('escolha')
-  const [selecionado, setSel]     = useState<string | null>(null)
-  const [copiado, setCopiado]     = useState(false)
-  const [loading, setLoading]     = useState(false)
-  const [pixData, setPixData]     = useState<PixData | null>(null)
-  const [erro, setErro]           = useState<string | null>(null)
-  const [verificando, setVerif]   = useState(false)
+  const [step, setStep]            = useState<'escolha' | 'pix' | 'confirmado'>('escolha')
+  const [selecionado, setSel]      = useState<string | null>(null)
+  const [copiado, setCopiado]      = useState(false)
+  const [loading, setLoading]      = useState(false)
+  const [pixData, setPixData]      = useState<PixData | null>(null)
+  const [erro, setErro]            = useState<string | null>(null)
+  const [verificando, setVerif]    = useState(false)
   const [consultasAtual, setSaldo] = useState<number | null>(null)
-  const [planos, setPlanos]       = useState<Plano[]>([])
-  const pollRef                   = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [planos, setPlanos]        = useState<Plano[]>([])
+  const [historico, setHistorico]  = useState<EntradaHistorico[]>([])
+  const pollRef                    = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    fetch('/api/admin/pacotes').then(r => r.json()).then((data: any[]) => {
-      if (Array.isArray(data)) setPlanos(data.filter(p => p.ativo))
-    })
+    fetch('/api/admin/pacotes')
+      .then(r => r.json())
+      .then((data: any[]) => { if (Array.isArray(data)) setPlanos(data.filter(p => p.ativo)) })
+      .catch(() => {})
+
+    fetch('/api/historico')
+      .then(r => r.json())
+      .then((data: any[]) => { if (Array.isArray(data)) setHistorico(data) })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -311,35 +314,35 @@ export default function CarteiraPage() {
 
       {/* Histórico */}
       <div className="card p-6">
-        <h2 className="font-semibold text-brand-dark mb-4">Histórico de transações</h2>
-        <div className="space-y-3">
-          {HISTORICO.map((h, i) => (
-            <div key={i} className="flex items-center justify-between py-2 border-b border-brand-border last:border-0">
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  h.tipo === 'credito' ? 'bg-brand-green-light' : 'bg-brand-blue-light'
-                }`}>
-                  {h.tipo === 'credito'
-                    ? <ArrowDownLeft className="w-4 h-4 text-brand-green" />
-                    : <ArrowUpRight  className="w-4 h-4 text-brand-blue"  />
-                  }
+        <h2 className="font-semibold text-brand-dark mb-4">Histórico de consultas</h2>
+        {historico.length === 0 ? (
+          <p className="text-sm text-brand-gray text-center py-6">Nenhuma consulta registrada ainda.</p>
+        ) : (
+          <div className="space-y-3">
+            {historico.map(h => (
+              <div key={h.id} className="flex items-center justify-between py-2 border-b border-brand-border last:border-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-brand-blue-light flex items-center justify-center">
+                    <ArrowUpRight className="w-4 h-4 text-brand-blue" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-brand-dark font-mono">{h.documento}</p>
+                    {h.descricao && <p className="text-xs text-brand-gray">{h.descricao}</p>}
+                    <p className="text-xs text-brand-gray">
+                      {h.data ? new Date(h.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-brand-dark">{h.desc}</p>
-                  <p className="text-xs text-brand-gray">{h.data}</p>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-brand-dark">-1 consulta</p>
+                  <span className="text-[10px] bg-brand-blue-light text-brand-blue px-2 py-0.5 rounded-full font-medium capitalize">
+                    {h.tipo}
+                  </span>
                 </div>
               </div>
-              <div className="text-right">
-                <p className={`text-sm font-bold ${h.tipo === 'credito' ? 'text-brand-green' : 'text-brand-dark'}`}>
-                  {h.valor}
-                </p>
-                <span className="text-[10px] bg-brand-blue-light text-brand-blue px-2 py-0.5 rounded-full font-medium">
-                  {h.badge}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

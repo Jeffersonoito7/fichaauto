@@ -12,10 +12,20 @@ export default function CadastroPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    // TODO: integrar Supabase Auth
-    await new Promise(r => setTimeout(r, 1200))
-    setLoading(false)
-    setStep('success')
+    try {
+      const res = await fetch('/api/auth/cadastro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.erro ?? 'Erro ao criar conta.')
+      setStep('success')
+    } catch (err: any) {
+      alert(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (step === 'success') {
@@ -25,8 +35,8 @@ export default function CadastroPage() {
           <div className="w-16 h-16 bg-brand-green-light rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle2 className="w-8 h-8 text-brand-green" />
           </div>
-          <h1 className="text-2xl font-bold text-brand-dark mb-2">Conta criada!</h1>
-          <p className="text-brand-gray mb-6">Verifique seu e-mail para confirmar o cadastro e começar a consultar.</p>
+          <h1 className="text-2xl font-bold text-brand-dark mb-2">Solicitação recebida!</h1>
+          <p className="text-brand-gray mb-6">Recebemos seus dados. Nossa equipe entrará em contato em até 24 horas para ativar seu acesso.</p>
           <Link href="/login" className="btn-primary">Ir para o login</Link>
         </div>
       </div>
