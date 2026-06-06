@@ -80,9 +80,9 @@ function SectionCard({ icon: Icon, title, badge, children }: {
 }
 
 export default function RelatorioCpfPage() {
-  const { documento } = useParams<{ documento: string }>()
+  const params = useParams<{ documento: string }>()
   const router = useRouter()
-  const cpf = documento.replace(/\D/g, '')
+  const cpf = (params?.documento ?? '').replace(/\D/g, '')
 
   const [data, setData]       = useState<any>(null)
   const [loading, setLoading] = useState(true)

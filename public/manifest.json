@@ -1,14 +1,28 @@
 {
-  "name": "Universidade AVP",
-  "short_name": "Uni AVP",
-  "description": "Plataforma de formação da Auto Vale Prevenções",
-  "start_url": "/",
+  "name": "Ficha Auto — Consulta Veicular",
+  "short_name": "Ficha Auto",
+  "description": "Consulta veicular completa: placa, CPF, CNPJ, RENAJUD, gravame, sinistro e muito mais.",
+  "start_url": "/dashboard/consultar",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#08090d",
-  "theme_color": "#333687",
-  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#00703C",
+  "orientation": "portrait-primary",
+  "categories": ["business", "utilities"],
   "icons": [
-    { "src": "/logo.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/logo.png", "sizes": "512x512", "type": "image/png" }
-  ]
+    {
+      "src": "/logo-icone.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-icone.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "lang": "pt-BR"
 }
