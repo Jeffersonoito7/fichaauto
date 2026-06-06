@@ -75,12 +75,14 @@ export default function RelatorioCnpjPage() {
     </div>
   )
 
-  const b   = data?.basico      ?? {}
-  const qsa = data?.qsa         ?? {}
-  const sc  = data?.score       ?? {}
-  const pr  = data?.processos   ?? {}
-  const pt  = data?.protestos   ?? {}
-  const rel = data?.relacionadas ?? {}
+  const b      = data?.basico      ?? {}
+  const qsa    = data?.qsa         ?? {}
+  const sc     = data?.score       ?? {}
+  const pr     = data?.processos   ?? {}
+  const pt     = data?.protestos   ?? {}
+  const rel    = data?.relacionadas ?? {}
+  const erros  = data?.erros  ?? []
+  const avisos = data?.avisos ?? []
 
   const razao     = v(b.razaoSocial ?? b.nome, 'Empresa não informada')
   const scoreVal  = Number(sc.score ?? sc.pontuacao ?? 0)
@@ -141,6 +143,26 @@ export default function RelatorioCnpjPage() {
           </div>
         </div>
       </div>
+
+      {/* Avisos de fonte alternativa */}
+      {avisos.length > 0 && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
+          <p className="text-xs font-semibold text-yellow-800 mb-1">Atenção</p>
+          {avisos.map((a: string, i: number) => (
+            <p key={i} className="text-xs text-yellow-700">{a}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Erros da API */}
+      {erros.length > 0 && !b.razaoSocial && !b.nome && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+          <p className="text-xs font-semibold text-red-800 mb-1">Módulos com falha</p>
+          {erros.map((e: string, i: number) => (
+            <p key={i} className="text-xs text-red-700">{e}</p>
+          ))}
+        </div>
+      )}
 
       {/* Status */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
