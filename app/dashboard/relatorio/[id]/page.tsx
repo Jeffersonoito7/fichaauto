@@ -315,27 +315,47 @@ export default function RelatorioPage() {
       ? [gravameObj]
       : []
 
-  // Débitos — vêm do BIN Estadual (debitosPendentes), fallback para consulta-base
+  // Débitos — vêm do BIN Estadual (debitosPendentes)
   const debitos       = binEstResp?.debitosPendentes ?? {}
   const licenciamento = num(debitos?.licenciamento ?? raw.licenciamento)
   const ipvaVal       = num(debitos?.ipva ?? raw.ipva)
-  const multasTotal   = num(debitos?.multas?.total ?? debitos?.multas ?? raw.multas ?? raw.totalMultas)
   const dpvat         = val(debitos?.dpvat, 'NAODISPONIVEL').toUpperCase()
+  // Multas por órgão — total pode vir como texto "EXISTE DEBITO DE MULTAS."
+  const multasOrg     = typeof debitos?.multas === 'object' ? debitos.multas : {}
+  const multasOrgVals: { orgao: string; valor: number }[] = [
+    { orgao: 'DETRAN',    valor: num(multasOrg.detran) },
+    { orgao: 'PRF',       valor: num(multasOrg.prf) },
+    { orgao: 'RENAINF',   valor: num(multasOrg.renainf) },
+    { orgao: 'Municipais',valor: num(multasOrg.municipais) },
+    { orgao: 'CETESB',    valor: num(multasOrg.cetesb) },
+    { orgao: 'DER',       valor: num(multasOrg.der) },
+    { orgao: 'DERSA',     valor: num(multasOrg.dersa) },
+  ].filter(o => o.valor > 0)
+  const temDebitoMultas = typeof multasOrg.total === 'string' && multasOrg.total.toUpperCase().includes('EXIST')
+  const multasTotal = multasOrgVals.reduce((s, o) => s + o.valor, 0) ||
+    num(debitos?.multas?.total ?? debitos?.multas ?? raw.multas ?? raw.totalMultas)
+
+  // Proprietário atual — vem da movimentação do BIN Estadual
+  const binEstMov        = binEstResp?.movimentacao ?? {}
+  const proprietarioNome = val(binEstMov.proprietarioAtual ?? binEstMov.nomeProprietario ?? binEstMov.nome, '')
+  const proprietarioCpf  = val(binEstMov.documentoProprietarioAtual ?? binEstMov.documentoProprietario ?? binEstMov.cpf ?? binEstMov.cnpj, '')
 
   // Precificador (Assertiva) — valor FIPE e mercado
   const precNull  = !data.precificador
   const precResp  = data.precificador?.resposta ?? data.precificador ?? {}
-  const precObj   = precResp?.precificador ?? precResp?.fipe ?? precResp ?? {}
+  // Precificador v3: tabelaFipe é array [{codigo, vigencia, precoFipe, precoMedio}]
+  const tabelaFipe = Array.isArray(precResp?.tabelaFipe) ? precResp.tabelaFipe[0] : null
+  const precObj   = tabelaFipe ?? precResp?.precificador ?? precResp?.fipe ?? precResp ?? {}
   const fipeAssertiva = {
-    codigoFipe:    val(precObj?.codigoFipe    ?? precObj?.codigo    ?? precObj?.codigoTabela, ''),
-    referencia:    val(precObj?.referenciaFipe ?? precObj?.referencia ?? precObj?.mesReferencia, ''),
-    valorFipe:     precObj?.valorFipe    ?? precObj?.valor    ?? precObj?.precoFipe    ?? precResp?.valorFipe    ?? null,
-    valorMercado:  precObj?.valorMercado ?? precObj?.valorVenda ?? precObj?.valorEstimado ?? precResp?.valorMercado ?? null,
-    desvalorizacao: val(precObj?.desvalorizacao ?? precObj?.percentualDesvalorizacao, ''),
+    codigoFipe:   val(tabelaFipe?.codigo    ?? precObj?.codigoFipe ?? precObj?.codigo, ''),
+    referencia:   val(tabelaFipe?.vigencia  ?? precObj?.referenciaFipe ?? precObj?.referencia, ''),
+    valorFipe:    tabelaFipe?.precoFipe     ?? precObj?.valorFipe ?? precObj?.valor ?? precObj?.precoFipe ?? null,
+    valorMercado: tabelaFipe?.precoMedio    ?? precObj?.valorMercado ?? precObj?.valorVenda ?? null,
+    desvalorizacao: val(precObj?.desvalorizacao ?? '', ''),
   }
   // Fallback para BrasilAPI (grátis)
   const fipeBrasil = data.fipe
-  const fipeValor  = fipeAssertiva.valorFipe  ?? fipeBrasil?.price  ?? fipeBrasil?.valor  ?? null
+  const fipeValor   = fipeAssertiva.valorFipe  ?? fipeBrasil?.price  ?? fipeBrasil?.valor  ?? null
   const fipeMercado = fipeAssertiva.valorMercado ?? null
   const fipeCodigo  = fipeAssertiva.codigoFipe   ?? fipeBrasil?.codeFipe ?? fipeBrasil?.codigo ?? null
   const fipeRef     = fipeAssertiva.referencia    ?? fipeBrasil?.referenceMonth ?? fipeBrasil?.referencia ?? null
@@ -349,8 +369,8 @@ export default function RelatorioPage() {
   const chassiNum  = val(pIdent.chassi     ?? pDesc.chassi,     '')
   const motorNum   = val(pIdent.motor      ?? pDesc.motor       ?? pFicha.motor,      '')
   const carroceria = val(pFicha.carroceria ?? pDesc.carroceria  ?? pIdent.carroceria, '')
-  const municipio  = val(pDesc.municipio   ?? pIdent.municipio, '')
-  const uf         = val(pDesc.uf          ?? pIdent.uf,         '')
+  const municipio  = val(binEstMov.municipio ?? binEstMov.cidade ?? pDesc.municipio ?? pIdent.municipio, '')
+  const uf         = val(binEstMov.uf ?? pDesc.uf ?? pIdent.uf, '')
   const nrProp     = parseInt(String(
     pDesc.quantidadeProprietarios ?? pMov.quantidadeProprietarios ?? pDesc.nrProprietarios ?? '0'
   ), 10) || 0
@@ -362,7 +382,7 @@ export default function RelatorioPage() {
   const cilindradas = val(pFicha.cilindradas ?? pFicha.cilindrada,       '')
   const potencia    = val(pFicha.potencia    ?? pFicha.potenciaMotor,    '')
   const categoria   = val(pFicha.categoria,                              '')
-  const procedencia = val(pFicha.procedencia ?? pFicha.origemVeiculo,    '')
+  const procedencia = val(binEstMov.procedencia ?? pFicha.procedencia ?? pFicha.origemVeiculo ?? pMov.procedencia, '')
   const cambio      = val(pFicha.cambio      ?? pFicha.tipoCambio       ?? pDesc.cambio, '')
   const temFicha    = !!(combustivel || tipoVeic || cilindradas || passageiros || cambio)
 
@@ -581,30 +601,57 @@ export default function RelatorioPage() {
         <CardStatus titulo="COMUN. VENDA" valor={comunicVenda} tipo="normal" />
       </SecaoAcordion>
 
+      {/* ── PROPRIETÁRIO ATUAL ────────────────────────────────────────────── */}
+      {proprietarioNome && (
+        <SecaoAcordion titulo="PROPRIETÁRIO ATUAL" normal={1} alerta={0} atencao={0}>
+          <CardStatus titulo="NOME" valor={proprietarioNome.toUpperCase()} tipo="normal" />
+          {proprietarioCpf && (
+            <CardStatus titulo="CPF / CNPJ" valor={proprietarioCpf} tipo="normal" />
+          )}
+          {municipio && (
+            <CardStatus titulo="MUNICÍPIO / UF" valor={`${municipio}/${uf}`.toUpperCase()} tipo="normal" />
+          )}
+        </SecaoAcordion>
+      )}
+
       {/* ── DÉBITOS ────────────────────────────────────────────────────────── */}
       <SecaoAcordion titulo="DÉBITOS"
-        normal={licenciamento === 0 && multasTotal === 0 ? 1 : 0}
-        alerta={[licenciamento, multasTotal, ipvaVal].filter(v => v > 0).length}
+        normal={licenciamento === 0 && multasTotal === 0 && !temDebitoMultas ? 1 : 0}
+        alerta={[licenciamento, multasTotal, ipvaVal].filter(v => v > 0).length + (temDebitoMultas && multasTotal === 0 ? 1 : 0)}
         atencao={0}>
         <CardStatus titulo="LICENCIAMENTO"
           valor={licenciamento > 0 ? licenciamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : 'NADA CONSTA'}
           tipo={tipoMoeda(licenciamento)} />
         <CardStatus titulo="DPVAT" valor={dpvat} tipo="atencao" />
-        <CardStatus titulo="MULTAS" valor={moedaBR(multasTotal)} tipo={tipoMoeda(multasTotal)} />
+        <CardStatus titulo="MULTAS"
+          valor={multasTotal > 0 ? moedaBR(multasTotal) : temDebitoMultas ? 'EXISTE DÉBITO' : 'NADA CONSTA'}
+          tipo={multasTotal > 0 || temDebitoMultas ? 'alerta' : 'normal'} />
         {ipvaVal > 0 && (
           <CardStatus titulo="IPVA" valor={moedaBR(ipvaVal)} tipo="alerta" />
         )}
       </SecaoAcordion>
 
-      {/* ── MULTAS (individuais) ───────────────────────────────────────────── */}
+      {/* ── MULTAS POR ÓRGÃO ──────────────────────────────────────────────── */}
+      {(multasOrgVals.length > 0 || (temDebitoMultas && multasOrgVals.length === 0)) && (
+        <SecaoAcordion titulo="MULTAS POR ÓRGÃO" normal={0} alerta={multasOrgVals.length || 1} atencao={0}>
+          {multasOrgVals.length > 0
+            ? multasOrgVals.map((o, i) => (
+                <CardStatus key={i} titulo={o.orgao} valor={`R$ ${o.valor.toFixed(2)}`} tipo="alerta" />
+              ))
+            : <CardStatus titulo="MULTAS" valor="EXISTE DÉBITO — verificar com DETRAN" tipo="alerta" />
+          }
+        </SecaoAcordion>
+      )}
+
+      {/* ── MULTAS (individuais da Assertiva) ─────────────────────────────── */}
       {multasLista.length > 0 && (
-        <SecaoAcordion titulo="MULTAS" normal={0} alerta={0} atencao={multasLista.length}>
+        <SecaoAcordion titulo="INFRAÇÕES" normal={0} alerta={0} atencao={multasLista.length}>
           {multasLista.map((m: any, i: number) => {
             const dataM = val(m.data ?? m.dataInfracao ?? m.dataMulta, '')
             const valor = m.valor ? `R$ ${num(m.valor).toFixed(2)}` : ''
             const tit   = [dataM, valor].filter(Boolean).join(' - ')
             const desc  = val(m.descricao ?? m.infracao ?? m.tipoInfracao ?? m.natureza, '---').toUpperCase()
-            return <CardStatus key={i} titulo={tit || `MULTA ${i + 1}`} valor={desc} tipo="atencao" />
+            return <CardStatus key={i} titulo={tit || `INFRAÇÃO ${i + 1}`} valor={desc} tipo="atencao" />
           })}
         </SecaoAcordion>
       )}
