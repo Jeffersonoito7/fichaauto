@@ -292,7 +292,11 @@ export async function consultarEnderecosCpf(cpf: string) {
 
 /** Telefones vinculados ao CPF */
 export async function consultarTelefonesCpf(cpf: string) {
-  return get(`/localize/v3/mais-telefones?cpf=${limpaCpf(cpf)}&idFinalidade=${FINALIDADE}`)
+  // mais-telefones exige protocolo gerado pelo localize/v3/cpf
+  const base = await get(`/localize/v3/cpf?cpf=${limpaCpf(cpf)}&idFinalidade=${FINALIDADE}`)
+  const protocolo = base?.cabecalho?.protocolo
+  if (!protocolo) return base
+  return get(`/localize/v3/mais-telefones?cpf=${limpaCpf(cpf)}&protocolo=${protocolo}&idFinalidade=${FINALIDADE}`)
 }
 
 /** Renda presumida */

@@ -412,9 +412,10 @@ export default function RelatorioCpfPage() {
         <SectionCard icon={Users} title="Pessoas de Referência / Relacionamentos" badge={relacionamentos.length}>
           <div className="space-y-2">
             {relacionamentos.slice(0, 8).map((r: any, i: number) => {
-              const nomeRel  = r?.nome ?? r?.nomePessoa ?? r?.nomeCompleto ?? ''
-              const cpfRel   = r?.cpf ?? r?.documento ?? ''
-              const tipoRel  = r?.vinculo ?? r?.tipo ?? r?.parentesco ?? r?.relacionamento ?? ''
+              const nomeRel  = r?.nomeOuRazaoSocial ?? r?.nome ?? r?.nomePessoa ?? r?.nomeCompleto ?? ''
+              const cpfRel   = r?.documento ?? r?.cpf ?? r?.cnpj ?? ''
+              const tipoRel  = r?.relacao ?? r?.vinculo ?? r?.tipo ?? r?.parentesco ?? r?.relacionamento ?? ''
+              const nascRel  = r?.dataNascimentoOuAbertura ?? r?.dataNascimento ?? ''
               return nomeRel ? (
                 <div key={i} className="flex items-center justify-between py-1.5 border-b border-brand-border last:border-0">
                   <div className="flex items-center gap-2">
@@ -423,11 +424,14 @@ export default function RelatorioCpfPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-brand-dark">{v(nomeRel)}</p>
-                      {cpfRel && <p className="text-xs text-brand-gray font-mono">{maskCpf(cpfRel)}</p>}
+                      <div className="flex items-center gap-2">
+                        {cpfRel && <p className="text-xs text-brand-gray font-mono">{maskCpf(cpfRel)}</p>}
+                        {nascRel && <p className="text-xs text-brand-gray">Nasc: {nascRel}</p>}
+                      </div>
                     </div>
                   </div>
                   {tipoRel && (
-                    <span className="text-xs bg-brand-gray-light text-brand-gray px-2 py-0.5 rounded-full">{v(tipoRel)}</span>
+                    <span className="text-xs bg-brand-blue-light text-brand-blue px-2 py-0.5 rounded-full shrink-0">{v(tipoRel)}</span>
                   )}
                 </div>
               ) : null
