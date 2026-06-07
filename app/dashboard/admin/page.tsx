@@ -5,19 +5,21 @@ import Link from 'next/link'
 export const dynamic = 'force-dynamic'
 
 export default async function AdminPage() {
-  const svc = createServiceRoleClient() as any
+  let total = 0, ativos = 0, aguardando = 0, totalConsultas = 0
 
-  const { data: perfis } = await svc
-    .from('perfis')
-    .select('ativo')
+  try {
+    const svc = createServiceRoleClient() as any
 
-  const total      = perfis?.length ?? 0
-  const ativos     = perfis?.filter((p: any) => p.ativo).length  ?? 0
-  const aguardando = perfis?.filter((p: any) => !p.ativo).length ?? 0
+    const { data: perfis } = await svc.from('perfis').select('ativo')
+    total      = perfis?.length ?? 0
+    ativos     = perfis?.filter((p: any) =>  p.ativo).length ?? 0
+    aguardando = perfis?.filter((p: any) => !p.ativo).length ?? 0
 
-  const { count: totalConsultas } = await svc
-    .from('consultas')
-    .select('id', { count: 'exact', head: true })
+    const { count } = await svc.from('consultas').select('id', { count: 'exact', head: true })
+    totalConsultas = count ?? 0
+  } catch {
+    // Supabase indisponível ou chave não configurada — exibe zeros
+  }
 
   const stats = [
     { label: 'Total de usuários',   value: String(total),                 icon: Users,     color: 'bg-brand-blue-light text-brand-blue' },
