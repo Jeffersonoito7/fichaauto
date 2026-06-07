@@ -130,6 +130,11 @@ export default function RelatorioCpfPage() {
   const sit       = v(b.situacaoCpf ?? b.situacao, 'REGULAR').toUpperCase()
   const cpfOk     = sit.includes('REGULAR') || sit.includes('ATIVO')
 
+  // ── Negativações / SPC / Serasa ─────────────────────────────────────────────
+  const negativacoes: any[] = Array.isArray(sc.negativacoes) ? sc.negativacoes : []
+  const totalNegat  = Number(sc.totalDebitos ?? negativacoes.length)
+  const valorNegat  = Number(sc.valorTotalDebitos ?? 0)
+
   // ── Empresas societárias ────────────────────────────────────────────────────
   const empresas: any[] = Array.isArray(soc.empresas ?? soc.lista) ? (soc.empresas ?? soc.lista) : []
 
@@ -181,6 +186,7 @@ export default function RelatorioCpfPage() {
   const statusGrid: { label: string; status: S; detalhe: string }[] = [
     { label: 'Situação CPF',        status: cpfOk ? 'ok' : 'error', detalhe: sit },
     { label: 'Score de Crédito',    status: scoreVal >= 700 ? 'ok' : scoreVal >= 400 ? 'warn' : 'error', detalhe: `${scoreVal} / 1000` },
+    { label: 'Negativações',        status: totalNegat > 0 ? 'error' : 'ok', detalhe: totalNegat > 0 ? `${totalNegat} registro(s) — R$ ${Number(valorNegat).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Nada consta' },
     { label: 'Processos Judiciais', status: totalProc > 0 ? 'error' : 'ok', detalhe: totalProc > 0 ? `${totalProc} processo(s)` : 'Nada consta' },
     { label: 'Protestos',           status: totalProt > 0 ? 'error' : 'ok', detalhe: totalProt > 0 ? `${totalProt} protesto(s)` : 'Nada consta' },
     { label: 'PEP',                 status: isPep ? 'error' : 'ok', detalhe: isPep ? 'Pessoa Politicamente Exposta' : 'Não identificado' },
@@ -446,6 +452,53 @@ export default function RelatorioCpfPage() {
             {veiculos.length > 8 && <p className="text-xs text-brand-gray mt-1">+{veiculos.length - 8} no PDF</p>}
           </div>
         </SectionCard>
+      )}
+
+      {/* Negativações / SPC / Serasa */}
+      {negativacoes.length > 0 && (
+        <div className="card p-5 mb-4 border border-red-200 bg-red-50">
+          <h3 className="text-sm font-bold text-red-700 mb-3 uppercase tracking-wide flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            Negativações / Restrições de Crédito
+            <span className="ml-1 bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">{negativacoes.length}</span>
+          </h3>
+          <div className="space-y-2">
+            {negativacoes.slice(0, 10).map((n: any, i: number) => {
+              const credor  = v(n.credor ?? n.nomeCredor ?? n.cedente, '—')
+              const valor   = Number(n.valor ?? n.valorDebito ?? 0)
+              const datVenc = v(n.dataVencimento ?? n.data ?? '', '')
+              const datInc  = v(n.dataInclusao ?? n.dataRegistro ?? '', '')
+              const tipo    = v(n.tipoDebito ?? n.tipo ?? n.natureza ?? '', '')
+              return (
+                <div key={i} className="flex items-start justify-between py-2 border-b border-red-200 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-red-800 truncate">{credor}</p>
+                    {tipo && <p className="text-xs text-red-600">{tipo}</p>}
+                    {(datVenc || datInc) && (
+                      <p className="text-xs text-red-500">
+                        {datVenc ? `Venc.: ${datVenc}` : ''}{datVenc && datInc ? ' · ' : ''}{datInc ? `Inc.: ${datInc}` : ''}
+                      </p>
+                    )}
+                  </div>
+                  {valor > 0 && (
+                    <p className="text-sm font-bold text-red-700 ml-3 shrink-0">
+                      R$ {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+            {negativacoes.length > 10 && (
+              <p className="text-xs text-red-500 mt-1">+{negativacoes.length - 10} registros no PDF completo</p>
+            )}
+          </div>
+          {valorNegat > 0 && (
+            <div className="mt-3 pt-2 border-t border-red-200 flex justify-between">
+              <p className="text-xs font-semibold text-red-700">Total de débitos</p>
+              <p className="text-sm font-bold text-red-700">R$ {valorNegat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Score detalhe */}

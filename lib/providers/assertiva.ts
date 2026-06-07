@@ -231,6 +231,11 @@ export async function consultarScoreCpf(cpf: string) {
     ? (rp?.valor ?? rp?.faixaRenda ?? rp?.renda)
     : (typeof rp === 'string' || typeof rp === 'number' ? rp : null)
 
+  const rd = data?.resposta?.registrosDebitos ?? {}
+  const negativacoes: any[] = Array.isArray(rd?.list ?? rd?.lista ?? rd?.registros)
+    ? (rd.list ?? rd.lista ?? rd.registros)
+    : []
+
   return {
     score:          pontos,
     pontuacao:      pontos,
@@ -240,6 +245,9 @@ export async function consultarScoreCpf(cpf: string) {
     protestos:      data?.resposta?.protestosPublicos?.qtdProtestos
                  ?? data?.resposta?.protestosPublicos?.sumQuantidade
                  ?? 0,
+    negativacoes,
+    totalDebitos:   rd?.qtdDebitos ?? rd?.quantidade ?? negativacoes.length,
+    valorTotalDebitos: rd?.valorTotal ?? rd?.valor ?? 0,
     _raw: data,
   }
 }
@@ -395,10 +403,17 @@ export async function consultarScoreCnpj(cnpj: string) {
   const sc = data?.resposta?.score ?? {}
   const pontos = sc?.pontuacao ?? sc?.pontos ?? sc?.valor
               ?? (typeof sc === 'number' ? sc : null)
+  const rd = data?.resposta?.registrosDebitos ?? {}
+  const negativacoes: any[] = Array.isArray(rd?.list ?? rd?.lista ?? rd?.registros)
+    ? (rd.list ?? rd.lista ?? rd.registros)
+    : []
   return {
     score:     pontos,
     pontuacao: pontos,
     faixa:     sc?.faixa ?? sc?.classificacao,
+    negativacoes,
+    totalDebitos: rd?.qtdDebitos ?? rd?.quantidade ?? negativacoes.length,
+    valorTotalDebitos: rd?.valorTotal ?? rd?.valor ?? 0,
     _raw: data,
   }
 }
