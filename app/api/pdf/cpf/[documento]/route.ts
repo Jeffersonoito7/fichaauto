@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import QRCode from 'qrcode'
 import {
   consultarCpfBasico, consultarScoreCpf, consultarProcessosCpf,
   consultarProtestosCpf, consultarEnderecosCpf, consultarTelefonesCpf,
@@ -29,7 +30,7 @@ function iconeInner(status: Status, label: string): string {
     </div>`
 }
 
-function header(agora: string, proto: string, pag: string): string {
+function header(agora: string, proto: string, pag: string, qrDataUrl: string): string {
   return `
   <table width="100%" cellpadding="4" cellspacing="0" style="border-bottom:2px solid #333;margin-bottom:0">
     <tr>
@@ -55,10 +56,7 @@ function header(agora: string, proto: string, pag: string): string {
         </div>
       </td>
       <td width="60" align="right" valign="middle">
-        <table cellpadding="0" cellspacing="0"><tr>
-          <td align="center" valign="middle"
-              style="width:52px;height:52px;border:1px solid #ccc;background:#f5f5f5;font-size:7px;color:#999">QR</td>
-        </tr></table>
+        <img src="${qrDataUrl}" width="52" height="52" style="display:block" />
       </td>
     </tr>
   </table>`
@@ -157,7 +155,7 @@ function scoreBar(score: number): string {
 }
 
 /* ─── PÁGINA 1 — identificação + ícones de status ─── */
-function pag1(cpf: string, data: any, agora: string, proto: string): string {
+function pag1(cpf: string, data: any, agora: string, proto: string, qr: string): string {
   const b  = data.basico    ?? {}
   const sc = data.score     ?? {}
   const pr = data.processos ?? {}
@@ -181,7 +179,7 @@ function pag1(cpf: string, data: any, agora: string, proto: string): string {
 
   return `
 <div class="pg">
-  ${header(agora, proto, '1')}
+  ${header(agora, proto, '1', qr)}
   ${banner(nome, cpf)}
 
   <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px">
@@ -227,53 +225,73 @@ function pag1(cpf: string, data: any, agora: string, proto: string): string {
 </div>`
 }
 
-/* ─── PÁGINA 2 — processos + protestos ─── */
-function pag2(cpf: string, data: any, agora: string, proto: string): string {
+/* ─── PÁGINA 2 — negativações + processos + protestos ─── */
+function pag2(cpf: string, data: any, agora: string, proto: string, qr: string): string {
   const b   = data.basico    ?? {}
+  const sc  = data.score     ?? {}
   const pr  = data.processos ?? {}
   const pt  = data.protestos ?? {}
   const nome = v(b.nome ?? b.nomeCompleto, 'NOME NÃO INFORMADO')
 
+  const negativacoes: any[] = Array.isArray(sc.negativacoes) ? sc.negativacoes : []
+  const totalNegat  = Number(sc.totalDebitos ?? negativacoes.length)
+  const valorNegat  = Number(sc.valorTotalDebitos ?? 0)
   const processos: any[] = Array.isArray(pr.processos ?? pr.lista) ? (pr.processos ?? pr.lista) : []
-  const protestos: any[] = Array.isArray(pt.protestos ?? pt.lista) ? (pt.protestos ?? pt.lista) : []
+  const protestos: any[] = Array.isArray(pt.lista ?? pt.protestos) ? (pt.lista ?? pt.protestos) : []
   const totalProc  = pr.total ?? pr.quantidade ?? processos.length
   const totalProt  = pt.total ?? pt.quantidade ?? protestos.length
   const valorProt  = pt.valorTotal ?? pt.valor ?? 0
 
   return `
 <div class="pg">
-  ${header(agora, proto, '2')}
+  ${header(agora, proto, '2', qr)}
   ${banner(nome, cpf)}
+
+  ${secTitle('Negativações / Restrições de Crédito (SPC/Serasa)')}
+  <p style="font-size:10px;font-weight:700;color:${totalNegat > 0 ? '#dc2626' : '#16a34a'};margin-bottom:4px">
+    ${totalNegat > 0
+      ? `CONSTA — ${totalNegat} registro(s) | Valor total: R$ ${valorNegat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+      : 'NADA CONSTA'}
+  </p>
+  ${tabelaGen(
+    ['Credor', 'Tipo', 'Valor', 'Vencimento', 'Inclusão', 'Cidade/UF'],
+    negativacoes.slice(0, 20).map((n: any) => [
+      v(n.credor ?? n.nomeCredor ?? n.cedente, '---'),
+      v(n.tipoDebito ?? n.tipo ?? n.natureza, '---'),
+      n.valor ? `R$ ${Number(n.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '---',
+      v(n.dataVencimento ?? n.data, '---'),
+      v(n.dataInclusao ?? n.dataRegistro, '---'),
+      `${v(n.cidade ?? n.municipio, '---')}/${v(n.uf ?? n.estado, '---')}`,
+    ])
+  )}
 
   ${secTitle('Processos Judiciais')}
   <p style="font-size:10px;font-weight:700;color:${totalProc > 0 ? '#dc2626' : '#16a34a'};margin-bottom:4px">
     ${totalProc > 0 ? `CONSTA — ${totalProc} processo(s) encontrado(s)` : 'NADA CONSTA'}
   </p>
   ${tabelaGen(
-    ['Número', 'Tipo', 'Vara / Tribunal', 'Data', 'Valor', 'Situação'],
-    processos.slice(0, 20).map((p: any) => [
+    ['Número', 'Tipo', 'Vara / Tribunal', 'Data', 'Valor'],
+    processos.slice(0, 15).map((p: any) => [
       v(p.numero ?? p.numeroProcesso, '---'),
-      v(p.tipo ?? p.natureza, '---'),
-      v(p.vara ?? p.tribunal, '---'),
-      v(p.data ?? p.dataDistribuicao, '---'),
-      v(p.valor ? `R$ ${p.valor}` : '', '---'),
-      v(p.situacao ?? p.status, '---'),
+      v(p.tipo ?? p.natureza ?? p.classe, '---'),
+      v(p.vara ?? p.tribunal ?? p.orgaoJulgador, '---'),
+      v(p.data ?? p.dataDistribuicao ?? p.dataAjuizamento, '---'),
+      v(p.valor ?? p.valorCausa ? `R$ ${p.valor ?? p.valorCausa}` : '', '---'),
     ])
   )}
-  ${processos.length > 20 ? `<p style="font-size:8px;color:#555;margin-bottom:6px">* Exibindo 20 de ${processos.length} processos</p>` : ''}
 
   ${secTitle('Protestos em Cartório')}
   <p style="font-size:10px;font-weight:700;color:${totalProt > 0 ? '#dc2626' : '#16a34a'};margin-bottom:4px">
-    ${totalProt > 0 ? `CONSTA — ${totalProt} protesto(s) | Valor total: R$ ${Number(valorProt).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'NADA CONSTA'}
+    ${totalProt > 0 ? `CONSTA — ${totalProt} protesto(s)${valorProt > 0 ? ` | Valor total: R$ ${Number(valorProt).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}` : 'NADA CONSTA'}
   </p>
   ${tabelaGen(
     ['Data', 'Cartório', 'Cidade/UF', 'Valor', 'Credor'],
-    protestos.slice(0, 20).map((p: any) => [
+    protestos.slice(0, 10).map((p: any) => [
       v(p.data ?? p.dataProtesto, '---'),
-      v(p.cartorio ?? p.nomeCartorio, '---'),
+      v(p.cartorio ?? p.nomeCartorio ?? p.orgao, '---'),
       `${v(p.municipio ?? p.cidade, '---')}/${v(p.uf, '---')}`,
-      v(p.valor ? `R$ ${p.valor}` : '', '---'),
-      v(p.credor ?? p.nomeCredor, '---'),
+      p.valor ? `R$ ${Number(p.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '---',
+      v(p.credor ?? p.nomeCredor ?? p.apresentante, '---'),
     ])
   )}
 
@@ -282,7 +300,7 @@ function pag2(cpf: string, data: any, agora: string, proto: string): string {
 }
 
 /* ─── PÁGINA 3 — endereços + telefones + renda ─── */
-function pag3(cpf: string, data: any, agora: string, proto: string): string {
+function pag3(cpf: string, data: any, agora: string, proto: string, qr: string): string {
   const b    = data.basico    ?? {}
   const end  = data.enderecos ?? {}
   const tel  = data.telefones ?? {}
@@ -295,7 +313,7 @@ function pag3(cpf: string, data: any, agora: string, proto: string): string {
 
   return `
 <div class="pg">
-  ${header(agora, proto, '3')}
+  ${header(agora, proto, '3', qr)}
   ${banner(nome, cpf)}
 
   ${secTitle('Histórico de Endereços')}
@@ -340,7 +358,7 @@ function pag3(cpf: string, data: any, agora: string, proto: string): string {
 }
 
 /* ─── PÁGINA 4 — PEP + societário + relacionamentos ─── */
-function pag4(cpf: string, data: any, agora: string, proto: string): string {
+function pag4(cpf: string, data: any, agora: string, proto: string, qr: string): string {
   const b    = data.basico         ?? {}
   const pp   = data.pep            ?? {}
   const soc  = data.societario     ?? {}
@@ -349,11 +367,12 @@ function pag4(cpf: string, data: any, agora: string, proto: string): string {
 
   const isPep       = !!(pp.pep ?? pp.isPep ?? pp.politicamenteExposta)
   const empresas: any[]  = Array.isArray(soc.empresas ?? soc.lista) ? (soc.empresas ?? soc.lista) : []
-  const pessoas: any[]   = Array.isArray(rel.relacionamentos ?? rel.lista) ? (rel.relacionamentos ?? rel.lista) : []
+  const pessoasRaw = rel.resposta?.pessoasDeReferencia ?? rel.resposta?.relacionamentos ?? rel.lista ?? rel.relacionamentos ?? []
+  const pessoas: any[] = Array.isArray(pessoasRaw) ? pessoasRaw : []
 
   return `
 <div class="pg">
-  ${header(agora, proto, '4')}
+  ${header(agora, proto, '4', qr)}
   ${banner(nome, cpf)}
 
   ${secTitle('PEP — Pessoa Politicamente Exposta')}
@@ -398,7 +417,7 @@ function pag4(cpf: string, data: any, agora: string, proto: string): string {
 }
 
 /* ─── PÁGINA 5 — histórico de veículos por CPF ─── */
-function pag5Veiculos(cpf: string, data: any, agora: string, proto: string): string {
+function pag5Veiculos(cpf: string, data: any, agora: string, proto: string, qr: string): string {
   const b    = data.basico    ?? {}
   const vei  = data.veiculos  ?? {}
   const nome = v(b.nome ?? b.nomeCompleto, 'NOME NÃO INFORMADO')
@@ -408,7 +427,7 @@ function pag5Veiculos(cpf: string, data: any, agora: string, proto: string): str
 
   return `
 <div class="pg">
-  ${header(agora, proto, '5')}
+  ${header(agora, proto, '5', qr)}
   ${banner(nome, cpf)}
 
   ${secTitle('Histórico de Veículos Vinculados ao CPF')}
@@ -437,11 +456,11 @@ function pag5Veiculos(cpf: string, data: any, agora: string, proto: string): str
 }
 
 /* ─── PÁGINA 6 — considerações ─── */
-function pag5(nome: string, cpf: string, agora: string, proto: string): string {
+function pag5(nome: string, cpf: string, agora: string, proto: string, qr: string): string {
   const n = TENANT.nome
   return `
 <div class="pg">
-  ${header(agora, proto, '5')}
+  ${header(agora, proto, '5', qr)}
   ${banner(nome, cpf)}
 
   <p style="text-align:center;font-size:12px;font-weight:700;margin:12px 0 10px">CONSIDERAÇÕES IMPORTANTES</p>
@@ -460,11 +479,13 @@ function pag5(nome: string, cpf: string, agora: string, proto: string): string {
 </div>`
 }
 
-function buildHtml(cpf: string, data: any): string {
+async function buildHtml(cpf: string, data: any): Promise<string> {
   const agora = new Date().toLocaleString('pt-BR')
   const proto = protocolo()
   const b     = data.basico ?? {}
   const nome  = v(b.nome ?? b.nomeCompleto, 'NOME NÃO INFORMADO')
+  const qrUrl = `https://fichaauto.com.br/dashboard/relatorio/cpf/${cpf}`
+  const qr    = await QRCode.toDataURL(qrUrl, { width: 52, margin: 0 }).catch(() => '')
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -473,18 +494,20 @@ function buildHtml(cpf: string, data: any): string {
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:Arial,Helvetica,sans-serif; font-size:10px; color:#1a1a1a; background:#fff; }
-.pg { width:210mm; min-height:297mm; padding:10mm 12mm 8mm; page-break-after:always; }
+.pg { width:210mm; min-height:297mm; padding:10mm 12mm 8mm; page-break-after:always; overflow:hidden; }
 .pg:last-child { page-break-after:auto; }
+table { page-break-inside:avoid; }
+tr { page-break-inside:avoid; }
 p { margin:0; }
 </style>
 </head>
 <body>
-${pag1(cpf, data, agora, proto)}
-${pag2(cpf, data, agora, proto)}
-${pag3(cpf, data, agora, proto)}
-${pag4(cpf, data, agora, proto)}
-${pag5Veiculos(cpf, data, agora, proto)}
-${pag5(nome, cpf, agora, proto)}
+${pag1(cpf, data, agora, proto, qr)}
+${pag2(cpf, data, agora, proto, qr)}
+${pag3(cpf, data, agora, proto, qr)}
+${pag4(cpf, data, agora, proto, qr)}
+${pag5Veiculos(cpf, data, agora, proto, qr)}
+${pag5(nome, cpf, agora, proto, qr)}
 </body>
 </html>`
 }
@@ -522,7 +545,7 @@ export async function GET(
     ])
 
   const data = { cpf, basico, score, processos, protestos, enderecos, telefones, renda, pep, societario, relacionamentos, veiculos, erros }
-  const html = buildHtml(cpf, data)
+  const html = await buildHtml(cpf, data)
 
   let pdfBuffer: Buffer | null = null
   try {

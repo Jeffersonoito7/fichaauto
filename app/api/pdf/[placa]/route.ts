@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import QRCode from 'qrcode'
 import { consultarVeiculo } from '@/lib/providers'
 
 const TENANT = {
@@ -55,7 +56,7 @@ function iconeInner(status: Status, label: string): string {
 }
 
 /* ── cabeçalho de página ─────────────────────────────────────────────────── */
-function header(agora: string, proto: string, pag: string): string {
+function header(agora: string, proto: string, pag: string, qrDataUrl: string): string {
   return `
   <table width="100%" cellpadding="4" cellspacing="0"
          style="border-bottom:2px solid #333;margin-bottom:0">
@@ -73,13 +74,7 @@ function header(agora: string, proto: string, pag: string): string {
         </div>
       </td>
       <td width="60" align="right" valign="middle">
-        <table cellpadding="0" cellspacing="0">
-          <tr>
-            <td align="center" valign="middle"
-                style="width:52px;height:52px;border:1px solid #ccc;background:#f5f5f5;
-                       font-size:7px;color:#999">QR</td>
-          </tr>
-        </table>
+        <img src="${qrDataUrl}" width="52" height="52" style="display:block" />
       </td>
     </tr>
   </table>`
@@ -180,7 +175,7 @@ function tabelaGen(cols: string[], linhas: string[][]): string {
 /* ════════════════════════════════════════════════════════════════════════════
    PÁGINA 1 — identificação, características, débitos
 ════════════════════════════════════════════════════════════════════════════ */
-function pag1(placa: string, data: any, agora: string, proto: string): string {
+function pag1(placa: string, data: any, agora: string, proto: string, qr: string): string {
   const p    = normalizaPlacaV3(data.placa)
   const deb  = debitosBinEst(data)
   const restOutrasUFs = restricoesBinEst(data)
@@ -214,7 +209,7 @@ function pag1(placa: string, data: any, agora: string, proto: string): string {
 
   return `
 <div class="pg">
-  ${header(agora, proto, '1')}
+  ${header(agora, proto, '1', qr)}
   ${banner(mm, placa)}
 
   <!-- 7 ícones: linha 1 com 4, linha 2 com 3 centralizados -->
@@ -304,7 +299,7 @@ function pag1(placa: string, data: any, agora: string, proto: string): string {
 /* ════════════════════════════════════════════════════════════════════════════
    PÁGINA 2 — alterações, restrições, roubo, gravame
 ════════════════════════════════════════════════════════════════════════════ */
-function pag2(placa: string, data: any, agora: string, proto: string): string {
+function pag2(placa: string, data: any, agora: string, proto: string, qr: string): string {
   const p    = normalizaPlacaV3(data.placa)
   const mm   = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
   const bin  = normalizaBinFederalV3(data.binFederal)
@@ -325,7 +320,7 @@ function pag2(placa: string, data: any, agora: string, proto: string): string {
 
   return `
 <div class="pg">
-  ${header(agora, proto, '2')}
+  ${header(agora, proto, '2', qr)}
   ${banner(mm, placa)}
 
   ${secTitle('Alterações de Caracteristicas')}
@@ -422,7 +417,7 @@ function pag2(placa: string, data: any, agora: string, proto: string): string {
 /* ════════════════════════════════════════════════════════════════════════════
    PÁGINA 3 — sinistro, leilão (3 bases), chassi
 ════════════════════════════════════════════════════════════════════════════ */
-function pag3(placa: string, data: any, agora: string, proto: string): string {
+function pag3(placa: string, data: any, agora: string, proto: string, qr: string): string {
   const p   = normalizaPlacaV3(data.placa)
   const cd  = data.chassi ?? {}
   const mm  = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
@@ -453,7 +448,7 @@ function pag3(placa: string, data: any, agora: string, proto: string): string {
 
   return `
 <div class="pg">
-  ${header(agora, proto, '3')}
+  ${header(agora, proto, '3', qr)}
   ${banner(mm, placa)}
 
   ${secTitle('Indício de Sinistro')}
@@ -503,7 +498,7 @@ function pag3(placa: string, data: any, agora: string, proto: string): string {
 /* ════════════════════════════════════════════════════════════════════════════
    PÁGINA 4 — informações adicionais
 ════════════════════════════════════════════════════════════════════════════ */
-function pag4(placa: string, data: any, agora: string, proto: string): string {
+function pag4(placa: string, data: any, agora: string, proto: string, qr: string): string {
   const p   = normalizaPlacaV3(data.placa)
   const mm  = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
   const deb = debitosBinEst(data)
@@ -528,7 +523,7 @@ function pag4(placa: string, data: any, agora: string, proto: string): string {
 
   return `
 <div class="pg">
-  ${header(agora, proto, '4')}
+  ${header(agora, proto, '4', qr)}
   ${banner(mm, placa)}
 
   ${secTitle('Informações Adicionais')}
@@ -554,7 +549,7 @@ function pag4(placa: string, data: any, agora: string, proto: string): string {
 /* ════════════════════════════════════════════════════════════════════════════
    PÁGINA EXTRA — tabela FIPE
 ════════════════════════════════════════════════════════════════════════════ */
-function pagFipe(placa: string, data: any, agora: string, proto: string): string {
+function pagFipe(placa: string, data: any, agora: string, proto: string, qr: string): string {
   const p    = normalizaPlacaV3(data.placa)
   const fipe = data.fipe  ?? {}
   const cd   = data.chassi ?? {}
@@ -574,7 +569,7 @@ function pagFipe(placa: string, data: any, agora: string, proto: string): string
 
   return `
 <div class="pg">
-  ${header(agora, proto, 'Extra')}
+  ${header(agora, proto, 'Extra', qr)}
   ${banner(mm, placa)}
 
   <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px">
@@ -643,7 +638,7 @@ function pagFipe(placa: string, data: any, agora: string, proto: string): string
 /* ════════════════════════════════════════════════════════════════════════════
    PÁGINA FICHA — ficha técnica
 ════════════════════════════════════════════════════════════════════════════ */
-function pagFicha(placa: string, data: any, agora: string, proto: string): string {
+function pagFicha(placa: string, data: any, agora: string, proto: string, qr: string): string {
   const p  = normalizaPlacaV3(data.placa)
   const cd = data.chassi ?? {}
   const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
@@ -682,7 +677,7 @@ function pagFicha(placa: string, data: any, agora: string, proto: string): strin
 
   return `
 <div class="pg">
-  ${header(agora, proto, 'FICHA')}
+  ${header(agora, proto, 'FICHA', qr)}
   ${banner(mm, placa)}
 
   <p style="text-align:center;font-size:11px;font-weight:700;margin:10px 0 6px">
@@ -706,14 +701,14 @@ function pagFicha(placa: string, data: any, agora: string, proto: string): strin
 /* ════════════════════════════════════════════════════════════════════════════
    PÁGINA 5 — considerações importantes
 ════════════════════════════════════════════════════════════════════════════ */
-function pag5(placa: string, data: any, agora: string, proto: string): string {
+function pag5(placa: string, data: any, agora: string, proto: string, qr: string): string {
   const p  = normalizaPlacaV3(data.placa)
   const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
   const n  = TENANT.nome
 
   return `
 <div class="pg">
-  ${header(agora, proto, '5')}
+  ${header(agora, proto, '5', qr)}
   ${banner(mm, placa)}
 
   <p style="text-align:center;font-size:12px;font-weight:700;margin:12px 0 10px">
@@ -875,17 +870,19 @@ function restricoesBinEst(data: any): string[] {
 /* ════════════════════════════════════════════════════════════════════════════
    BUILD HTML COMPLETO
 ════════════════════════════════════════════════════════════════════════════ */
-function buildHtml(placa: string, data: any): string {
+async function buildHtml(placa: string, data: any): Promise<string> {
   const agora = new Date().toLocaleString('pt-BR')
   const proto = protocolo()
+  const qrUrl = `https://fichaauto.com.br/dashboard/relatorio/${placa}`
+  const qr    = await QRCode.toDataURL(qrUrl, { width: 52, margin: 0 }).catch(() => '')
 
-  const pg1    = pag1(placa, data, agora, proto)
-  const pg2    = pag2(placa, data, agora, proto)
-  const pg3    = pag3(placa, data, agora, proto)
-  const pg4    = pag4(placa, data, agora, proto)
-  const pgFipe = pagFipe(placa, data, agora, proto)
-  const pgFich = pagFicha(placa, data, agora, proto)
-  const pg5    = pag5(placa, data, agora, proto)
+  const pg1    = pag1(placa, data, agora, proto, qr)
+  const pg2    = pag2(placa, data, agora, proto, qr)
+  const pg3    = pag3(placa, data, agora, proto, qr)
+  const pg4    = pag4(placa, data, agora, proto, qr)
+  const pgFipe = pagFipe(placa, data, agora, proto, qr)
+  const pgFich = pagFicha(placa, data, agora, proto, qr)
+  const pg5    = pag5(placa, data, agora, proto, qr)
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -894,8 +891,10 @@ function buildHtml(placa: string, data: any): string {
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:Arial,Helvetica,sans-serif; font-size:10px; color:#1a1a1a; background:#fff; }
-.pg { width:210mm; min-height:297mm; padding:10mm 12mm 8mm; page-break-after:always; }
+.pg { width:210mm; min-height:297mm; padding:10mm 12mm 8mm; page-break-after:always; overflow:hidden; }
 .pg:last-child { page-break-after:auto; }
+table { page-break-inside:avoid; }
+tr { page-break-inside:avoid; }
 p { margin:0; }
 </style>
 </head>
@@ -927,7 +926,7 @@ export async function GET(
 
   try {
     const data = await consultarVeiculo(placa)
-    const html = buildHtml(placa, data)
+    const html = await buildHtml(placa, data)
 
     let pdfBuffer: Buffer | null = null
     try {
