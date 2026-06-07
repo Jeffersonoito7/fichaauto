@@ -89,6 +89,12 @@ export async function consultarBinEstadual(placa: string, protocolo?: string) {
   return get(`/veiculos/v3/demais-consultas?tipo=placa&documento=${limpaPlaca(placa)}&consulta=binestadual&protocolo=${proto}&idFinalidade=${FINALIDADE}`)
 }
 
+/** CSV — Certificado de Segurança Veicular (SISCSV/DENATRAN) */
+export async function consultarCSV(placa: string, protocolo?: string) {
+  const proto = protocolo ?? (await consultarPlaca(placa))?.cabecalho?.protocolo
+  return get(`/veiculos/v3/demais-consultas?tipo=placa&documento=${limpaPlaca(placa)}&consulta=csv&protocolo=${proto}&idFinalidade=${FINALIDADE}`)
+}
+
 /** Decodificador de chassi */
 export async function consultarChassi(chassi: string) {
   return get(`/veiculos/v3/consulta-base?tipo=chassi&documento=${chassi}&idFinalidade=${FINALIDADE}`)
@@ -475,7 +481,7 @@ export const MODULOS: ModuloInfo[] = [
 export interface ConsultaVeiculoResult {
   placa:         any; binFederal: any; sinistro: any
   gravame:       any; leilao:     any; chassi:   any
-  binEstadual:   any; precificador: any
+  binEstadual:   any; precificador: any; csv: any
   erros:         string[]
 }
 
@@ -492,7 +498,7 @@ export async function consultarCompleto(placa: string, chassi?: string): Promise
   const placaData = await safe(() => consultarPlaca(placaLimpa), 'placa')
   const protocolo = placaData?.cabecalho?.protocolo as string | undefined
 
-  const [binFederal, sinistro, gravame, leilao, binEstadual, chassiData, precificador] = await Promise.all([
+  const [binFederal, sinistro, gravame, leilao, binEstadual, chassiData, precificador, csv] = await Promise.all([
     safe(() => consultarBinFederal(placaLimpa, protocolo),    'binFederal'),
     safe(() => consultarSinistro(placaLimpa, protocolo),      'sinistro'),
     safe(() => consultarGravame(placaLimpa, protocolo),       'gravame'),
@@ -500,9 +506,10 @@ export async function consultarCompleto(placa: string, chassi?: string): Promise
     safe(() => consultarBinEstadual(placaLimpa, protocolo),   'binEstadual'),
     chassi ? safe(() => consultarChassi(chassi), 'chassi') : Promise.resolve(null),
     safe(() => consultarPrecificador(placaLimpa, protocolo),  'precificador'),
+    safe(() => consultarCSV(placaLimpa, protocolo),           'csv'),
   ])
 
-  return { placa: placaData, binFederal, sinistro, gravame, leilao, binEstadual, chassi: chassiData, precificador, erros }
+  return { placa: placaData, binFederal, sinistro, gravame, leilao, binEstadual, chassi: chassiData, precificador, csv, erros }
 }
 
 // ═══════════════════════════════════════════════════════════════
