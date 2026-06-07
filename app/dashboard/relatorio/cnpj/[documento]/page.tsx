@@ -136,7 +136,7 @@ export default function RelatorioCnpjPage() {
           <div className="flex-1 min-w-0">
             <h2 className="text-xl font-bold truncate">{razao}</h2>
             <p className="text-white/80 font-mono text-sm mt-0.5">{maskCnpj(cnpj)}</p>
-            {b.nomeFantasia && <p className="text-white/70 text-xs mt-0.5">{b.nomeFantasia}</p>}
+            {b.nomeFantasia && <p className="text-white/70 text-xs mt-0.5">{v(b.nomeFantasia)}</p>}
           </div>
           <div className="text-right shrink-0">
             <p className={`text-3xl font-black ${scoreColor} bg-white rounded-xl px-3 py-2`}>{scoreVal}</p>
@@ -149,8 +149,8 @@ export default function RelatorioCnpjPage() {
       {avisos.length > 0 && (
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
           <p className="text-xs font-semibold text-yellow-800 mb-1">Atenção</p>
-          {avisos.map((a: string, i: number) => (
-            <p key={i} className="text-xs text-yellow-700">{a}</p>
+          {avisos.map((a: any, i: number) => (
+            <p key={i} className="text-xs text-yellow-700">{v(a)}</p>
           ))}
         </div>
       )}
@@ -159,8 +159,8 @@ export default function RelatorioCnpjPage() {
       {erros.length > 0 && !b.razaoSocial && !b.nome && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
           <p className="text-xs font-semibold text-red-800 mb-1">Módulos com falha</p>
-          {erros.map((e: string, i: number) => (
-            <p key={i} className="text-xs text-red-700">{e}</p>
+          {erros.map((e: any, i: number) => (
+            <p key={i} className="text-xs text-red-700">{v(e)}</p>
           ))}
         </div>
       )}

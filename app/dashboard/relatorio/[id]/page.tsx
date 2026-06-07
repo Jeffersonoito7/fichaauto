@@ -26,7 +26,9 @@ type TipoCard = 'normal' | 'alerta' | 'atencao'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function val(v: any, fallback = 'Não informado') {
-  return (v === null || v === undefined || v === '') ? fallback : String(v)
+  if (v === null || v === undefined || v === '') return fallback
+  if (typeof v === 'object') return v.titulo ?? v.descricao ?? v.nome ?? v.label ?? fallback
+  return String(v)
 }
 function num(v: any) {
   const s = String(v ?? '0').trim()
