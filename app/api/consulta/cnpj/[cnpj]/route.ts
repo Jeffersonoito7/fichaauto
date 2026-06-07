@@ -1,9 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  consultarCnpjBasico, consultarQsaCnpj, consultarScoreCnpj,
-  consultarProcessosCnpj, consultarProtestosCnpj, consultarRelacionadasCnpj,
-} from '@/lib/providers/assertiva'
+import { getAuthEmail, salvarConsulta } from '@/lib/consulta-helper'
+import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getCnpj } from '@/lib/providers/brasilapi'
+
+const BASE_URL  = 'https://api.assertivasolucoes.com.br'
+const TOKEN_URL = 'https://api.assertivasolucoes.com.br/oauth2/v3/token'
+const FINALIDADE = 2
+
+let _token: string | null = null
+let _tokenExpiry = 0
+
+async function getToken(): Promise<string> {
+  if (_token && Date.now() < _tokenExpiry) return _token
+  const basic = Buffer.from(`${process.env.ASSERTIVA_LOGIN ?? ''}:${process.env.ASSERTIVA_PASSWORD ?? ''}`).toString('base64')
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Authorization': `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=client_credentials',
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`Token error ${res.status}`)
+  const json = await res.json()
+  _token = json.access_token ?? json.token
+  _tokenExpiry = Date.now() + (json.expires_in ?? 3600) * 1000 - 300_000
+  return _token!
+}
+
+async function assertivaGet(path: string) {
+  const token = await getToken()
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`Assertiva ${path} erro ${res.status}`)
+  return res.json()
+}
 
 function limpaCnpj(c: string) { return c.replace(/\D/g, '') }
 
@@ -59,45 +90,103 @@ export async function GET(
     return NextResponse.json({ error: 'CNPJ inválido' }, { status: 400 })
   }
 
+  // Auth
+  const email = await getAuthEmail()
+  if (!email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+
+  const svc = createServiceRoleClient() as any
+  const { data: perfil } = await svc.from('perfis').select('saldo_consultas, role').eq('email', email).maybeSingle()
+  const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
+  const saldo = perfil?.saldo_consultas ?? 0
+  if (!isAdmin && saldo <= 0) return NextResponse.json({ error: 'Saldo insuficiente.' }, { status: 402 })
+  if (!isAdmin) await svc.from('perfis').update({ saldo_consultas: saldo - 1, atualizado_em: new Date().toISOString() }).eq('email', email)
+
   const erros: string[] = []
   const avisos: string[] = []
 
-  const safe = async (fn: () => Promise<any>, nome: string) => {
-    try { return await fn() }
-    catch (e: any) { erros.push(`${nome}: ${e.message}`); return null }
+  // Uma única chamada por endpoint — evita 429 por chamadas duplicadas
+  const [rawLocalize, rawScore, rawAcoes] = await Promise.all([
+    assertivaGet(`/localize/v3/cnpj?cnpj=${cnpj}&idFinalidade=${FINALIDADE}`).catch((e: any) => { erros.push(`localize: ${e.message}`); return null }),
+    assertivaGet(`/score/v3/pj/credito/${cnpj}?idFinalidade=${FINALIDADE}`).catch((e: any) => { erros.push(`score: ${e.message}`); return null }),
+    assertivaGet(`/score/v3/pj/acoes/${cnpj}?idFinalidade=${FINALIDADE}`).catch((e: any) => { erros.push(`acoes: ${e.message}`); return null }),
+  ])
+
+  // Extrair basico do localize
+  const cab = rawLocalize?.cabecalho ?? {}
+  const cad = rawLocalize?.resposta?.ocorrencias?.cadastro ?? rawLocalize?.resposta?.cadastro ?? {}
+  const tels  = rawLocalize?.resposta?.ocorrencias?.telefones ?? rawLocalize?.resposta?.telefones ?? []
+  const mails = rawLocalize?.resposta?.ocorrencias?.emails ?? rawLocalize?.resposta?.emails ?? []
+  const razaoSocial = cab?.razaoSocial ?? cab?.nome ?? cad?.razaoSocial ?? cad?.nome ?? null
+  const basico = rawLocalize ? {
+    razaoSocial, nome: razaoSocial,
+    nomeFantasia:     cad?.nomeFantasia ?? cad?.nomeEmpresa,
+    situacaoCadastral: cad?.situacaoCadastral ?? cad?.situacao ?? cab?.situacao,
+    situacao:         cad?.situacaoCadastral ?? cad?.situacao ?? cab?.situacao,
+    dataAbertura:     cad?.dataAbertura ?? cad?.dataFundacao ?? cab?.dataAbertura,
+    cnae:             cad?.cnae ?? cad?.cnaePrincipal ?? cad?.cnaeDescricao,
+    cnaePrincipal:    cad?.cnae ?? cad?.cnaePrincipal,
+    naturezaJuridica: cad?.naturezaJuridica ?? cad?.tipo,
+    porte:            cad?.porte ?? cad?.porteEmpresa,
+    capitalSocial:    cad?.capitalSocial,
+    optanteSimples:   cad?.optanteSimples ?? cad?.simplesNacional,
+    logradouro:       cad?.logradouro ?? cad?.nomeLogradouro,
+    numero:           cad?.numero ?? cad?.numeroLogradouro,
+    bairro:           cad?.bairro ?? cad?.nomeBairro,
+    municipio:        cad?.municipio ?? cad?.cidade ?? cad?.nomeMunicipio,
+    uf:               cad?.uf ?? cad?.estado ?? cad?.siglaUf,
+    cep:              cad?.cep,
+    telefone:         cad?.telefone ?? (Array.isArray(tels) && tels.length ? (tels[0]?.numero ?? tels[0]?.ddd + tels[0]?.telefone) : undefined),
+    email:            cad?.email ?? (Array.isArray(mails) && mails.length ? (mails[0]?.email ?? mails[0]?.enderecoEmail) : undefined),
+  } : null
+
+  // Extrair QSA do mesmo localize
+  const rawSocios = rawLocalize?.resposta?.ocorrencias?.socios ?? rawLocalize?.resposta?.ocorrencias?.quadroSocietario ?? rawLocalize?.resposta?.socios ?? rawLocalize?.resposta?.quadroSocietario ?? []
+  const qsa = { socios: Array.isArray(rawSocios) ? rawSocios : [], lista: Array.isArray(rawSocios) ? rawSocios : [] }
+
+  // Extrair relacionadas do mesmo localize
+  const rawRel = rawLocalize?.resposta?.ocorrencias?.empresasRelacionadas ?? rawLocalize?.resposta?.empresasRelacionadas ?? []
+  const relacionadas = { empresas: Array.isArray(rawRel) ? rawRel : [], lista: Array.isArray(rawRel) ? rawRel : [] }
+
+  // Extrair score + negativações + protestos do mesmo /score/v3/pj/credito
+  const sc = rawScore?.resposta?.score ?? {}
+  const pontos = sc?.pontuacao ?? sc?.pontos ?? sc?.valor ?? (typeof sc === 'number' ? sc : null)
+  const rd = rawScore?.resposta?.registrosDebitos ?? {}
+  const negativacoes: any[] = Array.isArray(rd?.list ?? rd?.lista ?? rd?.registros) ? (rd?.list ?? rd?.lista ?? rd?.registros) : []
+  const pp = rawScore?.resposta?.protestosPublicos ?? {}
+  const score = rawScore ? {
+    score: pontos, pontuacao: pontos,
+    faixa: sc?.faixa ?? sc?.classificacao,
+    negativacoes,
+    totalDebitos: rd?.qtdDebitos ?? rd?.quantidade ?? negativacoes.length,
+    valorTotalDebitos: rd?.valorTotal ?? rd?.valor ?? 0,
+  } : null
+  const protestos = {
+    total: pp?.qtdProtestos ?? pp?.sumQuantidade ?? pp?.quantidade ?? 0,
+    quantidade: pp?.qtdProtestos ?? 0,
+    lista: Array.isArray(pp?.list ?? pp?.lista) ? (pp?.list ?? pp?.lista) : [],
+    primeiraOcorrencia: pp?.primeiraOcorrencia ?? null,
+    ultimaOcorrencia: pp?.ultimaOcorrencia ?? null,
   }
 
-  const [basico, qsa, score, processos, protestos, relacionadas] =
-    await Promise.all([
-      safe(() => consultarCnpjBasico(cnpj),       'basico'),
-      safe(() => consultarQsaCnpj(cnpj),           'qsa'),
-      safe(() => consultarScoreCnpj(cnpj),         'score'),
-      safe(() => consultarProcessosCnpj(cnpj),     'processos'),
-      safe(() => consultarProtestosCnpj(cnpj),     'protestos'),
-      safe(() => consultarRelacionadasCnpj(cnpj),  'relacionadas'),
-    ])
+  // Extrair processos do /score/v3/pj/acoes
+  const ac = rawAcoes?.resposta?.acoes ?? {}
+  const qtdProc = ac?.qtdAcoes ?? ac?.quantidade ?? ac?.total ?? (Array.isArray(ac) ? ac.length : 0)
+  const processos = { total: qtdProc, quantidade: qtdProc, lista: ac?.acoes ?? ac?.lista ?? [] }
 
   // Fallback BrasilAPI quando Assertiva não retornou dados básicos
   let basicoFinal = basico
-  let qsaFinal    = qsa
+  let qsaFinal = qsa
   if (!basico?.razaoSocial && !basico?.nome) {
     basicoFinal = await basicoFallback(cnpj).catch(() => null)
     if (basicoFinal) avisos.push('Dados básicos via BrasilAPI (Assertiva indisponível)')
   }
-  if (!qsa?.socios?.length && !qsa?.lista?.length) {
-    qsaFinal = await qsaFallback(cnpj).catch(() => null)
-    if (qsaFinal) avisos.push('Quadro societário via BrasilAPI')
+  if (!qsa?.socios?.length) {
+    const fb = await qsaFallback(cnpj).catch(() => null)
+    if (fb) { qsaFinal = fb; avisos.push('Quadro societário via BrasilAPI') }
   }
 
-  return NextResponse.json({
-    cnpj,
-    basico:      basicoFinal,
-    qsa:         qsaFinal,
-    score,
-    processos,
-    protestos,
-    relacionadas,
-    erros,
-    avisos,
-  })
+  const resultado = { cnpj, basico: basicoFinal, qsa: qsaFinal, score, processos, protestos, relacionadas, erros, avisos }
+  const saved = await salvarConsulta({ email, tipo: 'cnpj', documento: cnpj, descricao: basicoFinal?.razaoSocial ?? cnpj, resultado }).catch(() => null)
+
+  return NextResponse.json({ ...resultado, token: saved?.token ?? null })
 }

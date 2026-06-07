@@ -26,11 +26,15 @@ export async function GET(
   if (!email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
   const svc = createServiceRoleClient() as any
-  const { data: perfil } = await svc.from('perfis').select('saldo_consultas').eq('email', email).maybeSingle()
+  const { data: perfil } = await svc.from('perfis').select('saldo_consultas, role').eq('email', email).maybeSingle()
+  const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
   const saldo = perfil?.saldo_consultas ?? 0
-  if (saldo <= 0) return NextResponse.json({ error: 'Saldo insuficiente.' }, { status: 402 })
 
-  await svc.from('perfis').update({ saldo_consultas: saldo - 1, atualizado_em: new Date().toISOString() }).eq('email', email)
+  if (!isAdmin && saldo <= 0) return NextResponse.json({ error: 'Saldo insuficiente.' }, { status: 402 })
+
+  if (!isAdmin) {
+    await svc.from('perfis').update({ saldo_consultas: saldo - 1, atualizado_em: new Date().toISOString() }).eq('email', email)
+  }
 
   const erros: string[] = []
   const safe = async (fn: () => Promise<any>, nome: string) => {

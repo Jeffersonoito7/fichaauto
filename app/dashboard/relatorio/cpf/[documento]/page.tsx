@@ -91,8 +91,15 @@ export default function RelatorioCpfPage() {
 
   useEffect(() => {
     fetch(`/api/consulta/cpf/${cpf}`)
-      .then(r => r.json())
-      .then(d => { setData(d); setLoading(false) })
+      .then(async r => {
+        const d = await r.json()
+        if (!r.ok || d?.error) {
+          setErro(d?.error ?? 'Erro ao consultar CPF.')
+        } else {
+          setData(d)
+        }
+        setLoading(false)
+      })
       .catch(() => { setErro('Erro ao consultar CPF.'); setLoading(false) })
   }, [cpf])
 
