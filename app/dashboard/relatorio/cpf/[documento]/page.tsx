@@ -216,8 +216,8 @@ export default function RelatorioCpfPage() {
             <p className="text-white/80 font-mono text-sm mt-0.5">{maskCpf(cpf)}</p>
             {b.dataNascimento && (
               <p className="text-white/70 text-xs mt-0.5">
-                Nasc. {b.dataNascimento}{b.idade ? ` · ${b.idade} anos` : ''}
-                {b.sexo ? ` · ${b.sexo}` : ''}
+                Nasc. {v(b.dataNascimento)}{b.idade ? ` · ${b.idade} anos` : ''}
+                {b.sexo ? ` · ${v(b.sexo)}` : ''}
               </p>
             )}
           </div>
@@ -269,7 +269,7 @@ export default function RelatorioCpfPage() {
                   return num ? (
                     <div key={i} className="flex items-center justify-between py-1 border-b border-brand-border last:border-0">
                       <p className="text-sm font-medium text-brand-dark font-mono">{num}</p>
-                      {tipo && <span className="text-xs text-brand-gray">{tipo}</span>}
+                      {tipo && <span className="text-xs text-brand-gray">{v(tipo)}</span>}
                     </div>
                   ) : null
                 })}
@@ -367,7 +367,7 @@ export default function RelatorioCpfPage() {
                       <User className="w-3.5 h-3.5 text-brand-blue" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-brand-dark">{nomeRel}</p>
+                      <p className="text-sm font-medium text-brand-dark">{v(nomeRel)}</p>
                       {cpfRel && <p className="text-xs text-brand-gray font-mono">{maskCpf(cpfRel)}</p>}
                     </div>
                   </div>
@@ -393,8 +393,8 @@ export default function RelatorioCpfPage() {
                 <div>
                   <p className="text-sm font-medium text-brand-dark">{v(e.razaoSocial ?? e.nome)}</p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    {e.cnpj && <p className="text-xs text-brand-gray font-mono">{e.cnpj}</p>}
-                    {e.dataEntrada && <p className="text-xs text-brand-gray">Entrada: {e.dataEntrada}</p>}
+                    {e.cnpj && <p className="text-xs text-brand-gray font-mono">{v(e.cnpj)}</p>}
+                    {e.dataEntrada && <p className="text-xs text-brand-gray">Entrada: {v(e.dataEntrada)}</p>}
                   </div>
                 </div>
                 <div className="text-right shrink-0 ml-2">
@@ -430,15 +430,15 @@ export default function RelatorioCpfPage() {
                       <Car className="w-4 h-4 text-brand-blue" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-brand-dark">{marcaMod || 'Veículo'}</p>
+                      <p className="text-sm font-medium text-brand-dark">{v(marcaMod) || 'Veículo'}</p>
                       <p className="text-xs text-brand-gray">
                         {[ano && anoMod ? `${ano}/${anoMod}` : ano, cor].filter(Boolean).join(' · ')}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    {placa && <p className="text-sm font-mono font-bold text-brand-dark">{placa}</p>}
-                    {dataVinc && <p className="text-xs text-brand-gray">{dataVinc}</p>}
+                    {placa && <p className="text-sm font-mono font-bold text-brand-dark">{v(placa)}</p>}
+                    {dataVinc && <p className="text-xs text-brand-gray">{v(dataVinc)}</p>}
                   </div>
                 </div>
               )
