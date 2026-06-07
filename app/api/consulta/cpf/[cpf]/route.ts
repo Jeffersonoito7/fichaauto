@@ -5,6 +5,8 @@ import {
   consultarRendaCpf, consultarPepCpf, consultarSocietarioCpf,
   consultarRelacionamentosCpf, consultarHistoricoVeiculosPorCpf,
 } from '@/lib/providers/assertiva'
+import { getAuthEmail, salvarConsulta } from '@/lib/consulta-helper'
+import { createServiceRoleClient } from '@/lib/supabase-server'
 
 function limpaCpf(c: string) { return c.replace(/\D/g, '') }
 
@@ -18,6 +20,17 @@ export async function GET(
   if (cpf.length !== 11) {
     return NextResponse.json({ error: 'CPF inválido' }, { status: 400 })
   }
+
+  // Auth e débito de crédito
+  const email = await getAuthEmail()
+  if (!email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+
+  const svc = createServiceRoleClient() as any
+  const { data: perfil } = await svc.from('perfis').select('saldo_consultas').eq('email', email).maybeSingle()
+  const saldo = perfil?.saldo_consultas ?? 0
+  if (saldo <= 0) return NextResponse.json({ error: 'Saldo insuficiente.' }, { status: 402 })
+
+  await svc.from('perfis').update({ saldo_consultas: saldo - 1, atualizado_em: new Date().toISOString() }).eq('email', email)
 
   const erros: string[] = []
   const safe = async (fn: () => Promise<any>, nome: string) => {
@@ -40,9 +53,15 @@ export async function GET(
       safe(() => consultarHistoricoVeiculosPorCpf(cpf),'veiculos'),
     ])
 
-  return NextResponse.json({
-    cpf, basico, score, processos, protestos,
-    enderecos, telefones, renda, pep, societario,
-    relacionamentos, veiculos, erros,
+  const resultado = { cpf, basico, score, processos, protestos, enderecos, telefones, renda, pep, societario, relacionamentos, veiculos, erros }
+  const descricao = basico?.nome ?? basico?.nomeCompleto ?? ''
+
+  const saved = await salvarConsulta({
+    email, tipo: 'cpf',
+    documento: cpf,
+    descricao,
+    resultado,
   })
+
+  return NextResponse.json({ ...resultado, token: saved?.token ?? null })
 }
