@@ -269,11 +269,18 @@ export async function consultarProcessosCpf(cpf: string) {
 /** Protestos em cartório — retornados junto ao endpoint de score */
 export async function consultarProtestosCpf(cpf: string) {
   const data = await get(`/score/v3/pf/credito/${limpaCpf(cpf)}?idFinalidade=${FINALIDADE}`)
-  const pp = data?.resposta?.protestosPublicos ?? {}
+  const pp  = data?.resposta?.protestosPublicos ?? {}
   const qtd = pp?.qtdProtestos ?? pp?.sumQuantidade ?? pp?.quantidade ?? 0
+  const lista: any[] = Array.isArray(pp?.list ?? pp?.lista ?? pp?.protestos)
+    ? (pp?.list ?? pp?.lista ?? pp?.protestos)
+    : []
   return {
-    total:     qtd,
-    quantidade: qtd,
+    total:          qtd,
+    quantidade:     qtd,
+    lista,
+    valorTotal:     pp?.valorTotal ?? null,
+    primeiraOcorrencia: pp?.primeiraOcorrencia ?? null,
+    ultimaOcorrencia:   pp?.ultimaOcorrencia   ?? null,
     _raw: data,
   }
 }

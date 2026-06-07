@@ -179,8 +179,17 @@ export default function RelatorioCpfPage() {
   // ── Renda ────────────────────────────────────────────────────────────────────
   const rendaStr = v(ren.rendaPresumida ?? ren.renda ?? ren.valor ?? sc.rendaPresumida ?? sc.faixaRenda)
 
+  // ── Protestos com lista ──────────────────────────────────────────────────────
+  const protestosLista: any[] = Array.isArray(pt.lista) ? pt.lista : []
+
+  // ── Processos com lista ──────────────────────────────────────────────────────
+  const processosLista: any[] = Array.isArray(pr.lista) ? pr.lista : []
+
   const scoreColor = scoreVal >= 700 ? 'text-green-600' : scoreVal >= 400 ? 'text-yellow-600' : 'text-red-600'
   const scoreLabel = scoreVal >= 700 ? 'Baixo Risco' : scoreVal >= 400 ? 'Risco Moderado' : 'Alto Risco'
+  const scoreFaixa = typeof sc.faixa === 'object'
+    ? (sc.faixa?.descricao ?? sc.faixa?.titulo ?? '')
+    : (sc.faixa ?? '')
 
   type S = 'ok' | 'warn' | 'error'
   const statusGrid: { label: string; status: S; detalhe: string }[] = [
@@ -271,11 +280,18 @@ export default function RelatorioCpfPage() {
               <div className="space-y-1">
                 {todosTels.slice(0, 8).map((t: any, i: number) => {
                   const num = fmtTel(t)
+                  const hasWhatsApp = !!(t?.aplicativos?.whatsApp || t?.aplicativos?.whatsAppBusiness)
                   const tipo = t?.tipo ?? (t?.ddd?.length === 2 ? (num.replace(/\D/g, '').length >= 10 ? 'Celular' : 'Fixo') : '')
+                  const operadora = t?.operadora ?? ''
                   return num ? (
                     <div key={i} className="flex items-center justify-between py-1 border-b border-brand-border last:border-0">
-                      <p className="text-sm font-medium text-brand-dark font-mono">{num}</p>
-                      {tipo && <span className="text-xs text-brand-gray">{v(tipo)}</span>}
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-brand-dark font-mono">{num}</p>
+                        {hasWhatsApp && (
+                          <span className="text-[10px] bg-green-100 text-green-700 font-bold px-1.5 py-0.5 rounded">WA</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-brand-gray">{[v(tipo, ''), operadora].filter(Boolean).join(' · ')}</span>
                     </div>
                   ) : null
                 })}
@@ -341,19 +357,52 @@ export default function RelatorioCpfPage() {
         </SectionCard>
       )}
 
-      {/* Processos */}
+      {/* Processos Judiciais */}
       {totalProc > 0 && (
         <div className="card p-5 mb-4 border border-red-200 bg-red-50">
-          <h3 className="text-sm font-bold text-red-700 mb-1 uppercase tracking-wide flex items-center gap-2">
+          <h3 className="text-sm font-bold text-red-700 mb-3 uppercase tracking-wide flex items-center gap-2">
             <AlertCircle className="w-4 h-4" />
             Processos Judiciais
             <span className="ml-1 bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">{totalProc}</span>
           </h3>
-          <p className="text-xs text-red-600 mb-3">
-            {totalProc} processo(s) judicial(is) encontrado(s). Baixe o PDF para a listagem completa com detalhes.
-          </p>
-          <a href={`/api/pdf/cpf/${cpf}`} className="text-xs text-brand-green font-semibold hover:underline">
-            Ver listagem no PDF completo →
+          {processosLista.length > 0 ? (
+            <div className="space-y-2">
+              {processosLista.slice(0, 8).map((p: any, i: number) => {
+                const num    = v(p.numeroProcesso ?? p.numero ?? p.numeroAcao, '—')
+                const tipo   = v(p.tipoAcao ?? p.tipo ?? p.natureza ?? p.classe, '')
+                const tribunal = v(p.tribunal ?? p.vara ?? p.orgao, '')
+                const data_  = v(p.dataDistribuicao ?? p.dataAjuizamento ?? p.data ?? '', '')
+                const valor  = Number(p.valorCausa ?? p.valor ?? 0)
+                return (
+                  <div key={i} className="py-2 border-b border-red-200 last:border-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-mono text-red-800 truncate">{num}</p>
+                        {tipo && <p className="text-xs text-red-700 font-semibold mt-0.5">{tipo}</p>}
+                        {(tribunal || data_) && (
+                          <p className="text-xs text-red-500 mt-0.5">
+                            {[tribunal, data_].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                      {valor > 0 && (
+                        <p className="text-xs font-bold text-red-700 shrink-0">
+                          R$ {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+              {processosLista.length > 8 && (
+                <p className="text-xs text-red-500 mt-1">+{processosLista.length - 8} processos no PDF completo</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-red-600 mb-3">{totalProc} processo(s) encontrado(s). Ver detalhes no PDF.</p>
+          )}
+          <a href={`/api/pdf/cpf/${cpf}`} className="text-xs text-brand-green font-semibold hover:underline mt-2 block">
+            PDF completo →
           </a>
         </div>
       )}
@@ -501,6 +550,54 @@ export default function RelatorioCpfPage() {
         </div>
       )}
 
+      {/* Protestos em cartório */}
+      {totalProt > 0 && (
+        <div className="card p-5 mb-4 border border-orange-200 bg-orange-50">
+          <h3 className="text-sm font-bold text-orange-700 mb-3 uppercase tracking-wide flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            Protestos em Cartório
+            <span className="ml-1 bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full">{totalProt}</span>
+          </h3>
+          {protestosLista.length > 0 ? (
+            <div className="space-y-2">
+              {protestosLista.map((p: any, i: number) => {
+                const cartorio  = v(p.cartorio ?? p.nomeCartorio ?? p.orgao, '—')
+                const cidade    = v(p.cidade ?? p.municipio, '')
+                const uf        = v(p.uf ?? p.estado, '')
+                const data_     = v(p.dataProtesto ?? p.data ?? '', '')
+                const valor     = Number(p.valor ?? p.valorProtesto ?? 0)
+                const credor    = v(p.credor ?? p.nomeCredor ?? p.apresentante, '')
+                return (
+                  <div key={i} className="py-2 border-b border-orange-200 last:border-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-orange-800">{cartorio}</p>
+                        {credor && <p className="text-xs text-orange-700 mt-0.5">Credor: {credor}</p>}
+                        <p className="text-xs text-orange-500 mt-0.5">
+                          {[cidade && uf ? `${cidade}/${uf}` : cidade, data_].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                      {valor > 0 && (
+                        <p className="text-sm font-bold text-orange-700 shrink-0">
+                          R$ {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-orange-600">{totalProt} protesto(s) encontrado(s). Detalhes disponíveis no PDF.</p>
+          )}
+          {pt.primeiraOcorrencia && (
+            <p className="text-xs text-orange-500 mt-2">
+              Primeira ocorrência: {pt.primeiraOcorrencia}{pt.ultimaOcorrencia && pt.ultimaOcorrencia !== pt.primeiraOcorrencia ? ` · Última: ${pt.ultimaOcorrencia}` : ''}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Score detalhe */}
       {scoreVal > 0 && (
         <SectionCard icon={TrendingUp} title="Score de Crédito">
@@ -517,9 +614,8 @@ export default function RelatorioCpfPage() {
                 />
               </div>
               <p className={`text-sm font-bold ${scoreColor}`}>{scoreLabel}</p>
-              {sc.faixa && <p className="text-xs text-brand-gray mt-0.5">{v(sc.faixa)}</p>}
-              {(data?.processos?.lista?.length > 0) && (
-                <p className="text-xs text-brand-gray mt-1">Ações judiciais: {data.processos.lista.length}</p>
+              {scoreFaixa && (
+                <p className="text-xs text-brand-gray mt-1 leading-relaxed">{scoreFaixa}</p>
               )}
             </div>
           </div>
