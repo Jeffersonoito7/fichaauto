@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Users, Search, Pencil, Loader2, X, Save, ShieldCheck, ShieldOff, Plus, Minus } from 'lucide-react'
-import { PLANOS, todosOsPlanos, type PlanoId } from '@/lib/products'
+import { Users, Search, Pencil, Loader2, X, Save, Plus, Minus, Settings2 } from 'lucide-react'
+import { PLANOS, type PlanoId, type ModuloId } from '@/lib/products'
+import ModulosSelector from '@/components/ModulosSelector'
 
 interface Usuario {
   user_id: string
@@ -16,6 +17,7 @@ interface Usuario {
   obs_admin: string | null
   atualizado_em: string | null
   plano: PlanoId | null
+  modulos_liberados: ModuloId[]
 }
 
 const PLANO_CORES: Record<string, string> = {
@@ -63,6 +65,7 @@ export default function UsuariosPage() {
       pode_lote: u.pode_lote,
       obs_admin: u.obs_admin ?? '',
       plano: u.plano,
+      modulos_liberados: u.modulos_liberados ?? [],
     })
     setErro(null)
   }
@@ -182,8 +185,8 @@ export default function UsuariosPage() {
 
       {/* Modal editar usuário */}
       {editando && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl my-4">
             <div className="flex items-center justify-between p-5 border-b border-brand-border">
               <div>
                 <h2 className="font-bold text-brand-dark">Editar usuário</h2>
@@ -194,102 +197,101 @@ export default function UsuariosPage() {
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              {/* Nome */}
-              <div>
-                <label className="block text-xs text-brand-gray mb-1.5 font-medium">Nome</label>
-                <input className="input-base" value={form.nome ?? ''} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Nome do cliente" />
-              </div>
+            <div className="p-5 grid lg:grid-cols-2 gap-5">
 
-              {/* Saldo */}
-              <div>
-                <label className="block text-xs text-brand-gray mb-1.5 font-medium">Saldo de consultas</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setForm(f => ({ ...f, saldo_consultas: Math.max(0, (f.saldo_consultas ?? 0) - 1) }))}
-                    className="w-9 h-9 rounded-lg bg-brand-gray-light flex items-center justify-center hover:bg-brand-border transition-colors"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <input
-                    type="number"
-                    min={0}
-                    className="input-base flex-1 text-center font-bold text-xl"
-                    value={form.saldo_consultas ?? 0}
-                    onChange={e => setForm(f => ({ ...f, saldo_consultas: Number(e.target.value) }))}
-                  />
-                  <button
-                    onClick={() => setForm(f => ({ ...f, saldo_consultas: (f.saldo_consultas ?? 0) + 1 }))}
-                    className="w-9 h-9 rounded-lg bg-brand-gray-light flex items-center justify-center hover:bg-brand-border transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Plano */}
-              <div>
-                <label className="block text-xs text-brand-gray mb-2 font-medium">Plano do cliente</label>
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  {([null, 'essencial', 'profissional', 'despachante', 'seguradora'] as const).map(pid => {
-                    const plano = pid ? PLANOS[pid] : null
-                    const ativo = (form as any).plano === pid
-                    return (
-                      <button
-                        key={pid ?? 'sem'}
-                        type="button"
-                        onClick={() => setForm(f => ({ ...f, plano: pid }))}
-                        className={`p-2.5 rounded-xl border-2 text-left transition-all ${ativo ? 'border-brand-blue bg-brand-blue-light' : 'border-brand-border hover:border-brand-blue/40'}`}
-                      >
-                        <p className={`text-xs font-bold ${ativo ? 'text-brand-blue' : 'text-brand-dark'}`}>
-                          {plano ? plano.nome : 'Sem plano'}
-                        </p>
-                        <p className="text-[10px] text-brand-gray mt-0.5">
-                          {plano ? `R$ ${plano.preco}/mês` : 'Permissões manuais'}
-                        </p>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Permissões manuais (fallback quando sem plano) */}
-              {!(form as any).plano && (
+              {/* Coluna esquerda — dados básicos */}
+              <div className="space-y-4">
+                {/* Nome */}
                 <div>
-                  <label className="block text-xs text-brand-gray mb-2 font-medium">Permissões manuais</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {PERM_LABELS.map(({ key, label }) => (
-                      <label key={key} className={`flex items-center gap-2.5 p-3 rounded-xl border-2 cursor-pointer transition-all select-none ${(form as any)[key] ? 'border-brand-green bg-brand-green-light' : 'border-brand-border hover:border-brand-green/40'}`}>
-                        <input
-                          type="checkbox"
-                          checked={!!(form as any)[key]}
-                          onChange={e => setForm(f => ({ ...f, [key]: e.target.checked }))}
-                          className="hidden"
-                        />
-                        {(form as any)[key]
-                          ? <ShieldCheck className="w-4 h-4 text-brand-green shrink-0" />
-                          : <ShieldOff className="w-4 h-4 text-brand-gray shrink-0" />
-                        }
-                        <span className={`text-sm font-medium ${(form as any)[key] ? 'text-brand-green' : 'text-brand-gray'}`}>{label}</span>
-                      </label>
-                    ))}
+                  <label className="block text-xs text-brand-gray mb-1.5 font-medium">Nome</label>
+                  <input className="input-base" value={form.nome ?? ''} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Nome do cliente" />
+                </div>
+
+                {/* Saldo */}
+                <div>
+                  <label className="block text-xs text-brand-gray mb-1.5 font-medium">Saldo de consultas</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setForm(f => ({ ...f, saldo_consultas: Math.max(0, (f.saldo_consultas ?? 0) - 1) }))}
+                      className="w-9 h-9 rounded-lg bg-brand-gray-light flex items-center justify-center hover:bg-brand-border transition-colors"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <input
+                      type="number" min={0}
+                      className="input-base flex-1 text-center font-bold text-xl"
+                      value={form.saldo_consultas ?? 0}
+                      onChange={e => setForm(f => ({ ...f, saldo_consultas: Number(e.target.value) }))}
+                    />
+                    <button
+                      onClick={() => setForm(f => ({ ...f, saldo_consultas: (f.saldo_consultas ?? 0) + 1 }))}
+                      className="w-9 h-9 rounded-lg bg-brand-gray-light flex items-center justify-center hover:bg-brand-border transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-              )}
 
-              {/* Status */}
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" checked={form.ativo ?? true} onChange={e => setForm(f => ({ ...f, ativo: e.target.checked }))} className="w-4 h-4 accent-brand-green" />
-                <span className="text-sm text-brand-dark">Conta ativa</span>
-              </label>
+                {/* Plano */}
+                <div>
+                  <label className="block text-xs text-brand-gray mb-2 font-medium">Plano base</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([null, 'essencial', 'profissional', 'despachante', 'seguradora'] as const).map(pid => {
+                      const plano = pid ? PLANOS[pid] : null
+                      const ativo = (form as any).plano === pid
+                      return (
+                        <button
+                          key={pid ?? 'sem'}
+                          type="button"
+                          onClick={() => setForm(f => ({ ...f, plano: pid }))}
+                          className={`p-2.5 rounded-xl border-2 text-left transition-all ${ativo ? 'border-brand-blue bg-brand-blue-light' : 'border-brand-border hover:border-brand-blue/40'}`}
+                        >
+                          <p className={`text-xs font-bold ${ativo ? 'text-brand-blue' : 'text-brand-dark'}`}>
+                            {plano ? plano.nome : 'Sem plano'}
+                          </p>
+                          <p className="text-[10px] text-brand-gray mt-0.5">
+                            {plano ? `${plano.creditos} consultas/mês` : 'Só módulos liberados'}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
 
-              {/* Obs admin */}
-              <div>
-                <label className="block text-xs text-brand-gray mb-1.5 font-medium">Observação interna</label>
-                <textarea className="input-base resize-none h-16 text-sm" value={form.obs_admin ?? ''} onChange={e => setForm(f => ({ ...f, obs_admin: e.target.value }))} placeholder="Notas internas (não visível ao cliente)" />
+                {/* Status */}
+                <label className="flex items-center gap-2 cursor-pointer select-none p-3 rounded-xl border border-brand-border hover:bg-brand-gray-light transition-colors">
+                  <input type="checkbox" checked={form.ativo ?? true} onChange={e => setForm(f => ({ ...f, ativo: e.target.checked }))} className="w-4 h-4 accent-brand-green" />
+                  <span className="text-sm font-medium text-brand-dark">Conta ativa</span>
+                </label>
+
+                {/* Obs admin */}
+                <div>
+                  <label className="block text-xs text-brand-gray mb-1.5 font-medium">Observação interna</label>
+                  <textarea className="input-base resize-none h-20 text-sm" value={form.obs_admin ?? ''} onChange={e => setForm(f => ({ ...f, obs_admin: e.target.value }))} placeholder="Notas visíveis só para admins" />
+                </div>
+
+                {erro && <p className="text-xs text-brand-danger bg-red-50 px-3 py-2 rounded-xl">{erro}</p>}
               </div>
 
-              {erro && <p className="text-xs text-brand-danger">{erro}</p>}
+              {/* Coluna direita — módulos liberados */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Settings2 className="w-4 h-4 text-brand-blue" />
+                  <label className="text-xs font-semibold text-brand-dark uppercase tracking-wide">
+                    Módulos liberados
+                  </label>
+                </div>
+                <p className="text-xs text-brand-gray mb-3">
+                  Define exatamente quais dados este cliente pode consultar, independente do plano.
+                </p>
+                <div className="max-h-[420px] overflow-y-auto pr-1">
+                  <ModulosSelector
+                    selecionados={(form as any).modulos_liberados ?? []}
+                    onChange={mods => setForm(f => ({ ...f, modulos_liberados: mods }))}
+                  />
+                </div>
+              </div>
+
             </div>
 
             <div className="flex gap-3 p-5 border-t border-brand-border">

@@ -3,7 +3,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 
 export async function POST(req: NextRequest) {
   try {
-    const { nome, email, cpfCnpj } = await req.json()
+    const { nome, email, cpfCnpj, modulos_liberados } = await req.json()
 
     if (!nome || !email) {
       return NextResponse.json({ erro: 'Nome e e-mail são obrigatórios.' }, { status: 400 })
@@ -26,16 +26,17 @@ export async function POST(req: NextRequest) {
     const { error } = await (supabase as any)
       .from('perfis')
       .insert({
-        nome:            nome.trim(),
-        email:           email.toLowerCase().trim(),
-        cpf_cnpj:        cpfCnpj ?? null,
-        saldo_consultas: 0,
-        ativo:           false,
-        pode_placa:      false,
-        pode_cpf:        false,
-        pode_cnpj:       false,
-        pode_lote:       false,
-        obs_admin:       'Aguardando aprovação — cadastro via site',
+        nome:              nome.trim(),
+        email:             email.toLowerCase().trim(),
+        cpf_cnpj:          cpfCnpj ?? null,
+        saldo_consultas:   0,
+        ativo:             false,
+        pode_placa:        false,
+        pode_cpf:          false,
+        pode_cnpj:         false,
+        pode_lote:         false,
+        modulos_liberados: Array.isArray(modulos_liberados) ? modulos_liberados : [],
+        obs_admin:         `Aguardando aprovação — cadastro via site${modulos_liberados?.length ? ` — ${modulos_liberados.length} módulo(s) solicitado(s)` : ''}`,
       })
 
     if (error) {

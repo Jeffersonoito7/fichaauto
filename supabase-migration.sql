@@ -33,7 +33,10 @@ ALTER TABLE perfis ADD COLUMN IF NOT EXISTS pode_placa     boolean DEFAULT true;
 ALTER TABLE perfis ADD COLUMN IF NOT EXISTS pode_cpf       boolean DEFAULT false;
 ALTER TABLE perfis ADD COLUMN IF NOT EXISTS pode_cnpj      boolean DEFAULT false;
 ALTER TABLE perfis ADD COLUMN IF NOT EXISTS pode_lote      boolean DEFAULT false;
-ALTER TABLE perfis ADD COLUMN IF NOT EXISTS obs_admin      text;
+ALTER TABLE perfis ADD COLUMN IF NOT EXISTS obs_admin         text;
+ALTER TABLE perfis ADD COLUMN IF NOT EXISTS plano             text;
+ALTER TABLE perfis ADD COLUMN IF NOT EXISTS modulos_liberados text[] DEFAULT '{}'::text[];
+ALTER TABLE perfis ADD COLUMN IF NOT EXISTS cpf_cnpj          text;
 
 -- 3. RLS: permitir service_role acessar planos_recarga
 ALTER TABLE planos_recarga ENABLE ROW LEVEL SECURITY;
