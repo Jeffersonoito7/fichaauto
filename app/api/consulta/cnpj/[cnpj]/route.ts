@@ -112,39 +112,52 @@ export async function GET(
   ])
 
   // Extrair basico do localize
-  const cab = rawLocalize?.cabecalho ?? {}
-  const cad = rawLocalize?.resposta?.ocorrencias?.cadastro ?? rawLocalize?.resposta?.cadastro ?? {}
-  const tels  = rawLocalize?.resposta?.ocorrencias?.telefones ?? rawLocalize?.resposta?.telefones ?? []
-  const mails = rawLocalize?.resposta?.ocorrencias?.emails ?? rawLocalize?.resposta?.emails ?? []
-  const razaoSocial = cab?.razaoSocial ?? cab?.nome ?? cad?.razaoSocial ?? cad?.nome ?? null
+  // Assertiva v3 CNPJ: dados em resposta.dadosCadastrais (não em ocorrencias.cadastro)
+  const resp  = rawLocalize?.resposta ?? {}
+  const cad   = resp.dadosCadastrais ?? resp.ocorrencias?.cadastro ?? resp.cadastro ?? {}
+  const telsR = resp.telefones ?? resp.ocorrencias?.telefones ?? {}
+  const tels: any[] = Array.isArray(telsR)
+    ? telsR
+    : [...(Array.isArray(telsR?.moveis) ? telsR.moveis : []), ...(Array.isArray(telsR?.fixos) ? telsR.fixos : [])]
+  const mails: any[] = Array.isArray(resp.emails ?? resp.ocorrencias?.emails) ? (resp.emails ?? resp.ocorrencias?.emails) : []
+  const endsArr: any[] = Array.isArray(resp.enderecos ?? resp.ocorrencias?.enderecos) ? (resp.enderecos ?? resp.ocorrencias?.enderecos) : []
+  const end0 = endsArr[0] ?? {}
+  const razaoSocial = cad?.razaoSocial ?? cad?.nome ?? null
   const basico = rawLocalize ? {
     razaoSocial, nome: razaoSocial,
     nomeFantasia:     cad?.nomeFantasia ?? cad?.nomeEmpresa,
-    situacaoCadastral: cad?.situacaoCadastral ?? cad?.situacao ?? cab?.situacao,
-    situacao:         cad?.situacaoCadastral ?? cad?.situacao ?? cab?.situacao,
-    dataAbertura:     cad?.dataAbertura ?? cad?.dataFundacao ?? cab?.dataAbertura,
-    cnae:             cad?.cnae ?? cad?.cnaePrincipal ?? cad?.cnaeDescricao,
-    cnaePrincipal:    cad?.cnae ?? cad?.cnaePrincipal,
+    situacaoCadastral: cad?.situacaoCadastral ?? cad?.situacao,
+    situacao:         cad?.situacaoCadastral ?? cad?.situacao,
+    dataAbertura:     cad?.dataAbertura ?? cad?.dataFundacao,
+    cnae:             cad?.cnaeDescricao ?? cad?.cnae ?? cad?.cnaePrincipal,
+    cnaePrincipal:    cad?.cnaeDescricao ?? cad?.cnae,
     naturezaJuridica: cad?.naturezaJuridica ?? cad?.tipo,
-    porte:            cad?.porte ?? cad?.porteEmpresa,
+    porte:            cad?.porteEmpresa ?? cad?.porte,
     capitalSocial:    cad?.capitalSocial,
     optanteSimples:   cad?.optanteSimples ?? cad?.simplesNacional,
-    logradouro:       cad?.logradouro ?? cad?.nomeLogradouro,
-    numero:           cad?.numero ?? cad?.numeroLogradouro,
-    bairro:           cad?.bairro ?? cad?.nomeBairro,
-    municipio:        cad?.municipio ?? cad?.cidade ?? cad?.nomeMunicipio,
-    uf:               cad?.uf ?? cad?.estado ?? cad?.siglaUf,
-    cep:              cad?.cep,
-    telefone:         cad?.telefone ?? (Array.isArray(tels) && tels.length ? (tels[0]?.numero ?? tels[0]?.ddd + tels[0]?.telefone) : undefined),
-    email:            cad?.email ?? (Array.isArray(mails) && mails.length ? (mails[0]?.email ?? mails[0]?.enderecoEmail) : undefined),
+    logradouro:       end0?.logradouro ?? end0?.nomeLogradouro ?? cad?.logradouro,
+    numero:           end0?.numero ?? end0?.numeroLogradouro ?? cad?.numero,
+    bairro:           end0?.bairro ?? end0?.nomeBairro ?? cad?.bairro,
+    municipio:        end0?.cidade ?? end0?.municipio ?? end0?.nomeMunicipio ?? cad?.municipio,
+    uf:               end0?.uf ?? end0?.estado ?? end0?.siglaUf ?? cad?.uf,
+    cep:              end0?.cep ?? cad?.cep,
+    telefone:         cad?.telefone ?? (tels.length ? (tels[0]?.numero ?? '') : undefined),
+    email:            cad?.email ?? (mails.length ? (mails[0]?.email ?? mails[0]?.enderecoEmail) : undefined),
   } : null
 
   // Extrair QSA do mesmo localize
-  const rawSocios = rawLocalize?.resposta?.ocorrencias?.socios ?? rawLocalize?.resposta?.ocorrencias?.quadroSocietario ?? rawLocalize?.resposta?.socios ?? rawLocalize?.resposta?.quadroSocietario ?? []
-  const qsa = { socios: Array.isArray(rawSocios) ? rawSocios : [], lista: Array.isArray(rawSocios) ? rawSocios : [] }
+  // Assertiva v3 CNPJ: sócios em resposta.socios com campos nomeOuRazaoSocial/documento/dataEntrada
+  const rawSocios = resp.socios ?? resp.ocorrencias?.socios ?? resp.ocorrencias?.quadroSocietario ?? resp.quadroSocietario ?? []
+  const sociosNorm = (Array.isArray(rawSocios) ? rawSocios : []).map((s: any) => ({
+    nome:         s.nomeOuRazaoSocial ?? s.nome ?? s.nomePessoa ?? s.razaoSocial ?? '',
+    cpf:          s.documento ?? s.cpf ?? s.cnpj ?? '',
+    qualificacao: s.qualificacaoSocio ?? s.qualificacao ?? s.cargo ?? '',
+    dataEntrada:  s.dataEntrada ?? s.dataEntrada ?? '',
+  }))
+  const qsa = { socios: sociosNorm, lista: sociosNorm }
 
   // Extrair relacionadas do mesmo localize
-  const rawRel = rawLocalize?.resposta?.ocorrencias?.empresasRelacionadas ?? rawLocalize?.resposta?.empresasRelacionadas ?? []
+  const rawRel = resp.ocorrencias?.empresasRelacionadas ?? resp.empresasRelacionadas ?? []
   const relacionadas = { empresas: Array.isArray(rawRel) ? rawRel : [], lista: Array.isArray(rawRel) ? rawRel : [] }
 
   // Extrair score + negativações + protestos do mesmo /score/v3/pj/credito

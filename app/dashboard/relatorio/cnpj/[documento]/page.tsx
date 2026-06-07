@@ -260,8 +260,11 @@ export default function RelatorioCnpjPage() {
             {socios.map((s: any, i: number) => (
               <div key={i} className="flex items-center justify-between py-1.5 border-b border-brand-border last:border-0">
                 <div>
-                  <p className="text-sm font-medium text-brand-dark">{v(s.nome)}</p>
-                  <p className="text-xs text-brand-gray">{v(s.qualificacao ?? s.cargo)}</p>
+                  <p className="text-sm font-medium text-brand-dark">{v(s.nome ?? s.nomeOuRazaoSocial)}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-xs text-brand-gray">{v(s.qualificacao ?? s.cargo, 'Sócio')}</p>
+                    {(s.dataEntrada) && <p className="text-xs text-brand-gray">Entrada: {s.dataEntrada}</p>}
+                  </div>
                 </div>
                 <span className="text-xs font-mono text-brand-gray">{v(s.cpf ?? s.cnpj ?? s.documento)}</span>
               </div>
