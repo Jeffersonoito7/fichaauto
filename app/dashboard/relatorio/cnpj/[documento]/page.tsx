@@ -10,6 +10,7 @@ function maskCnpj(c: string) {
 
 function v(x: any, fb = 'Não Informado'): string {
   if (x === null || x === undefined || x === '') return fb
+  if (typeof x === 'object') return x.titulo ?? x.descricao ?? x.nome ?? x.label ?? fb
   return String(x)
 }
 

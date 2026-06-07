@@ -32,6 +32,7 @@ function fmtEnd(e: any): string {
 
 function v(x: any, fb = 'Não informado'): string {
   if (x === null || x === undefined || x === '') return fb
+  if (typeof x === 'object') return x.titulo ?? x.descricao ?? x.nome ?? x.label ?? fb
   return String(x)
 }
 
@@ -371,7 +372,7 @@ export default function RelatorioCpfPage() {
                     </div>
                   </div>
                   {tipoRel && (
-                    <span className="text-xs bg-brand-gray-light text-brand-gray px-2 py-0.5 rounded-full">{tipoRel}</span>
+                    <span className="text-xs bg-brand-gray-light text-brand-gray px-2 py-0.5 rounded-full">{v(tipoRel)}</span>
                   )}
                 </div>
               ) : null
@@ -398,10 +399,10 @@ export default function RelatorioCpfPage() {
                 </div>
                 <div className="text-right shrink-0 ml-2">
                   {e.qualificacao && (
-                    <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full block mb-0.5">{e.qualificacao}</span>
+                    <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full block mb-0.5">{v(e.qualificacao)}</span>
                   )}
                   {e.participacao && (
-                    <p className="text-xs text-brand-gray">{e.participacao}</p>
+                    <p className="text-xs text-brand-gray">{v(e.participacao)}</p>
                   )}
                 </div>
               </div>
@@ -463,7 +464,7 @@ export default function RelatorioCpfPage() {
                 />
               </div>
               <p className={`text-sm font-bold ${scoreColor}`}>{scoreLabel}</p>
-              {sc.faixa && <p className="text-xs text-brand-gray mt-0.5">{sc.faixa}</p>}
+              {sc.faixa && <p className="text-xs text-brand-gray mt-0.5">{v(sc.faixa)}</p>}
               {(data?.processos?.lista?.length > 0) && (
                 <p className="text-xs text-brand-gray mt-1">Ações judiciais: {data.processos.lista.length}</p>
               )}
