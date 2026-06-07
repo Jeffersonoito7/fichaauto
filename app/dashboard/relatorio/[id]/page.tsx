@@ -345,7 +345,7 @@ export default function RelatorioPage() {
   const agora = new Date().toLocaleString('pt-BR')
 
   // Identificação
-  const renavam    = val(pIdent.renavam    ?? pDesc.renavam,    '')
+  const renavam    = val(pIdent.renavam ?? pDesc.renavam ?? binFedResp?.identificadores?.renavam ?? binEstResp?.identificadores?.renavam, '')
   const chassiNum  = val(pIdent.chassi     ?? pDesc.chassi,     '')
   const motorNum   = val(pIdent.motor      ?? pDesc.motor       ?? pFicha.motor,      '')
   const carroceria = val(pFicha.carroceria ?? pDesc.carroceria  ?? pIdent.carroceria, '')

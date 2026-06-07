@@ -22,24 +22,27 @@ export async function POST(req: NextRequest) {
     const service = createServiceRoleClient() as any
     const { data: perfil } = await service
       .from('perfis')
-      .select('saldo_consultas')
+      .select('saldo_consultas, role')
       .eq('email', email)
       .maybeSingle()
 
+    const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
     const saldo = perfil?.saldo_consultas ?? 0
 
-    if (saldo <= 0) {
+    if (!isAdmin && saldo <= 0) {
       return NextResponse.json(
         { error: 'Saldo insuficiente. Recarregue sua carteira para continuar.' },
         { status: 402 }
       )
     }
 
-    // Debitar 1 consulta antes de executar
-    await service
-      .from('perfis')
-      .update({ saldo_consultas: saldo - 1, atualizado_em: new Date().toISOString() })
-      .eq('email', email)
+    // Debitar 1 consulta antes de executar (admin não debita)
+    if (!isAdmin) {
+      await service
+        .from('perfis')
+        .update({ saldo_consultas: saldo - 1, atualizado_em: new Date().toISOString() })
+        .eq('email', email)
+    }
 
     const resultado = await consultarVeiculo(
       placa  ? input : '',
