@@ -40,17 +40,7 @@ const COR_PLANO: Record<PlanoId, string> = {
   seguradora:   '#7C3AED',
 }
 
-// ─── Tenant mockado — estrutura para futura integração com DB ──
-const TENANTS_INICIAL = [
-  {
-    id: '1', nome: 'Ficha Auto Demo', slug: 'ficha-auto', planoId: 'essencial' as PlanoId,
-    ativo: true, modulos: PLANOS.essencial.modulos as ModuloId[],
-  },
-  {
-    id: '2', nome: 'AVP — Auto Vale Prevenções', slug: 'avp', planoId: 'seguradora' as PlanoId,
-    ativo: true, modulos: PLANOS.seguradora.modulos as ModuloId[],
-  },
-]
+const TENANTS_INICIAL: { id: string; nome: string; slug: string; planoId: PlanoId; ativo: boolean; modulos: ModuloId[] }[] = []
 
 // ─── Componente: card de plano ─────────────────────────────────
 function PlanoCard({ planoId, selecionado, onClick }: {

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -27,6 +27,18 @@ const adminItems = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [nomeUsuario, setNome]  = useState('')
+  const [saldoNav, setSaldoNav] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(d => {
+        if (d?.nome) setNome(d.nome.split(' ')[0])
+        if (d?.saldo !== undefined) setSaldoNav(d.saldo)
+      })
+      .catch(() => {})
+  }, [])
 
   function NavLink({ href, icon: Icon, label }: { href: string; icon: any; label: string }) {
     const active = href === '/dashboard'
@@ -61,7 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="mx-4 mt-4 p-3 bg-brand-green-light rounded-xl border border-brand-green/20">
         <p className="text-xs text-brand-gray mb-0.5">Consultas disponíveis</p>
         <div className="flex items-center justify-between">
-          <span className="text-xl font-bold text-brand-green">7</span>
+          <span className="text-xl font-bold text-brand-green">{saldoNav === null ? '—' : saldoNav}</span>
           <Link href="/dashboard/carteira" className="text-xs text-brand-blue font-medium hover:underline">
             Recarregar
           </Link>
@@ -82,11 +94,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="p-4 border-t border-brand-border">
         <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-brand-gray-light cursor-pointer transition-colors">
           <div className="w-8 h-8 rounded-full gradient-hero flex items-center justify-center text-white text-xs font-bold shrink-0">
-            JS
+            {nomeUsuario ? nomeUsuario.slice(0, 2).toUpperCase() : '??'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-brand-dark truncate">Jefferson Soares</p>
-            <p className="text-xs text-brand-gray truncate">Plano Mensal</p>
+            <p className="text-sm font-medium text-brand-dark truncate">{nomeUsuario || '—'}</p>
           </div>
           <ChevronDown className="w-4 h-4 text-brand-gray shrink-0" />
         </div>
@@ -139,7 +150,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <LogoHorizontal height={28} />
           </div>
           <Link href="/dashboard/carteira" className="text-xs font-semibold text-brand-green bg-brand-green-light px-2.5 py-1 rounded-full">
-            7 consultas
+            {saldoNav === null ? '—' : saldoNav} consultas
           </Link>
         </header>
 
