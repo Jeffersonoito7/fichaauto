@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { consultarVeiculo } from '@/lib/providers'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getAuthEmail, salvarConsulta } from '@/lib/consulta-helper'
+import { PRECO } from '@/lib/products'
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,25 +23,26 @@ export async function POST(req: NextRequest) {
     const service = createServiceRoleClient() as any
     const { data: perfil } = await service
       .from('perfis')
-      .select('saldo_consultas, role')
+      .select('saldo, role')
       .eq('email', email)
       .maybeSingle()
 
     const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
-    const saldo = perfil?.saldo_consultas ?? 0
+    const saldo = parseFloat(perfil?.saldo ?? '0')
+    const custo = PRECO.placa
 
-    if (!isAdmin && saldo <= 0) {
+    if (!isAdmin && saldo < custo) {
       return NextResponse.json(
-        { error: 'Saldo insuficiente. Recarregue sua carteira para continuar.' },
+        { error: `Saldo insuficiente. Esta consulta custa R$ ${custo.toFixed(2).replace('.', ',')}. Recarregue sua carteira.` },
         { status: 402 }
       )
     }
 
-    // Debitar 1 consulta antes de executar (admin não debita)
+    // Debitar R$ 36,90 antes de executar (admin não debita)
     if (!isAdmin) {
       await service
         .from('perfis')
-        .update({ saldo_consultas: saldo - 1, atualizado_em: new Date().toISOString() })
+        .update({ saldo: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() })
         .eq('email', email)
     }
 

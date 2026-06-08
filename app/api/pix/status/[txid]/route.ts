@@ -14,15 +14,15 @@ export async function GET(
 
   const { data } = await supabase
     .from('transacoes_pix')
-    .select('status, consultas, valor')
+    .select('status, saldo_creditado, valor')
     .eq('txid', txid)
     .single()
 
   if (!data) return NextResponse.json({ status: 'nao_encontrado' })
 
   return NextResponse.json({
-    status:    data.status,   // 'pendente' | 'pago' | 'expirado'
-    consultas: data.consultas,
-    valor:     data.valor,
+    status:         data.status,
+    saldoCreditado: data.saldo_creditado,
+    valor:          data.valor,
   })
 }

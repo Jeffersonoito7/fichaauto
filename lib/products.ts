@@ -1,6 +1,27 @@
 // ─── Catálogo de produtos e planos do Ficha Auto ─────────────────────────────
 // Fonte dos dados: Assertiva (já contratado), FutureData (a contratar), DataJud (gratuito)
 
+// ─── Precificação por tipo de consulta ────────────────────────────────────────
+export const PRECO = {
+  placa: 36.90,
+  cpf:   29.90,
+  cnpj:  29.90,
+} as const
+
+export type TipoConsulta = keyof typeof PRECO
+
+// Pack: compra 10 consultas do mesmo tipo com 10% de desconto
+export const PACK_QUANTIDADE = 10
+export const PACK_DESCONTO   = 0.10   // 10%
+
+export function calcularPack(tipo: TipoConsulta) {
+  const unitario   = PRECO[tipo]
+  const total      = unitario * PACK_QUANTIDADE
+  const desconto   = total * PACK_DESCONTO
+  const comDesconto = parseFloat((total - desconto).toFixed(2))
+  return { unitario, total, desconto, comDesconto, quantidade: PACK_QUANTIDADE }
+}
+
 export type FonteDado = 'assertiva' | 'futuredata' | 'datajud' | 'brasilapi'
 
 export type ModuloId =

@@ -1,65 +1,46 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import {
-  Wallet, Zap, Copy, CheckCircle2, Clock,
-  ArrowUpRight, ArrowDownLeft, Loader2, QrCode, RefreshCw
-} from 'lucide-react'
-import { createClient } from '@/lib/supabase-client'
+import { Wallet, Copy, CheckCircle2, Loader2, QrCode, Car, User, Building2 } from 'lucide-react'
+import { PRECO, PACK_QUANTIDADE, calcularPack, type TipoConsulta } from '@/lib/products'
 
-interface Plano { id: string; nome: string; consultas: number; preco: number; destaque: boolean; economia_texto: string | null }
-
-interface EntradaHistorico { id: string; tipo: string; documento: string; descricao: string; data: string }
+type Opcao = { tipo: TipoConsulta; quantidade: 1 | 10 }
 
 interface PixData {
-  txid: string
-  valor: number
-  consultas: number
-  qrCode: string
-  copiaECola: string
-  expira: string
+  txid:           string
+  valorPago:      number
+  saldoCreditado: number
+  qrCode:         string
+  copiaECola:     string
+}
+
+const TIPOS: { id: TipoConsulta; label: string; icon: any; cor: string }[] = [
+  { id: 'placa', label: 'Veículo (Placa)', icon: Car,       cor: 'bg-green-50 border-green-300 text-green-700'  },
+  { id: 'cpf',   label: 'Pessoa (CPF)',    icon: User,      cor: 'bg-blue-50 border-blue-300 text-blue-700'     },
+  { id: 'cnpj',  label: 'Empresa (CNPJ)', icon: Building2, cor: 'bg-purple-50 border-purple-300 text-purple-700'},
+]
+
+function moeda(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
 export default function CarteiraPage() {
-  const [step, setStep]            = useState<'escolha' | 'pix' | 'confirmado'>('escolha')
-  const [selecionado, setSel]      = useState<string | null>(null)
-  const [copiado, setCopiado]      = useState(false)
-  const [loading, setLoading]      = useState(false)
-  const [pixData, setPixData]      = useState<PixData | null>(null)
-  const [erro, setErro]            = useState<string | null>(null)
-  const [verificando, setVerif]    = useState(false)
-  const [consultasAtual, setSaldo] = useState<number | null>(null)
-  const [planos, setPlanos]        = useState<Plano[]>([])
-  const [historico, setHistorico]  = useState<EntradaHistorico[]>([])
-  const pollRef                    = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [saldo, setSaldo]       = useState<number | null>(null)
+  const [opcao, setOpcao]       = useState<Opcao | null>(null)
+  const [step, setStep]         = useState<'escolha' | 'pix' | 'confirmado'>('escolha')
+  const [pixData, setPixData]   = useState<PixData | null>(null)
+  const [loading, setLoading]   = useState(false)
+  const [copiado, setCopiado]   = useState(false)
+  const [erro, setErro]         = useState<string | null>(null)
+  const pollRef                 = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    fetch('/api/admin/pacotes')
+    fetch('/api/auth/me')
       .then(r => r.json())
-      .then((data: any[]) => { if (Array.isArray(data)) setPlanos(data.filter(p => p.ativo)) })
-      .catch(() => {})
-
-    fetch('/api/historico')
-      .then(r => r.json())
-      .then((data: any[]) => { if (Array.isArray(data)) setHistorico(data) })
+      .then(d => { if (typeof d?.saldo === 'number') setSaldo(d.saldo) })
       .catch(() => {})
   }, [])
 
-  useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      supabase
-        .from('perfis' as any)
-        .select('saldo_consultas')
-        .eq('user_id', user.id)
-        .single()
-        .then(({ data }: { data: any }) => {
-          setSaldo(data?.saldo_consultas ?? 0)
-        })
-    })
-  }, [])
-
-  // Polling para detectar pagamento confirmado
+  // Polling após gerar PIX
   useEffect(() => {
     if (step !== 'pix' || !pixData?.txid) return
     pollRef.current = setInterval(async () => {
@@ -69,281 +50,183 @@ export default function CarteiraPage() {
         if (data.status === 'pago') {
           clearInterval(pollRef.current!)
           setStep('confirmado')
-          const supabase = createClient()
-          supabase.auth.getUser().then(({ data: { user } }) => {
-            if (!user) return
-            supabase.from('perfis' as any).select('saldo_consultas').eq('user_id', user.id).single()
-              .then(({ data: p }: { data: any }) => setSaldo(p?.saldo_consultas ?? 0))
-          })
+          fetch('/api/auth/me').then(r => r.json()).then(d => { if (typeof d?.saldo === 'number') setSaldo(d.saldo) })
         }
-      } catch { /* ignora erros de rede no poll */ }
+      } catch { /* ignora */ }
     }, 5000)
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
-  }, [step, pixData?.txid])
-
-  function copiarPix() {
-    if (!pixData) return
-    navigator.clipboard.writeText(pixData.copiaECola)
-    setCopiado(true)
-    setTimeout(() => setCopiado(false), 3000)
-  }
+  }, [step, pixData])
 
   async function gerarPix() {
-    if (!selecionado) return
+    if (!opcao) return
     setLoading(true)
     setErro(null)
     try {
       const res  = await fetch('/api/pix/gerar', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planoId: selecionado }),
+        body:    JSON.stringify({ tipo: opcao.tipo, quantidade: opcao.quantidade }),
       })
       const data = await res.json()
-      if (!res.ok || data.erro) throw new Error(data.erro ?? 'Falha ao gerar PIX')
+      if (!res.ok) { setErro(data.erro ?? 'Erro ao gerar PIX'); return }
       setPixData(data)
       setStep('pix')
-    } catch (e: any) {
-      setErro(e.message)
+    } catch {
+      setErro('Falha ao conectar. Tente novamente.')
     } finally {
       setLoading(false)
     }
   }
 
-  async function verificarManual() {
-    if (!pixData?.txid) return
-    setVerif(true)
-    try {
-      const res  = await fetch(`/api/pix/status/${pixData.txid}`)
-      const data = await res.json()
-      if (data.status === 'pago') {
-        setStep('confirmado')
-        const supabase = createClient()
-        supabase.auth.getUser().then(({ data: { user } }) => {
-          if (!user) return
-          supabase.from('perfis' as any).select('saldo_consultas').eq('user_id', user.id).single()
-            .then(({ data: p }: { data: any }) => setSaldo(p?.saldo_consultas ?? 0))
-        })
-      } else setErro('Pagamento ainda não identificado. Aguarde alguns instantes.')
-    } catch { setErro('Erro ao verificar. Tente novamente.') }
-    finally { setVerif(false) }
+  function copiar() {
+    if (!pixData?.copiaECola) return
+    navigator.clipboard.writeText(pixData.copiaECola)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 3000)
   }
 
-  // ─── Tela confirmado ──────────────────────────────────────────────────────
-  if (step === 'confirmado') {
-    return (
-      <div className="max-w-md mx-auto py-12 text-center">
-        <div className="w-20 h-20 bg-brand-green-light rounded-full flex items-center justify-center mx-auto mb-4">
-          <CheckCircle2 className="w-10 h-10 text-brand-green" />
-        </div>
-        <h2 className="text-2xl font-bold text-brand-dark mb-2">Pagamento confirmado!</h2>
-        <p className="text-brand-gray mb-1">
-          <span className="font-bold text-brand-green">{pixData?.consultas} consultas</span> adicionadas à sua conta.
-        </p>
-        <p className="text-brand-gray text-sm mb-8">Você já pode fazer novas consultas completas.</p>
-        <button onClick={() => { setStep('escolha'); setPixData(null); setSel(null) }} className="btn-primary">
-          Voltar à carteira
-        </button>
+  // ── Tela de confirmação ────────────────────────────────────────────────────
+  if (step === 'confirmado') return (
+    <div className="max-w-md mx-auto text-center mt-16">
+      <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+        <CheckCircle2 className="w-8 h-8 text-green-600" />
       </div>
-    )
-  }
+      <h2 className="text-xl font-bold text-brand-dark mb-2">Pagamento confirmado!</h2>
+      <p className="text-brand-gray mb-1">
+        {moeda(pixData?.saldoCreditado ?? 0)} adicionados ao seu saldo.
+      </p>
+      <p className="text-2xl font-black text-brand-green mb-6">
+        Saldo atual: {saldo !== null ? moeda(saldo) : '—'}
+      </p>
+      <button onClick={() => { setStep('escolha'); setOpcao(null); setPixData(null) }} className="btn-primary">
+        Recarregar novamente
+      </button>
+    </div>
+  )
 
-  // ─── Tela PIX ─────────────────────────────────────────────────────────────
-  if (step === 'pix' && pixData) {
-    const recarga = planos.find(r => r.id === selecionado)!
-    return (
-      <div className="max-w-md mx-auto">
-        <h1 className="text-xl font-bold text-brand-dark mb-6">Pagamento via Pix</h1>
-
-        <div className="card p-6 text-center mb-4">
-          {/* Valor */}
-          <div className="gradient-brand rounded-xl p-4 mb-5 text-white">
-            <p className="text-sm opacity-75">Valor a pagar</p>
-            <p className="text-4xl font-extrabold">
-              R$ {pixData.valor.toFixed(2).replace('.', ',')}
-            </p>
-            <p className="text-sm opacity-75 mt-1">{pixData.consultas} consultas completas</p>
-          </div>
-
-          {/* QR Code */}
-          {pixData.qrCode ? (
-            <img
-              src={pixData.qrCode}
-              alt="QR Code Pix"
-              className="w-52 h-52 mx-auto mb-4 rounded-2xl border-4 border-brand-blue"
-            />
-          ) : (
-            <div className="w-52 h-52 bg-brand-gray-light rounded-2xl flex items-center justify-center mx-auto mb-4 border-4 border-brand-blue">
-              <QrCode className="w-16 h-16 text-brand-blue opacity-40" />
-            </div>
+  // ── Tela do QR Code ────────────────────────────────────────────────────────
+  if (step === 'pix' && pixData) return (
+    <div className="max-w-md mx-auto">
+      <div className="card p-6 text-center">
+        <QrCode className="w-8 h-8 text-brand-green mx-auto mb-3" />
+        <h2 className="text-lg font-bold text-brand-dark mb-1">Pague via PIX</h2>
+        <p className="text-brand-gray text-sm mb-4">
+          Valor: <strong className="text-brand-dark">{moeda(pixData.valorPago)}</strong>
+          {pixData.saldoCreditado > pixData.valorPago && (
+            <span className="ml-2 text-green-600 font-semibold">
+              ({moeda(pixData.saldoCreditado)} em saldo — 10% de bônus)
+            </span>
           )}
+        </p>
 
-          <p className="text-xs text-brand-gray mb-4 flex items-center justify-center gap-1">
-            <Clock className="w-3 h-3" /> Expira em {pixData.expira}
-          </p>
+        {pixData.qrCode && (
+          <img src={pixData.qrCode} alt="QR Code PIX" className="w-48 h-48 mx-auto mb-4 rounded-xl border" />
+        )}
 
-          {/* Copia e cola */}
-          <div className="bg-brand-gray-light rounded-xl p-3 mb-4 text-left">
-            <p className="text-xs text-brand-gray mb-1 font-medium">Pix Copia e Cola</p>
-            <p className="text-xs font-mono text-brand-dark break-all line-clamp-3 leading-relaxed">
-              {pixData.copiaECola}
-            </p>
-          </div>
-
-          <button
-            onClick={copiarPix}
-            className={`w-full h-11 rounded-xl font-semibold text-sm mb-3 flex items-center justify-center gap-2 transition-all ${
-              copiado
-                ? 'bg-brand-green text-white'
-                : 'bg-brand-blue-light text-brand-blue border border-brand-blue/30 hover:bg-brand-blue hover:text-white'
-            }`}
-          >
-            {copiado
-              ? <><CheckCircle2 className="w-4 h-4" /> Copiado!</>
-              : <><Copy className="w-4 h-4" /> Copiar código Pix</>
-            }
-          </button>
-
-          {erro && <p className="text-xs text-brand-danger mb-3">{erro}</p>}
-
-          <button
-            onClick={verificarManual}
-            disabled={verificando}
-            className="btn-primary w-full h-11 mb-2"
-          >
-            {verificando
-              ? <><Loader2 className="w-4 h-4 animate-spin" /> Verificando...</>
-              : <><RefreshCw className="w-4 h-4" /> Já paguei — verificar</>
-            }
-          </button>
+        <div className="bg-brand-off-white rounded-xl p-3 mb-4">
+          <p className="text-xs text-brand-gray mb-1">Copia e Cola</p>
+          <p className="text-xs font-mono text-brand-dark break-all line-clamp-2">{pixData.copiaECola}</p>
         </div>
 
-        <p className="text-center text-xs text-brand-gray mb-2">
-          O pagamento é detectado automaticamente em até 1 minuto.
-        </p>
         <button
-          onClick={() => { setStep('escolha'); setPixData(null) }}
-          className="w-full text-sm text-brand-gray hover:text-brand-dark transition-colors py-2"
+          onClick={copiar}
+          className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all ${
+            copiado ? 'bg-green-600 text-white' : 'btn-primary'
+          }`}
         >
-          Voltar e escolher outro pacote
+          {copiado ? <><CheckCircle2 className="w-4 h-4" /> Copiado!</> : <><Copy className="w-4 h-4" /> Copiar código PIX</>}
+        </button>
+
+        <p className="text-xs text-brand-gray mt-4 flex items-center justify-center gap-1">
+          <Loader2 className="w-3 h-3 animate-spin" /> Aguardando confirmação do pagamento...
+        </p>
+        <button onClick={() => { setStep('escolha'); setOpcao(null) }} className="text-xs text-brand-gray hover:underline mt-3 block mx-auto">
+          Cancelar e voltar
         </button>
       </div>
-    )
-  }
+    </div>
+  )
 
-  // ─── Tela escolha ─────────────────────────────────────────────────────────
+  // ── Tela de escolha ────────────────────────────────────────────────────────
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-brand-dark mb-1">Carteira</h1>
-        <p className="text-brand-gray text-sm">Recarregue via Pix e receba créditos instantaneamente</p>
-      </div>
-
-      {/* Saldo */}
-      <div className="gradient-brand rounded-2xl p-6 text-white mb-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-white/60 text-sm">Consultas disponíveis</p>
-            <p className="text-5xl font-extrabold mt-1">
-              {consultasAtual === null ? <Loader2 className="w-8 h-8 animate-spin opacity-60" /> : consultasAtual}
-            </p>
-            <p className="text-white/60 text-sm mt-1">créditos restantes</p>
-          </div>
-          <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center">
-            <Wallet className="w-7 h-7 text-white" />
-          </div>
+      {/* Saldo atual */}
+      <div className="rounded-2xl p-6 mb-6 text-white" style={{ background: 'linear-gradient(135deg, #00703C, #00A651)' }}>
+        <div className="flex items-center gap-3 mb-1">
+          <Wallet className="w-5 h-5 text-white/70" />
+          <p className="text-white/80 text-sm">Saldo disponível</p>
+        </div>
+        <p className="text-4xl font-black">{saldo !== null ? moeda(saldo) : '—'}</p>
+        <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-white/70">
+          <span>Placa: {moeda(PRECO.placa)}/consulta</span>
+          <span>CPF: {moeda(PRECO.cpf)}/consulta</span>
+          <span>CNPJ: {moeda(PRECO.cnpj)}/consulta</span>
         </div>
       </div>
 
-      {/* Pacotes */}
-      <div className="card p-6 mb-6">
-        <h2 className="font-bold text-brand-dark mb-1">Escolha um pacote</h2>
-        <p className="text-brand-gray text-sm mb-4">Pague via Pix e receba as consultas na hora</p>
+      <h2 className="text-lg font-bold text-brand-dark mb-4">Escolha o que deseja comprar</h2>
 
-        <div className="space-y-3 mb-4">
-          {planos.length === 0 && (
-            <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-brand-green opacity-50" /></div>
-          )}
-          {planos.map(r => (
-            <button
-              key={r.id}
-              onClick={() => setSel(r.id === selecionado ? null : r.id)}
-              className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all text-left ${
-                selecionado === r.id
-                  ? 'border-brand-blue bg-brand-blue-light'
-                  : 'border-brand-border hover:border-brand-blue/40 bg-white'
-              } ${r.destaque ? 'ring-2 ring-brand-green ring-offset-1' : ''}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                  r.destaque ? 'bg-brand-green' : 'bg-brand-blue-light'
-                }`}>
-                  <Zap className={`w-5 h-5 ${r.destaque ? 'text-white' : 'text-brand-blue'}`} />
-                </div>
-                <div>
-                  <p className="font-semibold text-brand-dark">{r.nome}</p>
-                  <p className="text-xs text-brand-gray">{r.consultas} consultas completas</p>
-                  {r.destaque      && <p className="text-xs text-brand-green font-medium">Mais popular</p>}
-                  {r.economia_texto && <p className="text-xs text-brand-green">{r.economia_texto}</p>}
-                </div>
+      {/* Grade de opções */}
+      <div className="space-y-3 mb-6">
+        {TIPOS.map(({ id, label, icon: Icon, cor }) => {
+          const pack = calcularPack(id)
+          return (
+            <div key={id} className="card p-4">
+              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold mb-3 ${cor}`}>
+                <Icon className="w-3.5 h-3.5" />
+                {label}
               </div>
-              <div className="text-right">
-                <p className="text-xl font-extrabold text-brand-blue">
-                  R$ {Number(r.preco).toFixed(2).replace('.', ',')}
-                </p>
-                <p className="text-xs text-brand-gray">
-                  R$ {(r.preco / r.consultas).toFixed(2).replace('.', ',')} / consulta
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Avulso */}
+                <button
+                  onClick={() => setOpcao({ tipo: id, quantidade: 1 })}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${
+                    opcao?.tipo === id && opcao?.quantidade === 1
+                      ? 'border-brand-green bg-brand-green-light'
+                      : 'border-brand-border hover:border-brand-green/50'
+                  }`}
+                >
+                  <p className="text-xs text-brand-gray mb-1">1 consulta</p>
+                  <p className="text-xl font-black text-brand-dark">{moeda(PRECO[id])}</p>
+                  <p className="text-xs text-brand-gray mt-0.5">Avulso</p>
+                </button>
 
-        {erro && <p className="text-xs text-brand-danger mb-3 text-center">{erro}</p>}
-
-        <button
-          disabled={!selecionado || loading}
-          onClick={gerarPix}
-          className="btn-green w-full h-12 text-base disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {loading
-            ? <><Loader2 className="w-5 h-5 animate-spin" /> Gerando Pix...</>
-            : <><QrCode className="w-5 h-5" /> Gerar QR Code Pix</>
-          }
-        </button>
-      </div>
-
-      {/* Histórico */}
-      <div className="card p-6">
-        <h2 className="font-semibold text-brand-dark mb-4">Histórico de consultas</h2>
-        {historico.length === 0 ? (
-          <p className="text-sm text-brand-gray text-center py-6">Nenhuma consulta registrada ainda.</p>
-        ) : (
-          <div className="space-y-3">
-            {historico.map(h => (
-              <div key={h.id} className="flex items-center justify-between py-2 border-b border-brand-border last:border-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-brand-blue-light flex items-center justify-center">
-                    <ArrowUpRight className="w-4 h-4 text-brand-blue" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-brand-dark font-mono">{h.documento}</p>
-                    {h.descricao && <p className="text-xs text-brand-gray">{h.descricao}</p>}
-                    <p className="text-xs text-brand-gray">
-                      {h.data ? new Date(h.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-brand-dark">-1 consulta</p>
-                  <span className="text-[10px] bg-brand-blue-light text-brand-blue px-2 py-0.5 rounded-full font-medium capitalize">
-                    {h.tipo}
+                {/* Pack 10 */}
+                <button
+                  onClick={() => setOpcao({ tipo: id, quantidade: 10 })}
+                  className={`p-3 rounded-xl border-2 text-left relative transition-all ${
+                    opcao?.tipo === id && opcao?.quantidade === 10
+                      ? 'border-brand-green bg-brand-green-light'
+                      : 'border-brand-border hover:border-brand-green/50'
+                  }`}
+                >
+                  <span className="absolute -top-2 right-2 bg-brand-green text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    10% OFF
                   </span>
-                </div>
+                  <p className="text-xs text-brand-gray mb-1">{PACK_QUANTIDADE} consultas</p>
+                  <p className="text-xl font-black text-brand-dark">{moeda(pack.comDesconto)}</p>
+                  <p className="text-xs text-brand-gray line-through mt-0.5">{moeda(pack.total)}</p>
+                </button>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          )
+        })}
       </div>
+
+      {erro && <p className="text-red-600 text-sm mb-3 text-center">{erro}</p>}
+
+      <button
+        onClick={gerarPix}
+        disabled={!opcao || loading}
+        className="w-full btn-primary flex items-center justify-center gap-2 py-4 text-base disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {loading
+          ? <><Loader2 className="w-4 h-4 animate-spin" /> Gerando PIX...</>
+          : opcao
+            ? <>Gerar PIX — {moeda(opcao.quantidade === 1 ? PRECO[opcao.tipo] : calcularPack(opcao.tipo).comDesconto)}</>
+            : 'Selecione uma opção acima'
+        }
+      </button>
     </div>
   )
 }

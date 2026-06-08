@@ -25,10 +25,10 @@ export async function GET(_req: NextRequest) {
       const service = createServiceRoleClient()
       const { data } = await (service as any)
         .from('perfis')
-        .select('saldo_consultas, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote')
+        .select('saldo, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote')
         .eq('email', email)
         .maybeSingle()
-      saldo      = data?.saldo_consultas ?? 0
+      saldo      = parseFloat(data?.saldo ?? '0')
       plano      = data?.plano          ?? null
       pode_placa = data?.pode_placa     ?? true
       pode_cpf   = data?.pode_cpf       ?? true

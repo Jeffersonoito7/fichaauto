@@ -35,7 +35,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       .then(r => r.json())
       .then(d => {
         if (d?.nome) setNome(d.nome.split(' ')[0])
-        if (d?.saldo !== undefined) setSaldoNav(d.saldo)
+        if (d?.saldo !== undefined) setSaldoNav(Number(d.saldo))
       })
       .catch(() => {})
   }, [])
@@ -71,9 +71,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Saldo rápido */}
       <div className="mx-4 mt-4 p-3 bg-brand-green-light rounded-xl border border-brand-green/20">
-        <p className="text-xs text-brand-gray mb-0.5">Consultas disponíveis</p>
+        <p className="text-xs text-brand-gray mb-0.5">Saldo disponível</p>
         <div className="flex items-center justify-between">
-          <span className="text-xl font-bold text-brand-green">{saldoNav === null ? '—' : saldoNav}</span>
+          <span className="text-xl font-bold text-brand-green">{saldoNav === null ? '—' : saldoNav.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           <Link href="/dashboard/carteira" className="text-xs text-brand-blue font-medium hover:underline">
             Recarregar
           </Link>
@@ -150,7 +150,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <LogoHorizontal height={28} />
           </div>
           <Link href="/dashboard/carteira" className="text-xs font-semibold text-brand-green bg-brand-green-light px-2.5 py-1 rounded-full">
-            {saldoNav === null ? '—' : saldoNav} consultas
+            {saldoNav === null ? '—' : saldoNav.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
           </Link>
         </header>
 

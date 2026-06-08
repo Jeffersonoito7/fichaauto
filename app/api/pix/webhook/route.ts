@@ -34,23 +34,24 @@ export async function POST(req: NextRequest) {
         .update({ status: 'pago', pago_em: new Date().toISOString() })
         .eq('txid', txid)
 
-      // Adicionar créditos ao usuário
+      // Adicionar saldo em R$ ao usuário
       const { data: perfil } = await supabase
         .from('perfis')
-        .select('saldo_consultas')
+        .select('saldo')
         .eq('user_id', transacao.user_id)
         .single()
 
-      const saldoAtual = perfil?.saldo_consultas ?? 0
+      const saldoAtual    = parseFloat(perfil?.saldo ?? '0')
+      const saldoCreditado = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
       await supabase
         .from('perfis')
         .upsert({
-          user_id:           transacao.user_id,
-          saldo_consultas:   saldoAtual + transacao.consultas,
-          atualizado_em:     new Date().toISOString(),
+          user_id:      transacao.user_id,
+          saldo:        parseFloat((saldoAtual + saldoCreditado).toFixed(2)),
+          atualizado_em: new Date().toISOString(),
         }, { onConflict: 'user_id' })
 
-      console.log(`[PIX webhook] txid=${txid} user=${transacao.user_id} +${transacao.consultas} consultas`)
+      console.log(`[PIX webhook] txid=${txid} user=${transacao.user_id} +R$${saldoCreditado}`)
     }
 
     return NextResponse.json({ ok: true })
