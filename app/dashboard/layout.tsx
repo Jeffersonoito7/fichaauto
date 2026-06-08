@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Search, History, Wallet, BarChart3,
-  Users, LogOut, Menu, X, ChevronDown, Home, Shield, Package, Layers
+  Users, LogOut, Menu, X, ChevronDown, Home, Shield
 } from 'lucide-react'
 import { LogoHorizontal, LogoIcon } from '@/components/LogoFichaAuto'
 
@@ -18,8 +18,6 @@ const navItems = [
 
 const adminItems = [
   { href: '/dashboard/admin',           icon: BarChart3, label: 'Dashboard Admin'  },
-  { href: '/dashboard/admin/planos',    icon: Layers,    label: 'Planos / Produtos' },
-  { href: '/dashboard/admin/pacotes',   icon: Package,   label: 'Pacotes'           },
   { href: '/dashboard/admin/usuarios',  icon: Users,     label: 'Usuários'          },
   { href: '/dashboard/admin/tenants',   icon: Shield,    label: 'Tenants / Módulos' },
 ]
