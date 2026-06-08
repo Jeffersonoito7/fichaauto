@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   FileText, ArrowLeft, Loader2, User, AlertCircle,
-  CheckCircle, AlertTriangle, Car, Phone, Mail,
-  MapPin, Briefcase, Users, TrendingUp
+  CheckCircle, AlertTriangle, Phone,
+  MapPin, Briefcase, Users
 } from 'lucide-react'
 
 function maskCpf(c: string) {
@@ -120,33 +120,20 @@ export default function RelatorioCpfPage() {
     </div>
   )
 
-  const b   = data?.basico    ?? {}
-  const sc  = data?.score     ?? {}
-  const pr  = data?.processos ?? {}
-  const pt  = data?.protestos ?? {}
-  const pp  = data?.pep       ?? {}
+  const b   = data?.basico     ?? {}
   const soc = data?.societario ?? {}
-  const ren = data?.renda     ?? {}
+  const pp  = data?.pep        ?? {}
 
-  // ── Dados básicos ───────────────────────────────────────────────────────────
-  const nome      = v(b.nome ?? b.nomeCompleto, 'Nome não informado')
-  const scoreVal  = Number(sc.score ?? sc.pontuacao ?? 0)
-  const totalProc = Number(pr.total ?? pr.quantidade ?? 0)
-  const totalProt = Number(pt.total ?? pt.quantidade ?? 0)
-  const isPep     = !!(pp?.pep ?? pp?.isPep)
-  const sit       = v(b.situacaoCpf ?? b.situacao, 'REGULAR').toUpperCase()
-  const cpfOk     = sit.includes('REGULAR') || sit.includes('ATIVO')
-
-  // ── Negativações / SPC / Serasa ─────────────────────────────────────────────
-  const negativacoes: any[] = Array.isArray(sc.negativacoes) ? sc.negativacoes : []
-  const totalNegat  = Number(sc.totalDebitos ?? negativacoes.length)
-  const valorNegat  = Number(sc.valorTotalDebitos ?? 0)
+  const nome   = v(b.nome ?? b.nomeCompleto, 'Nome não informado')
+  const isPep  = !!(pp?.pep ?? pp?.isPep)
+  const sit    = v(b.situacaoCpf ?? b.situacao, 'REGULAR').toUpperCase()
+  const cpfOk  = sit.includes('REGULAR') || sit.includes('ATIVO')
 
   // ── Empresas societárias ────────────────────────────────────────────────────
   const empresas: any[] = Array.isArray(soc.empresas ?? soc.lista) ? (soc.empresas ?? soc.lista) : []
 
-  // ── Telefones: combina basico + mais-telefones ──────────────────────────────
-  const telsBasico: any[]  = Array.isArray(b.telefones) ? b.telefones : []
+  // ── Telefones ───────────────────────────────────────────────────────────────
+  const telsBasico: any[] = Array.isArray(b.telefones) ? b.telefones : []
   const telsRaw = data?.telefones?.resposta?.telefones ?? data?.telefones?.resposta?.ocorrencias?.telefones ?? {}
   const telsMais: any[] = [
     ...(Array.isArray(telsRaw?.moveis) ? telsRaw.moveis : []),
@@ -161,54 +148,26 @@ export default function RelatorioCpfPage() {
   // ── Emails ──────────────────────────────────────────────────────────────────
   const emails: any[] = Array.isArray(b.emails) ? b.emails : []
 
-  // ── Endereços: histórico completo ────────────────────────────────────────────
+  // ── Endereços ────────────────────────────────────────────────────────────────
   const endsRaw = data?.enderecos?.resposta?.enderecos
                ?? data?.enderecos?.resposta?.ocorrencias?.enderecos
                ?? []
   const enderecos: any[] = Array.isArray(endsRaw) ? endsRaw : []
 
-  // ── Relacionamentos / Pessoas de Referência ──────────────────────────────────
-  const relRaw  = data?.relacionamentos?.resposta?.pessoasDeReferencia
-               ?? data?.relacionamentos?.resposta?.relacionamentos
-               ?? data?.relacionamentos?.resposta?.referencias
-               ?? data?.relacionamentos?.resposta
+  // ── Relacionamentos ──────────────────────────────────────────────────────────
+  const relRaw = data?.relacionamentos?.resposta?.pessoasDeReferencia
+              ?? data?.relacionamentos?.resposta?.relacionamentos
+              ?? data?.relacionamentos?.resposta
   const relacionamentos: any[] = Array.isArray(relRaw) ? relRaw : []
 
-  // ── Veículos vinculados ──────────────────────────────────────────────────────
-  const veicRaw = data?.veiculos?.resposta?.veiculos
-               ?? data?.veiculos?.resposta?.historico
-               ?? data?.veiculos?.resposta?.lista
-               ?? data?.veiculos?.historico
-               ?? data?.veiculos?.veiculos
-               ?? data?.veiculos?.lista
-  const veiculos: any[] = Array.isArray(veicRaw) ? veicRaw : []
-
-  // ── Renda ────────────────────────────────────────────────────────────────────
-  const rendaStr = v(ren.rendaPresumida ?? ren.renda ?? ren.valor ?? sc.rendaPresumida ?? sc.faixaRenda)
-
-  // ── Protestos com lista ──────────────────────────────────────────────────────
-  const protestosLista: any[] = Array.isArray(pt.lista) ? pt.lista : []
-
-  // ── Processos com lista ──────────────────────────────────────────────────────
-  const processosLista: any[] = Array.isArray(pr.lista) ? pr.lista : []
-
   // ── DataJud ──────────────────────────────────────────────────────────────────
-  const dj = data?.datajud ?? null
+  const dj      = data?.datajud ?? null
   const djTotal = dj?.total ?? 0
-
-  const scoreColor = scoreVal >= 700 ? 'text-green-600' : scoreVal >= 400 ? 'text-yellow-600' : 'text-red-600'
-  const scoreLabel = scoreVal >= 700 ? 'Baixo Risco' : scoreVal >= 400 ? 'Risco Moderado' : 'Alto Risco'
-  const scoreFaixa = typeof sc.faixa === 'object'
-    ? (sc.faixa?.descricao ?? sc.faixa?.titulo ?? '')
-    : (sc.faixa ?? '')
 
   type S = 'ok' | 'warn' | 'error'
   const statusGrid: { label: string; status: S; detalhe: string }[] = [
     { label: 'Situação CPF',        status: cpfOk ? 'ok' : 'error', detalhe: sit },
-    { label: 'Score de Crédito',    status: scoreVal >= 700 ? 'ok' : scoreVal >= 400 ? 'warn' : 'error', detalhe: `${scoreVal} / 1000` },
-    { label: 'Negativações',        status: totalNegat > 0 ? 'error' : 'ok', detalhe: totalNegat > 0 ? `${totalNegat} registro(s) — R$ ${Number(valorNegat).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Nada consta' },
-    { label: 'Processos Judiciais', status: (totalProc > 0 || djTotal > 0) ? 'error' : 'ok', detalhe: djTotal > 0 ? `${djTotal} processo(s) — DataJud CNJ` : totalProc > 0 ? `${totalProc} processo(s)` : 'Nada consta' },
-    { label: 'Protestos',           status: totalProt > 0 ? 'error' : 'ok', detalhe: totalProt > 0 ? `${totalProt} protesto(s)` : 'Nada consta' },
+    { label: 'Processos Judiciais', status: djTotal > 0 ? 'error' : 'ok', detalhe: djTotal > 0 ? `${djTotal} processo(s) — DataJud CNJ` : 'Nada consta' },
     { label: 'PEP',                 status: isPep ? 'error' : 'ok', detalhe: isPep ? 'Pessoa Politicamente Exposta' : 'Não identificado' },
     { label: 'Participação Soc.',   status: empresas.length > 0 ? 'warn' : 'ok', detalhe: empresas.length > 0 ? `${empresas.length} empresa(s)` : 'Nenhuma' },
   ]
@@ -247,12 +206,6 @@ export default function RelatorioCpfPage() {
               </p>
             )}
           </div>
-          {scoreVal > 0 && (
-            <div className="text-center shrink-0">
-              <div className={`text-4xl font-black ${scoreColor} bg-white rounded-xl px-4 py-2 inline-block`}>{scoreVal}</div>
-              <p className="text-white/80 text-xs mt-1">{scoreLabel}</p>
-            </div>
-          )}
         </div>
       </div>
 
@@ -275,7 +228,6 @@ export default function RelatorioCpfPage() {
           <Campo label="Situação CPF"     value={sit} />
           <Campo label="Nome da mãe"      value={v(b.nomeMae ?? b.mae)} />
           {b.nomePai && <Campo label="Nome do pai" value={v(b.nomePai)} />}
-          <Campo label="Renda presumida"  value={rendaStr} />
         </div>
 
         {/* Contatos */}
@@ -476,161 +428,6 @@ export default function RelatorioCpfPage() {
               </div>
             ))}
             {empresas.length > 8 && <p className="text-xs text-brand-gray">+{empresas.length - 8} no PDF</p>}
-          </div>
-        </SectionCard>
-      )}
-
-      {/* Veículos */}
-      {veiculos.length > 0 && (
-        <SectionCard icon={Car} title="Veículos Vinculados ao CPF" badge={veiculos.length}>
-          <div className="space-y-2">
-            {veiculos.slice(0, 8).map((ve: any, i: number) => {
-              const marcaMod = ve.marcaModelo ?? ve.modelo ?? ve.marca ?? ''
-              const placa    = ve.placa ?? ve.numeroPlaca ?? ''
-              const ano      = ve.anoFabricacao ?? ve.ano ?? ''
-              const anoMod   = ve.anoModelo ?? ''
-              const cor      = ve.cor ?? ve.coloracao ?? ''
-              const dataVinc = ve.dataVinculo ?? ve.dataUltimaTransferencia ?? ve.data ?? ''
-              return (
-                <div key={i} className="flex items-center justify-between py-1.5 border-b border-brand-border last:border-0">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-brand-blue-light rounded-lg flex items-center justify-center shrink-0">
-                      <Car className="w-4 h-4 text-brand-blue" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-brand-dark">{v(marcaMod) || 'Veículo'}</p>
-                      <p className="text-xs text-brand-gray">
-                        {[ano && anoMod ? `${ano}/${anoMod}` : ano, cor].filter(Boolean).join(' · ')}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    {placa && <p className="text-sm font-mono font-bold text-brand-dark">{v(placa)}</p>}
-                    {dataVinc && <p className="text-xs text-brand-gray">{v(dataVinc)}</p>}
-                  </div>
-                </div>
-              )
-            })}
-            {veiculos.length > 8 && <p className="text-xs text-brand-gray mt-1">+{veiculos.length - 8} no PDF</p>}
-          </div>
-        </SectionCard>
-      )}
-
-      {/* Negativações / SPC / Serasa */}
-      {negativacoes.length > 0 && (
-        <div className="card p-5 mb-4 border border-red-200 bg-red-50">
-          <h3 className="text-sm font-bold text-red-700 mb-3 uppercase tracking-wide flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            Negativações / Restrições de Crédito
-            <span className="ml-1 bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">{negativacoes.length}</span>
-          </h3>
-          <div className="space-y-2">
-            {negativacoes.slice(0, 10).map((n: any, i: number) => {
-              const credor  = v(n.credor ?? n.nomeCredor ?? n.cedente, '—')
-              const valor   = Number(n.valor ?? n.valorDebito ?? 0)
-              const datVenc = v(n.dataVencimento ?? n.data ?? '', '')
-              const datInc  = v(n.dataInclusao ?? n.dataRegistro ?? '', '')
-              const tipo    = v(n.tipoDebito ?? n.tipo ?? n.natureza ?? '', '')
-              return (
-                <div key={i} className="flex items-start justify-between py-2 border-b border-red-200 last:border-0">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-red-800 truncate">{credor}</p>
-                    {tipo && <p className="text-xs text-red-600">{tipo}</p>}
-                    {(datVenc || datInc) && (
-                      <p className="text-xs text-red-500">
-                        {datVenc ? `Venc.: ${datVenc}` : ''}{datVenc && datInc ? ' · ' : ''}{datInc ? `Inc.: ${datInc}` : ''}
-                      </p>
-                    )}
-                  </div>
-                  {valor > 0 && (
-                    <p className="text-sm font-bold text-red-700 ml-3 shrink-0">
-                      R$ {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
-                  )}
-                </div>
-              )
-            })}
-            {negativacoes.length > 10 && (
-              <p className="text-xs text-red-500 mt-1">+{negativacoes.length - 10} registros no PDF completo</p>
-            )}
-          </div>
-          {valorNegat > 0 && (
-            <div className="mt-3 pt-2 border-t border-red-200 flex justify-between">
-              <p className="text-xs font-semibold text-red-700">Total de débitos</p>
-              <p className="text-sm font-bold text-red-700">R$ {valorNegat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Protestos em cartório */}
-      {totalProt > 0 && (
-        <div className="card p-5 mb-4 border border-orange-200 bg-orange-50">
-          <h3 className="text-sm font-bold text-orange-700 mb-3 uppercase tracking-wide flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            Protestos em Cartório
-            <span className="ml-1 bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full">{totalProt}</span>
-          </h3>
-          {protestosLista.length > 0 ? (
-            <div className="space-y-2">
-              {protestosLista.map((p: any, i: number) => {
-                const cartorio  = v(p.cartorio ?? p.nomeCartorio ?? p.orgao, '—')
-                const cidade    = v(p.cidade ?? p.municipio, '')
-                const uf        = v(p.uf ?? p.estado, '')
-                const data_     = v(p.dataProtesto ?? p.data ?? '', '')
-                const valor     = Number(p.valor ?? p.valorProtesto ?? 0)
-                const credor    = v(p.credor ?? p.nomeCredor ?? p.apresentante, '')
-                return (
-                  <div key={i} className="py-2 border-b border-orange-200 last:border-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-orange-800">{cartorio}</p>
-                        {credor && <p className="text-xs text-orange-700 mt-0.5">Credor: {credor}</p>}
-                        <p className="text-xs text-orange-500 mt-0.5">
-                          {[cidade && uf ? `${cidade}/${uf}` : cidade, data_].filter(Boolean).join(' · ')}
-                        </p>
-                      </div>
-                      {valor > 0 && (
-                        <p className="text-sm font-bold text-orange-700 shrink-0">
-                          R$ {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <p className="text-xs text-orange-600">{totalProt} protesto(s) encontrado(s). Detalhes disponíveis no PDF.</p>
-          )}
-          {pt.primeiraOcorrencia && (
-            <p className="text-xs text-orange-500 mt-2">
-              Primeira ocorrência: {pt.primeiraOcorrencia}{pt.ultimaOcorrencia && pt.ultimaOcorrencia !== pt.primeiraOcorrencia ? ` · Última: ${pt.ultimaOcorrencia}` : ''}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Score detalhe */}
-      {scoreVal > 0 && (
-        <SectionCard icon={TrendingUp} title="Score de Crédito">
-          <div className="flex items-center gap-6">
-            <div className="text-center">
-              <p className={`text-5xl font-black ${scoreColor}`}>{scoreVal}</p>
-              <p className="text-xs text-brand-gray mt-1">de 1.000</p>
-            </div>
-            <div className="flex-1">
-              <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
-                <div
-                  className={`h-3 rounded-full transition-all ${scoreVal >= 700 ? 'bg-green-500' : scoreVal >= 400 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                  style={{ width: `${Math.min(100, scoreVal / 10)}%` }}
-                />
-              </div>
-              <p className={`text-sm font-bold ${scoreColor}`}>{scoreLabel}</p>
-              {scoreFaixa && (
-                <p className="text-xs text-brand-gray mt-1 leading-relaxed">{scoreFaixa}</p>
-              )}
-            </div>
           </div>
         </SectionCard>
       )}

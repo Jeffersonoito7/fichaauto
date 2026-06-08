@@ -72,18 +72,14 @@ export async function GET(
   // ── 5 chamadas únicas à Assertiva (antes eram 12) ──────────────────────────
   // mais-telefones removido: retorna 400 (não contratado) e telefones já
   // vêm completos no localize principal (resposta.telefones.moveis/fixos)
+  // 2 chamadas Assertiva: localize + relacionamentos
+  // Score/SPC/Serasa e histórico de veículos são produtos separados
   const [
-    rawLocalize,    // /localize/v3/cpf      → basico + enderecos + emails + societario + telefones
-    rawScore,       // /score/v3/pf/credito/ → score + negativacoes + protestos + renda
-    rawAcoes,       // /score/v3/pf/acoes/   → processos
-    rawRel,         // /localize/v3/pessoas-de-referencia → relacionamentos
-    rawVeiculos,    // /veiculos/v3/historico-veiculos → veículos por CPF
+    rawLocalize,  // /localize/v3/cpf → basico + enderecos + emails + societario + telefones
+    rawRel,       // /localize/v3/pessoas-de-referencia → relacionamentos
   ] = await Promise.all([
-    safe(`/localize/v3/cpf?cpf=${cpf}&idFinalidade=${FINALIDADE}`,                     'localize'),
-    safe(`/score/v3/pf/credito/${cpf}?idFinalidade=${FINALIDADE}`,                     'score'),
-    safe(`/score/v3/pf/acoes/${cpf}?idFinalidade=${FINALIDADE}`,                       'acoes'),
-    safe(`/localize/v3/pessoas-de-referencia?cpf=${cpf}&idFinalidade=${FINALIDADE}`,   'relacionamentos'),
-    safe(`/veiculos/v3/historico-veiculos?documento=${cpf}&idFinalidade=${FINALIDADE}`, 'veiculos'),
+    safe(`/localize/v3/cpf?cpf=${cpf}&idFinalidade=${FINALIDADE}`,                   'localize'),
+    safe(`/localize/v3/pessoas-de-referencia?cpf=${cpf}&idFinalidade=${FINALIDADE}`, 'relacionamentos'),
   ])
 
   // ── Extrair dados do /localize/v3/cpf ─────────────────────────────────────
@@ -129,47 +125,6 @@ export async function GET(
     lista:    Array.isArray(resp.participacoesEmpresas) ? resp.participacoesEmpresas : [],
   } : null
 
-  // ── Extrair dados do /score/v3/pf/credito ─────────────────────────────────
-  const sc  = rawScore?.resposta?.score ?? {}
-  const pontos = sc?.pontos ?? sc?.pontuacao ?? sc?.valor ?? null
-  const rd  = rawScore?.resposta?.registrosDebitos ?? {}
-  const negativacoes: any[] = Array.isArray(rd?.list ?? rd?.lista) ? (rd?.list ?? rd?.lista) : []
-  const pp  = rawScore?.resposta?.protestosPublicos ?? {}
-  const rp  = rawScore?.resposta?.rendaPresumida ?? {}
-  const rendaVal = rp?.valor ?? rp?.faixaRenda ?? rp?.renda ?? null
-
-  const score = rawScore ? {
-    score:             pontos,
-    pontuacao:         pontos,
-    faixa:             sc?.faixa,
-    negativacoes,
-    totalDebitos:      rd?.qtdDebitos ?? rd?.quantidade ?? negativacoes.length,
-    valorTotalDebitos: rd?.valorTotal ?? rd?.valor ?? 0,
-    rendaPresumida:    rendaVal,
-    faixaRenda:        rp?.faixaRenda ?? rp?.descricao,
-  } : null
-
-  const protestos = {
-    total:              pp?.qtdProtestos ?? 0,
-    quantidade:         pp?.qtdProtestos ?? 0,
-    lista:              Array.isArray(pp?.list ?? pp?.lista) ? (pp?.list ?? pp?.lista) : [],
-    valorTotal:         pp?.valorTotal ?? null,
-    primeiraOcorrencia: pp?.primeiraOcorrencia ?? null,
-    ultimaOcorrencia:   pp?.ultimaOcorrencia ?? null,
-  }
-
-  const renda = rawScore ? {
-    renda:          rendaVal,
-    valor:          rendaVal,
-    rendaPresumida: rendaVal,
-    faixaRenda:     rp?.faixaRenda ?? rp?.descricao,
-  } : null
-
-  // ── Extrair processos do /score/v3/pf/acoes ───────────────────────────────
-  const ac  = rawAcoes?.resposta?.acoes ?? {}
-  const qtdProc = ac?.qtdAcoes ?? ac?.quantidade ?? ac?.total ?? 0
-  const processos = { total: qtdProc, quantidade: qtdProc, lista: ac?.acoes ?? ac?.lista ?? [] }
-
   // ── Extrair relacionamentos ───────────────────────────────────────────────
   const relArr = rawRel?.resposta?.pessoasDeReferencia ?? rawRel?.resposta?.relacionamentos ?? []
   const relacionamentos = {
@@ -178,22 +133,13 @@ export async function GET(
     resposta: rawRel?.resposta,
   }
 
-  // ── Extrair veículos ──────────────────────────────────────────────────────
-  const veicArr = rawVeiculos?.resposta?.veiculos ?? rawVeiculos?.resposta?.historico ?? rawVeiculos?.resposta?.lista ?? []
-  const veiculos = {
-    veiculos: Array.isArray(veicArr) ? veicArr : [],
-    lista:    Array.isArray(veicArr) ? veicArr : [],
-    historico: Array.isArray(veicArr) ? veicArr : [],
-    resposta: rawVeiculos?.resposta,
-  }
-
   // DataJud — gratuito, busca por nome do titular
   const nomeParaDatajud = basico?.nome ?? ''
   const datajud = nomeParaDatajud.length >= 5
     ? await buscarProcessosProprietario(nomeParaDatajud).catch(() => null)
     : null
 
-  const resultado = { cpf, basico, score, processos, protestos, enderecos, telefones, renda, pep: null, societario, relacionamentos, veiculos, datajud, erros }
+  const resultado = { cpf, basico, enderecos, telefones, pep: null, societario, relacionamentos, datajud, erros }
   const descricao = basico?.nome ?? ''
 
   const saved = await salvarConsulta({ email, tipo: 'cpf', documento: cpf, descricao, resultado })
