@@ -192,6 +192,10 @@ export default function RelatorioCpfPage() {
   // ── Processos com lista ──────────────────────────────────────────────────────
   const processosLista: any[] = Array.isArray(pr.lista) ? pr.lista : []
 
+  // ── DataJud ──────────────────────────────────────────────────────────────────
+  const dj = data?.datajud ?? null
+  const djTotal = dj?.total ?? 0
+
   const scoreColor = scoreVal >= 700 ? 'text-green-600' : scoreVal >= 400 ? 'text-yellow-600' : 'text-red-600'
   const scoreLabel = scoreVal >= 700 ? 'Baixo Risco' : scoreVal >= 400 ? 'Risco Moderado' : 'Alto Risco'
   const scoreFaixa = typeof sc.faixa === 'object'
@@ -203,7 +207,7 @@ export default function RelatorioCpfPage() {
     { label: 'Situação CPF',        status: cpfOk ? 'ok' : 'error', detalhe: sit },
     { label: 'Score de Crédito',    status: scoreVal >= 700 ? 'ok' : scoreVal >= 400 ? 'warn' : 'error', detalhe: `${scoreVal} / 1000` },
     { label: 'Negativações',        status: totalNegat > 0 ? 'error' : 'ok', detalhe: totalNegat > 0 ? `${totalNegat} registro(s) — R$ ${Number(valorNegat).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Nada consta' },
-    { label: 'Processos Judiciais', status: totalProc > 0 ? 'error' : 'ok', detalhe: totalProc > 0 ? `${totalProc} processo(s)` : 'Nada consta' },
+    { label: 'Processos Judiciais', status: (totalProc > 0 || djTotal > 0) ? 'error' : 'ok', detalhe: djTotal > 0 ? `${djTotal} processo(s) — DataJud CNJ` : totalProc > 0 ? `${totalProc} processo(s)` : 'Nada consta' },
     { label: 'Protestos',           status: totalProt > 0 ? 'error' : 'ok', detalhe: totalProt > 0 ? `${totalProt} protesto(s)` : 'Nada consta' },
     { label: 'PEP',                 status: isPep ? 'error' : 'ok', detalhe: isPep ? 'Pessoa Politicamente Exposta' : 'Não identificado' },
     { label: 'Participação Soc.',   status: empresas.length > 0 ? 'warn' : 'ok', detalhe: empresas.length > 0 ? `${empresas.length} empresa(s)` : 'Nenhuma' },
@@ -364,51 +368,49 @@ export default function RelatorioCpfPage() {
         </SectionCard>
       )}
 
-      {/* Processos Judiciais */}
-      {totalProc > 0 && (
-        <div className="card p-5 mb-4 border border-red-200 bg-red-50">
-          <h3 className="text-sm font-bold text-red-700 mb-3 uppercase tracking-wide flex items-center gap-2">
+      {/* Processos Judiciais — DataJud CNJ */}
+      {dj !== null && (
+        <div className={`card p-5 mb-4 border ${djTotal > 0 ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
+          <h3 className={`text-sm font-bold mb-3 uppercase tracking-wide flex items-center gap-2 ${djTotal > 0 ? 'text-red-700' : 'text-green-700'}`}>
             <AlertCircle className="w-4 h-4" />
-            Processos Judiciais
-            <span className="ml-1 bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">{totalProc}</span>
+            Processos Judiciais — DataJud CNJ
+            {djTotal > 0 && (
+              <span className="ml-1 bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">{djTotal}</span>
+            )}
           </h3>
-          {processosLista.length > 0 ? (
+          {djTotal === 0 ? (
+            <p className="text-xs text-green-700">Nenhum processo encontrado nos tribunais estaduais para <strong>{dj.nomeUsado}</strong>.</p>
+          ) : (
             <div className="space-y-2">
-              {processosLista.slice(0, 8).map((p: any, i: number) => {
-                const num    = v(p.numeroProcesso ?? p.numero ?? p.numeroAcao, '—')
-                const tipo   = v(p.tipoAcao ?? p.tipo ?? p.natureza ?? p.classe, '')
-                const tribunal = v(p.tribunal ?? p.vara ?? p.orgao, '')
-                const data_  = v(p.dataDistribuicao ?? p.dataAjuizamento ?? p.data ?? '', '')
-                const valor  = Number(p.valorCausa ?? p.valor ?? 0)
+              {dj.processos.slice(0, 8).map((p: any, i: number) => {
+                const corRisco = p.risco === 'alto' ? 'text-red-700 bg-red-100' : p.risco === 'medio' ? 'text-yellow-700 bg-yellow-100' : 'text-gray-600 bg-gray-100'
                 return (
                   <div key={i} className="py-2 border-b border-red-200 last:border-0">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-mono text-red-800 truncate">{num}</p>
-                        {tipo && <p className="text-xs text-red-700 font-semibold mt-0.5">{tipo}</p>}
-                        {(tribunal || data_) && (
-                          <p className="text-xs text-red-500 mt-0.5">
-                            {[tribunal, data_].filter(Boolean).join(' · ')}
-                          </p>
+                        <p className="text-xs font-mono text-red-800 truncate">{p.numero}</p>
+                        {p.classe && <p className="text-xs text-red-700 font-semibold mt-0.5">{p.classe}</p>}
+                        {p.assuntos?.length > 0 && (
+                          <p className="text-xs text-red-600 mt-0.5">{p.assuntos.slice(0, 2).join(' · ')}</p>
                         )}
-                      </div>
-                      {valor > 0 && (
-                        <p className="text-xs font-bold text-red-700 shrink-0">
-                          R$ {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <p className="text-xs text-red-500 mt-0.5">
+                          {[p.tribunal, p.dataAjuizamento].filter(Boolean).join(' · ')}
                         </p>
-                      )}
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold shrink-0 ${corRisco}`}>
+                        {p.risco === 'alto' ? 'Alto risco' : p.risco === 'medio' ? 'Médio risco' : 'Baixo risco'}
+                      </span>
                     </div>
                   </div>
                 )
               })}
-              {processosLista.length > 8 && (
-                <p className="text-xs text-red-500 mt-1">+{processosLista.length - 8} processos no PDF completo</p>
+              {djTotal > 8 && (
+                <p className="text-xs text-red-500 mt-1">+{djTotal - 8} processos no PDF completo</p>
               )}
             </div>
-          ) : (
-            <p className="text-xs text-red-600 mb-3">{totalProc} processo(s) encontrado(s). Ver detalhes no PDF.</p>
           )}
-          <a href={`/api/pdf/cpf/${cpf}`} className="text-xs text-brand-green font-semibold hover:underline mt-2 block">
+          <p className="text-xs text-gray-400 mt-3">Fonte: DataJud CNJ · Pesquisa por nome: {dj.nomeUsado} · Tribunais: TJSP, TJRJ, TJMG, TJRS, TJPR, TJBA, TJGO, TJCE, TJSC, TJPE</p>
+          <a href={`/api/pdf/cpf/${cpf}`} className="text-xs text-brand-green font-semibold hover:underline mt-1 block">
             PDF completo →
           </a>
         </div>

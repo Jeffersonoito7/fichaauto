@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthEmail, salvarConsulta } from '@/lib/consulta-helper'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { buscarProcessosProprietario } from '@/lib/providers/datajud'
 
 const BASE_URL   = 'https://api.assertivasolucoes.com.br'
 const TOKEN_URL  = 'https://api.assertivasolucoes.com.br/oauth2/v3/token'
@@ -184,7 +185,13 @@ export async function GET(
     resposta: rawVeiculos?.resposta,
   }
 
-  const resultado = { cpf, basico, score, processos, protestos, enderecos, telefones, renda, pep: null, societario, relacionamentos, veiculos, erros }
+  // DataJud — gratuito, busca por nome do titular
+  const nomeParaDatajud = basico?.nome ?? ''
+  const datajud = nomeParaDatajud.length >= 5
+    ? await buscarProcessosProprietario(nomeParaDatajud).catch(() => null)
+    : null
+
+  const resultado = { cpf, basico, score, processos, protestos, enderecos, telefones, renda, pep: null, societario, relacionamentos, veiculos, datajud, erros }
   const descricao = basico?.nome ?? ''
 
   const saved = await salvarConsulta({ email, tipo: 'cpf', documento: cpf, descricao, resultado })
