@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import {
   ShieldCheck, Zap, Search, Car, TrendingUp, Lock,
-  ChevronRight, CheckCircle2, Star, ArrowRight, Phone
+  ChevronRight, CheckCircle2, ArrowRight, Phone
 } from 'lucide-react'
 
 const features = [
@@ -20,37 +20,30 @@ const stats = [
   { value: '3 bases', label: 'Histórico de leilão' },
 ]
 
-const plans = [
+const precos = [
   {
-    name: 'Avulso',
-    price: 'R$ 39,90',
-    period: 'por consulta',
-    description: 'Ideal para consultas esporádicas',
-    highlight: false,
-    cta: 'Consultar agora',
-    features: [
-      'Relatório completo em PDF',
-      'Score de risco do veículo',
-      'Link compartilhável 48h',
-      'Sem mensalidade',
-    ],
+    tipo: 'Veículo (Placa)',
+    preco: 'R$ 36,90',
+    pack: 'R$ 332,10',
+    cor: 'text-brand-green',
+    bg: 'bg-green-50 border-green-200',
+    features: ['Identificação completa', 'Restrições e RENAJUD', 'Roubo e furto', 'Gravame e alienação', 'Leilão (3 bases)', 'Sinistro e precificador', 'Processos judiciais (DataJud)'],
   },
   {
-    name: 'Plano Mensal',
-    price: 'R$ 297',
-    period: '/mês',
-    description: '10 consultas completas incluídas',
-    highlight: true,
-    cta: 'Assinar agora',
-    badge: 'Mais popular',
-    features: [
-      'Tudo do Avulso',
-      '10 consultas/mês incluídas',
-      'Recarga via Pix automática',
-      'Histórico ilimitado',
-      'Monitoramento de placas',
-      'Suporte prioritário',
-    ],
+    tipo: 'Pessoa Física (CPF)',
+    preco: 'R$ 29,90',
+    pack: 'R$ 269,10',
+    cor: 'text-blue-600',
+    bg: 'bg-blue-50 border-blue-200',
+    features: ['Dados cadastrais', 'Score de crédito', 'Negativações SPC/Serasa', 'Processos judiciais (DataJud)', 'Endereços e telefones', 'Participação societária', 'Veículos vinculados'],
+  },
+  {
+    tipo: 'Empresa (CNPJ)',
+    preco: 'R$ 29,90',
+    pack: 'R$ 269,10',
+    cor: 'text-purple-600',
+    bg: 'bg-purple-50 border-purple-200',
+    features: ['Dados cadastrais', 'Quadro societário (QSA)', 'Score empresarial', 'Protestos em cartório', 'Empresas relacionadas', 'Score de crédito PJ'],
   },
 ]
 
@@ -71,7 +64,7 @@ export default function LandingPage() {
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm text-brand-gray">
             <a href="#funcionalidades" className="hover:text-brand-blue transition-colors">Funcionalidades</a>
-            <a href="#planos" className="hover:text-brand-blue transition-colors">Planos</a>
+            <a href="#precos" className="hover:text-brand-blue transition-colors">Preços</a>
             <a href="#como-funciona" className="hover:text-brand-blue transition-colors">Como funciona</a>
           </div>
           <div className="flex items-center gap-3">
@@ -198,51 +191,41 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Planos */}
-      <section id="planos" className="py-20 px-4">
-        <div className="max-w-3xl mx-auto">
+      {/* Preços */}
+      <section id="precos" className="py-20 px-4 bg-white">
+        <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-brand-dark mb-3">Planos simples e transparentes</h2>
-            <p className="text-brand-gray">Sem surpresas. Pague só o que usar.</p>
+            <h2 className="text-3xl font-bold text-brand-dark mb-3">Preço por consulta, sem mensalidade</h2>
+            <p className="text-brand-gray">Pague só o que usar. Compre 10 consultas do mesmo tipo e ganhe 10% de desconto.</p>
           </div>
-          <div className="grid md:grid-cols-2 gap-6">
-            {plans.map((plan) => (
-              <div key={plan.name} className={`card p-8 relative ${plan.highlight ? 'border-2 border-brand-blue shadow-blue' : ''}`}>
-                {plan.badge && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="bg-brand-blue text-white text-xs font-bold px-4 py-1 rounded-full flex items-center gap-1">
-                      <Star className="w-3 h-3" /> {plan.badge}
-                    </span>
-                  </div>
-                )}
-                <div className="mb-6">
-                  <h3 className="font-bold text-lg text-brand-dark">{plan.name}</h3>
-                  <div className="flex items-baseline gap-1 mt-2">
-                    <span className="text-3xl font-extrabold text-brand-blue">{plan.price}</span>
-                    <span className="text-brand-gray text-sm">{plan.period}</span>
-                  </div>
-                  <p className="text-sm text-brand-gray mt-1">{plan.description}</p>
+          <div className="grid md:grid-cols-3 gap-6 mb-8">
+            {precos.map((p) => (
+              <div key={p.tipo} className={`rounded-2xl border p-6 ${p.bg}`}>
+                <h3 className="font-bold text-brand-dark mb-3">{p.tipo}</h3>
+                <div className="mb-1">
+                  <span className={`text-4xl font-black ${p.cor}`}>{p.preco}</span>
+                  <span className="text-brand-gray text-sm ml-1">/ consulta</span>
                 </div>
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map((f) => (
+                <p className="text-xs text-brand-gray mb-4">
+                  Pack de 10: <strong>{p.pack}</strong> <span className="text-green-600 font-semibold">(10% off)</span>
+                </p>
+                <ul className="space-y-2">
+                  {p.features.map((f) => (
                     <li key={f} className="flex items-center gap-2 text-sm text-brand-dark">
-                      <CheckCircle2 className="w-4 h-4 text-brand-green shrink-0" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-brand-green shrink-0" />
                       {f}
                     </li>
                   ))}
                 </ul>
-                <Link
-                  href="/cadastro"
-                  className={`${plan.highlight ? 'btn-primary' : 'btn-outline'} w-full justify-center`}
-                >
-                  {plan.cta} <ArrowRight className="w-4 h-4" />
-                </Link>
               </div>
             ))}
           </div>
-          <p className="text-center text-xs text-brand-gray mt-6">
-            Plano Mensal: quando acabarem as consultas, recarregue via Pix a qualquer momento.
-          </p>
+          <div className="text-center">
+            <Link href="/cadastro" className="btn-primary inline-flex items-center gap-2">
+              Criar conta e consultar <ArrowRight className="w-4 h-4" />
+            </Link>
+            <p className="text-xs text-brand-gray mt-3">Recarga via PIX · Saldo não expira · Sem mensalidade</p>
+          </div>
         </div>
       </section>
 
