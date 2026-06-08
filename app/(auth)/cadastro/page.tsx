@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Eye, EyeOff, Loader2, ArrowLeft, CheckCircle2, ArrowRight } from 'lucide-react'
 import ModulosSelector from '@/components/ModulosSelector'
+import { LogoHorizontal } from '@/components/LogoFichaAuto'
 import type { ModuloId } from '@/lib/products'
 
 type Step = 'dados' | 'modulos' | 'sucesso'
@@ -70,8 +71,7 @@ export default function CadastroPage() {
       {/* Left */}
       <div className="hidden lg:flex lg:w-1/2 gradient-brand flex-col justify-between p-12 text-white">
         <Link href="/" className="flex items-center w-fit">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-horizontal.png" alt="Ficha Auto" style={{ height: 38, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
+          <LogoHorizontal height={36} theme="dark" />
         </Link>
         <div>
           <h2 className="text-4xl font-extrabold mb-4 leading-tight">
@@ -108,8 +108,7 @@ export default function CadastroPage() {
           </Link>
 
           <div className="lg:hidden mb-8">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-horizontal.png" alt="Ficha Auto" style={{ height: 36, objectFit: 'contain' }} />
+            <LogoHorizontal height={36} theme="light" />
           </div>
 
           {/* Indicador de etapas */}

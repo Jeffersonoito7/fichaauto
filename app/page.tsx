@@ -3,6 +3,7 @@ import {
   ShieldCheck, Zap, Search, Car, TrendingUp, Lock,
   ChevronRight, CheckCircle2, ArrowRight, Phone
 } from 'lucide-react'
+import { LogoHorizontal } from '@/components/LogoFichaAuto'
 
 const features = [
   { icon: Car,         title: 'Dados do Veículo',        desc: 'Identificação completa via placa ou chassi — marca, modelo, ano, cor, renavam.' },
@@ -54,14 +55,7 @@ export default function LandingPage() {
       {/* Navbar */}
       <nav className="bg-white border-b border-brand-border sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
-              <Car className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-lg text-brand-dark">
-              Ficha Auto
-            </span>
-          </div>
+          <LogoHorizontal height={36} theme="light" />
           <div className="hidden md:flex items-center gap-6 text-sm text-brand-gray">
             <a href="#funcionalidades" className="hover:text-brand-blue transition-colors">Funcionalidades</a>
             <a href="#precos" className="hover:text-brand-blue transition-colors">Preços</a>
@@ -243,12 +237,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="bg-brand-dark text-white py-10 px-4">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg gradient-hero flex items-center justify-center">
-              <Car className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="font-bold text-sm">Ficha Auto</span>
-          </div>
+          <LogoHorizontal height={28} theme="dark" />
           <p className="text-white/40 text-xs text-center">
             © 2026 Ficha Auto · OITO7DIGITAL SERVIÇOS LTDA · CNPJ 62.302.560/0001-58
           </p>

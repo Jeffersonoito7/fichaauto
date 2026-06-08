@@ -1,7 +1,8 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
-import { Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { LogoHorizontal } from '@/components/LogoFichaAuto'
 
 export default function LoginPage() {
   const [show, setShow]       = useState(false)
@@ -41,8 +42,7 @@ export default function LoginPage() {
 
           {/* Logo */}
           <div className="mb-10">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-horizontal.png" alt="Ficha Auto" style={{ height: 44, objectFit: 'contain' }} />
+            <LogoHorizontal height={40} theme="light" />
           </div>
 
           <h1 className="text-2xl font-bold text-brand-dark mb-1">Fazer Login</h1>
@@ -150,11 +150,8 @@ export default function LoginPage() {
         <div className="absolute bottom-8 right-52 w-10 h-10 rounded-full" style={{ background: '#EF4444', opacity: 0.8 }} />
 
         {/* Logo no topo */}
-        <div className="relative z-10 flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
-            <ShieldCheck className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-bold text-lg text-white">Ficha Auto</span>
+        <div className="relative z-10">
+          <LogoHorizontal height={36} theme="dark" />
         </div>
 
         {/* Conteúdo central */}

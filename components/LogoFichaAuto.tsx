@@ -1,27 +1,40 @@
-import Image from 'next/image'
+import { ShieldCheck } from 'lucide-react'
 
-export function LogoIcon({ size = 36 }: { size?: number }) {
+// Logo horizontal: escudo + "Ficha Auto"
+// theme="light"  → fundo verde (gradient-hero) + texto escuro  (para fundos brancos)
+// theme="dark"   → fundo branco translúcido + texto branco     (para fundos escuros/verdes)
+export function LogoHorizontal({ height = 36, theme = 'light' }: { height?: number; theme?: 'light' | 'dark' }) {
+  const box  = Math.round(height * 0.95)
+  const icon = Math.round(height * 0.55)
+  const text = Math.round(height * 0.52)
+
   return (
-    <Image
-      src="/logo-icone.jpg"
-      alt="Ficha Auto"
-      width={size}
-      height={size}
-      style={{ objectFit: 'contain', borderRadius: 6 }}
-      priority
-    />
+    <div className="flex items-center gap-2">
+      <div
+        className={`rounded-xl flex items-center justify-center shrink-0 ${theme === 'dark' ? 'bg-white/20 backdrop-blur-sm' : 'gradient-hero'}`}
+        style={{ width: box, height: box }}
+      >
+        <ShieldCheck className="text-white" style={{ width: icon, height: icon }} />
+      </div>
+      <span
+        className={`font-bold tracking-tight ${theme === 'dark' ? 'text-white' : 'text-brand-dark'}`}
+        style={{ fontSize: text }}
+      >
+        Ficha Auto
+      </span>
+    </div>
   )
 }
 
-export function LogoHorizontal({ height = 36 }: { height?: number }) {
+// Ícone isolado (só o escudo)
+export function LogoIcon({ size = 36, theme = 'light' }: { size?: number; theme?: 'light' | 'dark' }) {
+  const icon = Math.round(size * 0.58)
   return (
-    <Image
-      src="/logo-horizontal.png"
-      alt="Ficha Auto"
-      width={Math.round(height * 3.8)}
-      height={height}
-      style={{ objectFit: 'contain' }}
-      priority
-    />
+    <div
+      className={`rounded-xl flex items-center justify-center shrink-0 ${theme === 'dark' ? 'bg-white/20 backdrop-blur-sm' : 'gradient-hero'}`}
+      style={{ width: size, height: size }}
+    >
+      <ShieldCheck className="text-white" style={{ width: icon, height: icon }} />
+    </div>
   )
 }
