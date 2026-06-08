@@ -106,10 +106,6 @@ export async function consultarPrecificador(placa: string, protocolo?: string) {
   return get(`/veiculos/v3/demais-consultas?tipo=placa&documento=${limpaPlaca(placa)}&consulta=precificador&protocolo=${proto}&idFinalidade=${FINALIDADE}`)
 }
 
-/** Histórico de veículos por CPF */
-export async function consultarHistoricoVeiculosPorCpf(cpf: string) {
-  return get(`/veiculos/v3/historico-veiculos?documento=${limpaCpf(cpf)}&idFinalidade=${FINALIDADE}`)
-}
 
 // ═══════════════════════════════════════════════════════════════
 // MÓDULOS — PESSOAS (CPF)
@@ -461,7 +457,7 @@ export async function consultarRelacionadasCnpj(cnpj: string) {
 // ═══════════════════════════════════════════════════════════════
 
 export type ModuloId =
-  | 'placa' | 'binFederal' | 'sinistro' | 'gravame' | 'leilao' | 'chassi' | 'historicoVeiculosCpf'
+  | 'placa' | 'binFederal' | 'sinistro' | 'gravame' | 'leilao' | 'chassi'
   | 'cpfBasico' | 'cpfScore' | 'cpfProcessos' | 'cpfProtestos' | 'cpfEnderecos'
   | 'cpfTelefones' | 'cpfRenda' | 'cpfPep' | 'cpfSocietario' | 'cpfRelacionamentos'
   | 'cnpjBasico' | 'cnpjQsa' | 'cnpjScore' | 'cnpjProcessos' | 'cnpjProtestos' | 'cnpjRelacionadas'
@@ -481,7 +477,6 @@ export const MODULOS: ModuloInfo[] = [
   { id: 'gravame',             grupo: 'Veículos',               label: 'Gravame',                     descricao: 'Histórico completo de financiamentos e alienações',                    custo: 1 },
   { id: 'leilao',              grupo: 'Veículos',               label: 'Histórico de Leilão',         descricao: 'Verificação nas bases A, B e Remarketing',                            custo: 1 },
   { id: 'chassi',              grupo: 'Veículos',               label: 'Decodificador de Chassi',     descricao: 'VIN completo e alterações de características',                        custo: 1 },
-  { id: 'historicoVeiculosCpf',grupo: 'Veículos',               label: 'Histórico Veículos por CPF',  descricao: 'Todos os veículos que um CPF já registrou',                           custo: 1 },
   { id: 'cpfBasico',           grupo: 'CPF — Pessoa Física',    label: 'Cadastro Básico',             descricao: 'Nome, endereço, telefone, e-mail, filiação, data de nascimento',      custo: 1 },
   { id: 'cpfScore',            grupo: 'CPF — Pessoa Física',    label: 'Score de Crédito',            descricao: 'Pontuação de risco financeiro e comportamento de crédito',            custo: 1 },
   { id: 'cpfProcessos',        grupo: 'CPF — Pessoa Física',    label: 'Processos Judiciais',         descricao: 'Ações judiciais federais, estaduais e trabalhistas',                  custo: 2 },
@@ -586,7 +581,6 @@ export async function consultarModular(
       safe('cpfPep',             () => consultarPepCpf(c)),
       safe('cpfSocietario',      () => consultarSocietarioCpf(c)),
       safe('cpfRelacionamentos', () => consultarRelacionamentosCpf(c)),
-      safe('historicoVeiculosCpf', () => consultarHistoricoVeiculosPorCpf(c)),
     ])
   }
 
