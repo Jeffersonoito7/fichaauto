@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Search, Car, Hash, User, Building2, Loader2,
-  History, Zap, ChevronRight, AlertCircle, FileSearch,
+  History, Zap, ChevronRight, AlertCircle, FileSearch, CreditCard,
 } from 'lucide-react'
 
 // ─── Logos das marcas ─────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ function moedaBR(v: any) {
   return n > 0 ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : null
 }
 
-type Aba = 'veiculo' | 'cpf' | 'cnpj'
+type Aba = 'veiculo' | 'cpf' | 'cnpj' | 'credito'
 
 interface FipeResult {
   placa: string
@@ -241,6 +241,8 @@ export default function ConsultarPage() {
   const [mercosul, setMercosul] = useState(true)
   const [fipeResult, setFipeResult] = useState<FipeResult | null>(null)
 
+  const [creditoTipo, setCreditoTipo] = useState<'cpf' | 'cnpj'>('cpf')
+
   function handleChange(v: string) {
     if (aba === 'veiculo' && subTipo === 'placa') {
       const fmt = formatPlaca(v)
@@ -248,7 +250,7 @@ export default function ConsultarPage() {
       if (fmt.length >= 5) setMercosul(isMercosul(fmt))
     } else if (aba === 'veiculo') {
       setValor(v.toUpperCase().slice(0, 17))
-    } else if (aba === 'cpf') {
+    } else if (aba === 'cpf' || (aba === 'credito' && creditoTipo === 'cpf')) {
       setValor(formatCpf(v))
     } else {
       setValor(formatCnpj(v))
@@ -258,12 +260,13 @@ export default function ConsultarPage() {
   function isValido() {
     if (aba === 'veiculo') return subTipo === 'placa' ? valor.length === 7 : valor.length === 17
     if (aba === 'cpf')     return valor.length === 11
+    if (aba === 'credito') return creditoTipo === 'cpf' ? valor.length === 11 : valor.length === 14
     return valor.length === 14
   }
 
   function displayValor() {
-    if (aba === 'cpf')  return maskCpf(valor)
-    if (aba === 'cnpj') return maskCnpj(valor)
+    if (aba === 'cpf' || (aba === 'credito' && creditoTipo === 'cpf')) return maskCpf(valor)
+    if (aba === 'cnpj' || (aba === 'credito' && creditoTipo === 'cnpj')) return maskCnpj(valor)
     return valor
   }
 
@@ -273,6 +276,12 @@ export default function ConsultarPage() {
     setLoading(true)
     setFipeResult(null)
 
+    if (aba === 'credito') {
+      router.push(creditoTipo === 'cpf'
+        ? `/dashboard/credito/cpf/${valor}`
+        : `/dashboard/credito/cnpj/${valor}`)
+      return
+    }
     if (aba === 'cpf')  { router.push(`/dashboard/relatorio/cpf/${valor}`);  return }
     if (aba === 'cnpj') { router.push(`/dashboard/relatorio/cnpj/${valor}`); return }
 
@@ -294,9 +303,10 @@ export default function ConsultarPage() {
   }
 
   const abas = [
-    { id: 'veiculo' as Aba, icon: Car,       label: 'Veículo' },
-    { id: 'cpf'     as Aba, icon: User,      label: 'CPF'     },
-    { id: 'cnpj'    as Aba, icon: Building2, label: 'CNPJ'    },
+    { id: 'veiculo' as Aba, icon: Car,        label: 'Veículo'  },
+    { id: 'cpf'     as Aba, icon: User,       label: 'CPF'      },
+    { id: 'cnpj'    as Aba, icon: Building2,  label: 'CNPJ'     },
+    { id: 'credito' as Aba, icon: CreditCard, label: 'Crédito'  },
   ]
 
   // ─── Se tem resultado FIPE, exibe o preview ───────────────────────────────
@@ -379,10 +389,29 @@ export default function ConsultarPage() {
         {/* Form */}
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
+            {/* Sub-seletor CPF/CNPJ na aba Crédito */}
+            {aba === 'credito' && (
+              <div className="flex gap-2 mb-4">
+                {(['cpf', 'cnpj'] as const).map(t => (
+                  <button key={t} type="button"
+                    onClick={() => { setCreditoTipo(t); setValor('') }}
+                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                      creditoTipo === t
+                        ? 'border-brand-blue bg-blue-50 text-brand-blue'
+                        : 'border-brand-border text-brand-gray hover:border-brand-blue/40'
+                    }`}
+                  >
+                    {t === 'cpf' ? <User className="w-3.5 h-3.5" /> : <Building2 className="w-3.5 h-3.5" />}
+                    {t === 'cpf' ? 'Pessoa Física (CPF)' : 'Empresa (CNPJ)'}
+                  </button>
+                ))}
+              </div>
+            )}
             <label className="block text-sm font-medium text-brand-dark mb-2">
-              {aba === 'veiculo' && (subTipo === 'placa' ? 'Placa do veículo' : 'Número do chassi')}
-              {aba === 'cpf'  && 'CPF da pessoa física'}
-              {aba === 'cnpj' && 'CNPJ da empresa'}
+              {aba === 'veiculo'  && (subTipo === 'placa' ? 'Placa do veículo' : 'Número do chassi')}
+              {aba === 'cpf'     && 'CPF da pessoa física'}
+              {aba === 'cnpj'    && 'CNPJ da empresa'}
+              {aba === 'credito' && (creditoTipo === 'cpf' ? 'CPF para análise de crédito' : 'CNPJ para análise de crédito')}
             </label>
             <input
               type="text"
@@ -420,6 +449,17 @@ export default function ConsultarPage() {
                 <ChevronRight className="w-3.5 h-3.5 ml-auto" />
               </button>
             </div>
+          ) : aba === 'credito' ? (
+            <button
+              type="submit"
+              disabled={loading || !isValido()}
+              className="w-full h-12 text-base font-semibold rounded-xl bg-brand-blue text-white hover:bg-blue-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {loading
+                ? <><Loader2 className="w-5 h-5 animate-spin" /> Consultando...</>
+                : <><CreditCard className="w-5 h-5" /> Análise de Crédito</>
+              }
+            </button>
           ) : (
             <button
               type="submit"

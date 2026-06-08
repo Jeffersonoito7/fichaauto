@@ -1,35 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { criarCobranca, obterQrCode } from '@/lib/providers/efi'
 import { createClient, createServiceRoleClient } from '@/lib/supabase-server'
-import { PRECO, PACK_QUANTIDADE, PACK_DESCONTO, calcularPack, type TipoConsulta } from '@/lib/products'
+import { PRECO, PACK_QUANTIDADE, PACK_DESCONTO, calcularPack, CREDITO, type TipoConsulta, type TipoCreditoCompra } from '@/lib/products'
 
 export async function POST(req: NextRequest) {
   try {
     const { tipo, quantidade } = await req.json()
 
-    if (!tipo || !['placa', 'cpf', 'cnpj'].includes(tipo)) {
-      return NextResponse.json({ erro: 'Tipo inválido. Use: placa, cpf ou cnpj' }, { status: 400 })
+    const tiposValidos = ['placa', 'cpf', 'cnpj', 'credito_pack', 'credito_cpf', 'credito_cnpj']
+    if (!tipo || !tiposValidos.includes(tipo)) {
+      return NextResponse.json({ erro: 'Tipo inválido.' }, { status: 400 })
     }
-    if (quantidade !== 1 && quantidade !== PACK_QUANTIDADE) {
-      return NextResponse.json({ erro: `Quantidade inválida. Use 1 (avulso) ou ${PACK_QUANTIDADE} (pack)` }, { status: 400 })
-    }
-
-    const tipoConsulta = tipo as TipoConsulta
-    const precoUnitario = PRECO[tipoConsulta]
 
     let valorPago: number
     let saldoCreditado: number
+    let creditosCreditados: number | null = null
     let descricaoPix: string
 
-    if (quantidade === 1) {
-      valorPago       = precoUnitario
-      saldoCreditado  = precoUnitario
-      descricaoPix    = `1 consulta ${tipoConsulta.toUpperCase()} — Ficha Auto`
+    // ── Produto 3: Análise de Crédito ────────────────────────────────────────
+    if (['credito_pack', 'credito_cpf', 'credito_cnpj'].includes(tipo)) {
+      const t = tipo as TipoCreditoCompra
+      if (t === 'credito_pack') {
+        valorPago          = CREDITO.packValor
+        saldoCreditado     = 0
+        creditosCreditados = CREDITO.packQtd
+        descricaoPix       = `Pack ${CREDITO.packQtd} consultas Crédito — Ficha Auto`
+      } else if (t === 'credito_cpf') {
+        valorPago          = CREDITO.avulsoCpf
+        saldoCreditado     = 0
+        creditosCreditados = 1
+        descricaoPix       = `1 consulta Crédito CPF avulso — Ficha Auto`
+      } else {
+        valorPago          = CREDITO.avulsoCnpj
+        saldoCreditado     = 0
+        creditosCreditados = 1
+        descricaoPix       = `1 consulta Crédito CNPJ avulso — Ficha Auto`
+      }
     } else {
-      const pack      = calcularPack(tipoConsulta)
-      valorPago       = pack.comDesconto
-      saldoCreditado  = pack.total          // cliente paga menos mas recebe valor cheio em saldo
-      descricaoPix    = `${PACK_QUANTIDADE} consultas ${tipoConsulta.toUpperCase()} — Ficha Auto (10% off)`
+      // ── Produtos 1 e 2: Placa / CPF / CNPJ ────────────────────────────────
+      if (quantidade !== 1 && quantidade !== PACK_QUANTIDADE) {
+        return NextResponse.json({ erro: `Quantidade inválida. Use 1 ou ${PACK_QUANTIDADE}.` }, { status: 400 })
+      }
+      const tipoConsulta = tipo as TipoConsulta
+      const precoUnitario = PRECO[tipoConsulta]
+      if (quantidade === 1) {
+        valorPago      = precoUnitario
+        saldoCreditado = precoUnitario
+        descricaoPix   = `1 consulta ${tipoConsulta.toUpperCase()} — Ficha Auto`
+      } else {
+        const pack     = calcularPack(tipoConsulta)
+        valorPago      = pack.comDesconto
+        saldoCreditado = pack.total
+        descricaoPix   = `${PACK_QUANTIDADE} consultas ${tipoConsulta.toUpperCase()} — Ficha Auto (10% off)`
+      }
     }
 
     // Autenticação
@@ -50,22 +73,24 @@ export async function POST(req: NextRequest) {
     // Salvar transação pendente
     const svc = createServiceRoleClient() as any
     await svc.from('transacoes_pix').insert({
-      txid:             cob.txid,
-      user_id:          user.id,
-      valor:            valorPago,
-      saldo_creditado:  saldoCreditado,
-      status:           'pendente',
+      txid:                cob.txid,
+      user_id:             user.id,
+      valor:               valorPago,
+      saldo_creditado:     saldoCreditado || null,
+      creditos_creditados: creditosCreditados,
+      status:              'pendente',
     })
 
     return NextResponse.json({
-      txid:            cob.txid,
-      tipo:            tipoConsulta,
-      quantidade,
+      txid:               cob.txid,
+      tipo,
+      quantidade:         quantidade ?? null,
       valorPago,
-      saldoCreditado,
-      qrCode:          qr.imagemQrcode,
-      copiaECola:      qr.qrcode,
-      expira:          '60 minutos',
+      saldoCreditado:     saldoCreditado || null,
+      creditosCreditados: creditosCreditados ?? null,
+      qrCode:             qr.imagemQrcode,
+      copiaECola:         qr.qrcode,
+      expira:             '60 minutos',
     })
   } catch (err: any) {
     console.error('[PIX gerar]', err?.response?.data ?? err.message)

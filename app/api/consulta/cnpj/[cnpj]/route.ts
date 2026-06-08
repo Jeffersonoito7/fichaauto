@@ -106,11 +106,9 @@ export async function GET(
   const erros: string[] = []
   const avisos: string[] = []
 
-  // Uma única chamada por endpoint — evita 429 por chamadas duplicadas
-  const [rawLocalize, rawScore, rawAcoes] = await Promise.all([
+  // Score/SPC/Serasa é produto separado — apenas localize aqui
+  const [rawLocalize] = await Promise.all([
     assertivaGet(`/localize/v3/cnpj?cnpj=${cnpj}&idFinalidade=${FINALIDADE}`).catch((e: any) => { erros.push(`localize: ${e.message}`); return null }),
-    assertivaGet(`/score/v3/pj/credito/${cnpj}?idFinalidade=${FINALIDADE}`).catch((e: any) => { erros.push(`score: ${e.message}`); return null }),
-    assertivaGet(`/score/v3/pj/acoes/${cnpj}?idFinalidade=${FINALIDADE}`).catch((e: any) => { erros.push(`acoes: ${e.message}`); return null }),
   ])
 
   // Extrair basico do localize
@@ -162,32 +160,6 @@ export async function GET(
   const rawRel = resp.ocorrencias?.empresasRelacionadas ?? resp.empresasRelacionadas ?? []
   const relacionadas = { empresas: Array.isArray(rawRel) ? rawRel : [], lista: Array.isArray(rawRel) ? rawRel : [] }
 
-  // Extrair score + negativações + protestos do mesmo /score/v3/pj/credito
-  const sc = rawScore?.resposta?.score ?? {}
-  const pontos = sc?.pontuacao ?? sc?.pontos ?? sc?.valor ?? (typeof sc === 'number' ? sc : null)
-  const rd = rawScore?.resposta?.registrosDebitos ?? {}
-  const negativacoes: any[] = Array.isArray(rd?.list ?? rd?.lista ?? rd?.registros) ? (rd?.list ?? rd?.lista ?? rd?.registros) : []
-  const pp = rawScore?.resposta?.protestosPublicos ?? {}
-  const score = rawScore ? {
-    score: pontos, pontuacao: pontos,
-    faixa: sc?.faixa ?? sc?.classificacao,
-    negativacoes,
-    totalDebitos: rd?.qtdDebitos ?? rd?.quantidade ?? negativacoes.length,
-    valorTotalDebitos: rd?.valorTotal ?? rd?.valor ?? 0,
-  } : null
-  const protestos = {
-    total: pp?.qtdProtestos ?? pp?.sumQuantidade ?? pp?.quantidade ?? 0,
-    quantidade: pp?.qtdProtestos ?? 0,
-    lista: Array.isArray(pp?.list ?? pp?.lista) ? (pp?.list ?? pp?.lista) : [],
-    primeiraOcorrencia: pp?.primeiraOcorrencia ?? null,
-    ultimaOcorrencia: pp?.ultimaOcorrencia ?? null,
-  }
-
-  // Extrair processos do /score/v3/pj/acoes
-  const ac = rawAcoes?.resposta?.acoes ?? {}
-  const qtdProc = ac?.qtdAcoes ?? ac?.quantidade ?? ac?.total ?? (Array.isArray(ac) ? ac.length : 0)
-  const processos = { total: qtdProc, quantidade: qtdProc, lista: ac?.acoes ?? ac?.lista ?? [] }
-
   // Fallback BrasilAPI quando Assertiva não retornou dados básicos
   let basicoFinal = basico
   let qsaFinal = qsa
@@ -200,7 +172,7 @@ export async function GET(
     if (fb) { qsaFinal = fb; avisos.push('Quadro societário via BrasilAPI') }
   }
 
-  const resultado = { cnpj, basico: basicoFinal, qsa: qsaFinal, score, processos, protestos, relacionadas, erros, avisos }
+  const resultado = { cnpj, basico: basicoFinal, qsa: qsaFinal, relacionadas, erros, avisos }
   const saved = await salvarConsulta({ email, tipo: 'cnpj', documento: cnpj, descricao: basicoFinal?.razaoSocial ?? cnpj, resultado }).catch(() => null)
 
   return NextResponse.json({ ...resultado, token: saved?.token ?? null })

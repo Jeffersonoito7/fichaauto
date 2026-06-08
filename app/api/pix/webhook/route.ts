@@ -34,24 +34,32 @@ export async function POST(req: NextRequest) {
         .update({ status: 'pago', pago_em: new Date().toISOString() })
         .eq('txid', txid)
 
-      // Adicionar saldo em R$ ao usuário
       const { data: perfil } = await supabase
         .from('perfis')
-        .select('saldo')
+        .select('saldo, creditos_credito')
         .eq('user_id', transacao.user_id)
         .single()
 
-      const saldoAtual    = parseFloat(perfil?.saldo ?? '0')
-      const saldoCreditado = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
-      await supabase
-        .from('perfis')
-        .upsert({
+      if (transacao.creditos_creditados) {
+        // Produto 3: credita contagem de consultas de crédito
+        const creditosAtual = Number(perfil?.creditos_credito ?? 0)
+        await supabase.from('perfis').upsert({
+          user_id:           transacao.user_id,
+          creditos_credito:  creditosAtual + Number(transacao.creditos_creditados),
+          atualizado_em:     new Date().toISOString(),
+        }, { onConflict: 'user_id' })
+        console.log(`[PIX webhook] txid=${txid} user=${transacao.user_id} +${transacao.creditos_creditados} créditos`)
+      } else {
+        // Produtos 1 e 2: credita saldo em R$
+        const saldoAtual     = parseFloat(perfil?.saldo ?? '0')
+        const saldoCreditado = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
+        await supabase.from('perfis').upsert({
           user_id:      transacao.user_id,
           saldo:        parseFloat((saldoAtual + saldoCreditado).toFixed(2)),
           atualizado_em: new Date().toISOString(),
         }, { onConflict: 'user_id' })
-
-      console.log(`[PIX webhook] txid=${txid} user=${transacao.user_id} +R$${saldoCreditado}`)
+        console.log(`[PIX webhook] txid=${txid} user=${transacao.user_id} +R$${saldoCreditado}`)
+      }
     }
 
     return NextResponse.json({ ok: true })

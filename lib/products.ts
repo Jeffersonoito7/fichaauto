@@ -1,7 +1,8 @@
 // ─── Catálogo de produtos e planos do Ficha Auto ─────────────────────────────
 // Fonte dos dados: Assertiva (já contratado), FutureData (a contratar), DataJud (gratuito)
 
-// ─── Precificação por tipo de consulta ────────────────────────────────────────
+// ─── PRODUTO 1: Consulta Veicular ────────────────────────────────────────────
+// ─── PRODUTO 2: Consulta CPF ─────────────────────────────────────────────────
 export const PRECO = {
   placa: 36.90,
   cpf:   29.90,
@@ -10,17 +11,30 @@ export const PRECO = {
 
 export type TipoConsulta = keyof typeof PRECO
 
-// Pack: compra 10 consultas do mesmo tipo com 10% de desconto
+// Pack de 10 com 10% de desconto (Produtos 1 e 2)
 export const PACK_QUANTIDADE = 10
-export const PACK_DESCONTO   = 0.10   // 10%
+export const PACK_DESCONTO   = 0.10
 
 export function calcularPack(tipo: TipoConsulta) {
-  const unitario   = PRECO[tipo]
-  const total      = unitario * PACK_QUANTIDADE
-  const desconto   = total * PACK_DESCONTO
+  const unitario    = PRECO[tipo]
+  const total       = unitario * PACK_QUANTIDADE
+  const desconto    = total * PACK_DESCONTO
   const comDesconto = parseFloat((total - desconto).toFixed(2))
   return { unitario, total, desconto, comDesconto, quantidade: PACK_QUANTIDADE }
 }
+
+// ─── PRODUTO 3: Análise de Crédito (Score SPC/Serasa/Bancário) ────────────────
+// Pack pré-pago: R$ 300 = 10 consultas (R$ 30/cada)
+// Avulso CPF: R$ 34,90 | Avulso CNPJ: R$ 38,65
+export const CREDITO = {
+  packValor:    300.00,
+  packQtd:      10,
+  avulsoCpf:    34.90,
+  avulsoCnpj:   38.65,
+  custoPorUso:  30.00,   // debitado do saldo a cada consulta
+} as const
+
+export type TipoCreditoCompra = 'credito_pack' | 'credito_cpf' | 'credito_cnpj'
 
 export type FonteDado = 'assertiva' | 'futuredata' | 'datajud' | 'brasilapi'
 

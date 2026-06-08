@@ -15,28 +15,32 @@ export async function GET(_req: NextRequest) {
     const { email, nome, role } = payload
 
     // Tenta buscar saldo e plano via service role
-    let saldo = 0
+    let saldo            = 0
+    let creditos_credito = 0
     let plano: string | null = null
-    let pode_placa = true
-    let pode_cpf   = true
-    let pode_cnpj  = true
-    let pode_lote  = false
+    let pode_placa   = true
+    let pode_cpf     = true
+    let pode_cnpj    = true
+    let pode_lote    = false
+    let pode_credito = false
     try {
       const service = createServiceRoleClient()
       const { data } = await (service as any)
         .from('perfis')
-        .select('saldo, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote')
+        .select('saldo, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito')
         .eq('email', email)
         .maybeSingle()
-      saldo      = parseFloat(data?.saldo ?? '0')
-      plano      = data?.plano          ?? null
-      pode_placa = data?.pode_placa     ?? true
-      pode_cpf   = data?.pode_cpf       ?? true
-      pode_cnpj  = data?.pode_cnpj      ?? true
-      pode_lote  = data?.pode_lote      ?? false
+      saldo            = parseFloat(data?.saldo ?? '0')
+      creditos_credito = Number(data?.creditos_credito ?? 0)
+      plano            = data?.plano          ?? null
+      pode_placa       = data?.pode_placa     ?? true
+      pode_cpf         = data?.pode_cpf       ?? true
+      pode_cnpj        = data?.pode_cnpj      ?? true
+      pode_lote        = data?.pode_lote      ?? false
+      pode_credito     = data?.pode_credito   ?? false
     } catch {}
 
-    return NextResponse.json({ nome, email, role, saldo, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote })
+    return NextResponse.json({ nome, email, role, saldo, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito })
   } catch {
     return NextResponse.json({ erro: 'Token inválido' }, { status: 401 })
   }
