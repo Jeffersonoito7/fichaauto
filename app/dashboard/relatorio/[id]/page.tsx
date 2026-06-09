@@ -19,7 +19,7 @@ interface ReportData {
   placa: any; binFederal: any; sinistro: any
   gravame: any; leilao: any; chassi: any
   binEstadual: any; fipe: any; precificador: any
-  csv: any; datajud: ResultadoDatajud | null; erros: string[]
+  datajud: ResultadoDatajud | null; erros: string[]
 }
 
 type TipoCard = 'normal' | 'alerta' | 'atencao'
@@ -834,56 +834,6 @@ export default function RelatorioPage() {
         })}
       </SecaoAcordion>
 
-      {/* ── CERTIFICADO DE SEGURANÇA VEICULAR (CSV / SISCSV) ─────────────── */}
-      {(() => {
-        const csvData = data.csv
-        if (!csvData) return null
-
-        // Normaliza: resposta pode ser array de laudos ou objeto com laudos
-        const csvResp = csvData?.resposta ?? csvData ?? {}
-        const laudos: any[] = Array.isArray(csvResp)
-          ? csvResp
-          : Array.isArray(csvResp?.laudos ?? csvResp?.csvs ?? csvResp?.certificados)
-            ? (csvResp.laudos ?? csvResp.csvs ?? csvResp.certificados)
-            : (typeof csvResp === 'object' && csvResp?.numero ? [csvResp] : [])
-
-        if (laudos.length === 0 &&
-          (typeof csvResp === 'string' && csvResp.toLowerCase().includes('não localizada'))) return null
-        if (laudos.length === 0 && !csvResp?.numero) return null
-
-        return (
-          <SecaoAcordion
-            titulo="CERTIFICADO DE SEGURANÇA VEICULAR (CSV)"
-            normal={laudos.filter(l => {
-              const r = (l.resultado ?? l.situacao ?? l.status ?? '').toString().toUpperCase()
-              return r.includes('APROVADO') || r.includes('APROVAD')
-            }).length}
-            alerta={laudos.filter(l => {
-              const r = (l.resultado ?? l.situacao ?? l.status ?? '').toString().toUpperCase()
-              return r.includes('REPROVADO') || r.includes('REPROVAD')
-            }).length}
-            atencao={0}
-            defaultAberto
-          >
-            {laudos.map((l: any, i: number) => {
-              const num    = val(l.numero ?? l.csvNumero ?? l.numeroCsv ?? l.id, `CSV ${i + 1}`)
-              const data_  = val(l.dataInspecao ?? l.data ?? l.dataEmissao, '')
-              const tipo   = val(l.tipo ?? l.tipoCSV ?? l.tipoCsv, '')
-              const res    = val(l.resultado ?? l.situacao ?? l.status, 'NÃO INFORMADO').toUpperCase()
-              const reprov = res.includes('REPROVADO')
-              const aprov  = res.includes('APROVADO')
-              return (
-                <CardStatus
-                  key={i}
-                  titulo={`CSV Nº ${num}${data_ ? ` — ${data_}` : ''}`}
-                  valor={`${tipo ? tipo.toUpperCase() + ' — ' : ''}${res}`}
-                  tipo={reprov ? 'alerta' : aprov ? 'normal' : 'atencao'}
-                />
-              )
-            })}
-          </SecaoAcordion>
-        )
-      })()}
 
     </div>
   )
