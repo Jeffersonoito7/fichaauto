@@ -281,21 +281,33 @@ export default function RelatorioPage() {
     COR:         val(altRaw?.cor         ?? altRaw?.corVeiculo,      'Sem Alteração'),
   }
 
-  // Sinistro — campo indicioSinistro é boolean
+  // Sinistro — trata três estados: sem sinistro | sinistro ativo | sinistro recuperado
   const sinistroNull = !data.sinistro
-  const sinistroJ    = JSON.stringify(data.sinistro ?? {}).toUpperCase()
-  const temSinistro  = data.sinistro?.resposta?.indicioSinistro === true
-    || (!sinistroNull && sinistroJ.includes('CONSTA') && !sinistroJ.includes('NADA CONSTA') && !sinistroJ.includes('NAO EXISTEM') && !sinistroJ.includes('NÃO EXISTEM'))
   const sinistroResp = data.sinistro?.resposta ?? data.sinistro ?? {}
-  const sinistroDesc = val(
-    data.sinistro?.cabecalho?.resultado ?? sinistroResp?.situacao ?? sinistroResp?.resultado,
-    sinistroNull ? 'NÃO CONSULTADO' : temSinistro ? 'CONSTA INDÍCIO' : 'Não Existem Indícios de Sinistro'
-  ).toUpperCase()
+  const sinistroRaw  = (
+    data.sinistro?.cabecalho?.resultado ??
+    sinistroResp?.situacao ??
+    sinistroResp?.resultado ??
+    sinistroResp?.indicioSinistro ??
+    ''
+  ).toString().toUpperCase()
+  const sinistroRecuperado = sinistroRaw.includes('RECUPER')
+  const temSinistro = !sinistroRecuperado && (
+    data.sinistro?.resposta?.indicioSinistro === true
+    || (sinistroRaw.includes('CONSTA') && !sinistroRaw.includes('NADA CONSTA') && !sinistroRaw.includes('NAO EXISTEM') && !sinistroRaw.includes('NÃO EXISTEM') && !sinistroRaw.includes('SEM INDICIO') && !sinistroRaw.includes('FALSE'))
+  )
+  const sinistroDesc = sinistroNull
+    ? 'NÃO CONSULTADO'
+    : sinistroRecuperado
+      ? 'SINISTRO RECUPERADO — veículo com histórico de sinistro reparado'
+      : temSinistro
+        ? 'CONSTA INDÍCIO DE SINISTRO'
+        : 'Não Existem Indícios de Sinistro'
 
-  // Leilão — API v3 retorna resposta.historicoLeilao[]
+  // Leilão — filtra itens "NADA CONSTA" que a API retorna como registros vazios
   const leilaoNull = !data.leilao
   const leilResp   = data.leilao?.resposta ?? data.leilao ?? {}
-  const todosLeilao: any[] = Array.isArray(leilResp?.historicoLeilao)
+  const todosLeilaoRaw: any[] = Array.isArray(leilResp?.historicoLeilao)
     ? leilResp.historicoLeilao
     : [
         ...(Array.isArray(leilResp?.baseA)        ? leilResp.baseA        : []),
@@ -303,6 +315,14 @@ export default function RelatorioPage() {
         ...(Array.isArray(leilResp?.remarketing)  ? leilResp.remarketing  : []),
         ...(Array.isArray(leilResp?.lotes)        ? leilResp.lotes        : []),
       ]
+  // Filtra registros reais: precisam ter pelo menos um campo identificador preenchido
+  // e não podem ser respostas "NADA CONSTA" / "SEM REGISTRO"
+  const todosLeilao = todosLeilaoRaw.filter((l: any) => {
+    const situacao = (l.resultado ?? l.situacao ?? l.status ?? '').toString().toUpperCase()
+    if (situacao.includes('NADA CONSTA') || situacao.includes('SEM REGISTRO') || situacao.includes('NAO CONSTA')) return false
+    const temDado = !!(l.data ?? l.dataLeilao ?? l.dataCadastro ?? l.comitente ?? l.leiloeiro ?? l.leilaoeiro ?? l.orgao ?? l.comarca ?? l.descricao)
+    return temDado
+  })
   const temLeilao = todosLeilao.length > 0
 
   // Gravame — API v3 retorna resposta.gravame como objeto único (não array)
@@ -395,7 +415,7 @@ export default function RelatorioPage() {
     situacaoVTipo, situacaoCTipo,
     temLeilao ? 'alerta' : 'normal',
     binFedNull ? 'atencao' : temRoubo ? 'alerta' : 'normal',
-    sinistroNull ? 'atencao' : temSinistro ? 'alerta' : 'normal',
+    sinistroNull ? 'atencao' : temSinistro ? 'alerta' : sinistroRecuperado ? 'atencao' : 'normal',
     altTipos.some(t => t !== 'normal') ? 'alerta' : 'normal',
     temRenajud ? 'alerta' : 'normal',
     comunicVenda.includes('NADA') || comunicVenda.includes('NÃO CONSULTADO') ? 'normal' : 'atencao',
@@ -528,8 +548,8 @@ export default function RelatorioPage() {
           valor={binFedNull ? 'Não consultado' : temRoubo ? 'CONSTA OCORRÊNCIA' : 'Não Existem Registros de histórico de Roubo/Furto'}
           tipo={binFedNull ? 'atencao' : temRoubo ? 'alerta' : 'normal'} />
         <CardStatus titulo="Indício de Sinistro"
-          valor={sinistroNull ? 'Não consultado' : temSinistro ? 'CONSTA INDÍCIO' : 'Não localizamos registros que mostre algum Indício de Sinistro'}
-          tipo={sinistroNull ? 'atencao' : temSinistro ? 'alerta' : 'normal'} />
+          valor={sinistroNull ? 'Não consultado' : temSinistro ? 'CONSTA INDÍCIO' : sinistroRecuperado ? 'Sinistro Recuperado' : 'Não localizamos registros que mostre algum Indício de Sinistro'}
+          tipo={sinistroNull ? 'atencao' : temSinistro ? 'alerta' : sinistroRecuperado ? 'atencao' : 'normal'} />
         <CardStatus titulo="Alterações de Características"
           valor={altTipos.every(t => t === 'normal') ? 'Não Existem alterações de Características' : 'CONSTA ALTERAÇÃO'}
           tipo={altTipos.some(t => t !== 'normal') ? 'alerta' : 'normal'} />
@@ -658,12 +678,12 @@ export default function RelatorioPage() {
 
       {/* ── INDÍCIO DE SINISTRO ────────────────────────────────────────────── */}
       <SecaoAcordion titulo="INDÍCIO DE SINISTRO"
-        normal={!sinistroNull && !temSinistro ? 1 : 0}
+        normal={!sinistroNull && !temSinistro && !sinistroRecuperado ? 1 : 0}
         alerta={temSinistro ? 1 : 0}
-        atencao={sinistroNull ? 1 : 0}>
+        atencao={sinistroNull || sinistroRecuperado ? 1 : 0}>
         <CardStatus titulo="INDÍCIO DE SINISTRO"
           valor={sinistroNull ? 'NÃO CONSULTADO' : sinistroDesc}
-          tipo={sinistroNull ? 'atencao' : temSinistro ? 'alerta' : 'normal'} />
+          tipo={sinistroNull ? 'atencao' : temSinistro ? 'alerta' : sinistroRecuperado ? 'atencao' : 'normal'} />
       </SecaoAcordion>
 
       {/* ── INFORMAÇÕES ADICIONAIS ─────────────────────────────────────────── */}
