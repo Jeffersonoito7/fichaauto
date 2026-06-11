@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import RegisterSW from '@/components/RegisterSW'
+import InstallPWA from '@/components/InstallPWA'
 
 export const metadata: Metadata = {
   title: 'Ficha Auto — Consulta Veicular Completa',
@@ -28,12 +29,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Ficha Auto" />
-        <link rel="apple-touch-icon" href="/logo-icone.jpg" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
         {/* Ícone */}
-        <link rel="icon" href="/logo-icone.jpg" type="image/jpeg" />
+        <link rel="icon" href="/icon-192.png" type="image/png" />
       </head>
       <body>
         <RegisterSW />
+        <InstallPWA />
         {children}
       </body>
     </html>
