@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import QRCode from 'qrcode'
+import { getAuthEmail } from '@/lib/consulta-helper'
+import { createServiceRoleClient } from '@/lib/supabase-server'
 import { consultarVeiculo } from '@/lib/providers'
 
 const TENANT = {
@@ -195,7 +197,7 @@ function pag1(placa: string, data: any, agora: string, proto: string, qr: string
   const stDetran:    Status = temRenajud   ? 'error' : 'ok'
   const stRestricoes:Status = temRenajud   ? 'error' : temAlienacao ? 'warn' : 'ok'
   const stAlienacao: Status = !temAlienacao ? 'ok'   : temAlienacaoFiduc ? 'warn' : 'error'
-  const stSinistro:  Status = temSinistro  ? 'error' : 'ok'
+  const stSinistro:  Status = temSinistro ? 'error' : sinistro.recuperado ? 'warn' : 'ok'
   const stRoubo:     Status = temRoubo     ? 'error' : 'ok'
   const stLeilao:    Status = temLeilao    ? 'error' : 'ok'
   const stAlteracoes:Status = temAlteracoes ? 'warn' : 'ok'
@@ -428,12 +430,12 @@ function pag3(placa: string, data: any, agora: string, proto: string, qr: string
   const leil    = normalizaLeilaoV3(data.leilao)
   const sinistro = normalizaSinistroV3(data.sinistro)
 
-  // API v3: historicoLeilao[] tem {data, numero, comitente, leiloeiro, uf}
-  const leilHdr = ['Data', 'Nº', 'Comitente / Órgão', 'Leiloeiro', 'UF']
+  // API v3: historicoLeilao[] tem {data, numero, comitente, leiloeiro, uf, _base}
+  const leilHdr = ['Base', 'Data', 'Comitente / Órgão', 'Leiloeiro', 'UF']
   function leilLinhas(arr: any[]): string[][] {
     return arr.map((r: any) => [
+      v(r._base ?? r.tipo ?? r.base, '---'),
       v(r.data ?? r.dataLeilao ?? r.dataCadastro, '---'),
-      v(r.numero ?? r.lote ?? r.numeroLote, '---'),
       v(r.comitente ?? r.orgao ?? r.comarca ?? r.vara ?? r.descricao, '---'),
       v(r.leiloeiro ?? r.leilaoeiro, '---'),
       v(r.uf, '---'),
@@ -452,7 +454,7 @@ function pag3(placa: string, data: any, agora: string, proto: string, qr: string
   ${banner(mm, placa)}
 
   ${secTitle('Indício de Sinistro')}
-  <p style="font-size:10px;font-weight:700;color:${sinistroNaoConsultado ? '#888' : sinistro.temSinistro ? '#dc2626' : '#16a34a'};margin-bottom:4px">
+  <p style="font-size:10px;font-weight:700;color:${sinistroNaoConsultado ? '#888' : sinistro.temSinistro ? '#dc2626' : sinistro.recuperado ? '#d97706' : '#16a34a'};margin-bottom:4px">
     ${sinistroNaoConsultado ? 'NÃO CONSULTADO NESTA PESQUISA' : sinistro.descricao}
   </p>
   <p style="font-size:8.5px;color:#555;margin-bottom:8px;line-height:1.5">
@@ -798,17 +800,21 @@ function normalizaGravameV3(raw: any): any[] {
 function normalizaLeilaoV3(raw: any): { todos: any[] } {
   if (!raw) return { todos: [] }
   const resp = raw.resposta ?? raw
-  // API v3 retorna resp.historicoLeilao[]
-  if (Array.isArray(resp?.historicoLeilao) && resp.historicoLeilao.length > 0) {
-    return { todos: resp.historicoLeilao }
-  }
-  const todos = [
-    ...(Array.isArray(resp?.baseA)       ? resp.baseA       : []),
-    ...(Array.isArray(resp?.baseB)       ? resp.baseB       : []),
-    ...(Array.isArray(resp?.remarketing) ? resp.remarketing : []),
-    ...(Array.isArray(resp?.lotes)       ? resp.lotes       : []),
-    ...(Array.isArray(resp?.leiloes)     ? resp.leiloes     : []),
-  ]
+  const brutos: any[] = Array.isArray(resp?.historicoLeilao) && resp.historicoLeilao.length > 0
+    ? resp.historicoLeilao
+    : [
+        ...(Array.isArray(resp?.baseA)       ? resp.baseA.map((l: any) => ({ ...l, _base: 'BASE A — JUDICIAL' }))      : []),
+        ...(Array.isArray(resp?.baseB)       ? resp.baseB.map((l: any) => ({ ...l, _base: 'BASE B — FINANCEIRO' }))    : []),
+        ...(Array.isArray(resp?.remarketing) ? resp.remarketing.map((l: any) => ({ ...l, _base: 'REMARKETING' }))      : []),
+        ...(Array.isArray(resp?.lotes)       ? resp.lotes.map((l: any) => ({ ...l, _base: 'JUDICIAL — LOTES' }))      : []),
+        ...(Array.isArray(resp?.leiloes)     ? resp.leiloes     : []),
+      ]
+  // Filtra registros "NADA CONSTA" (mesma lógica do relatório web)
+  const todos = brutos.filter((l: any) => {
+    const sit = (l.resultado ?? l.situacao ?? l.status ?? '').toString().toUpperCase()
+    if (sit.includes('NADA CONSTA') || sit.includes('SEM REGISTRO') || sit.includes('NAO CONSTA')) return false
+    return !!(l.data ?? l.dataLeilao ?? l.dataCadastro ?? l.comitente ?? l.leiloeiro ?? l.leilaoeiro ?? l.orgao ?? l.comarca ?? l.descricao)
+  })
   return { todos }
 }
 
@@ -837,17 +843,23 @@ function normalizaBinFederalV3(raw: any): { renajud: any[]; rouboFurto: any[]; r
   }
 }
 
-function normalizaSinistroV3(raw: any): { temSinistro: boolean; descricao: string } {
-  if (!raw) return { temSinistro: false, descricao: 'NAO_CONSULTADO' }
-  // API v3: resp.indicioSinistro é boolean
-  const temSinistro = raw.resposta?.indicioSinistro === true
-    || (JSON.stringify(raw).toUpperCase().includes('CONSTA') && !JSON.stringify(raw).toUpperCase().includes('NADA CONSTA'))
+function normalizaSinistroV3(raw: any): { temSinistro: boolean; recuperado: boolean; descricao: string } {
+  if (!raw) return { temSinistro: false, recuperado: false, descricao: 'NAO_CONSULTADO' }
   const resp = raw.resposta ?? raw
-  const desc = raw?.cabecalho?.resultado ?? resp?.situacao ?? resp?.resultado
-  return {
-    temSinistro,
-    descricao: String(desc ?? (temSinistro ? 'CONSTA INDÍCIO DE SINISTRO' : 'NÃO EXISTEM INDÍCIOS DE SINISTRO')).toUpperCase(),
-  }
+  const sinistroRaw = (
+    raw?.cabecalho?.resultado ?? resp?.situacao ?? resp?.resultado ?? resp?.indicioSinistro ?? ''
+  ).toString().toUpperCase()
+  const recuperado   = sinistroRaw.includes('RECUPER')
+  const temSinistro  = !recuperado && (
+    resp?.indicioSinistro === true ||
+    (sinistroRaw.includes('CONSTA') && !sinistroRaw.includes('NADA CONSTA') && !sinistroRaw.includes('NAO EXISTEM') && !sinistroRaw.includes('NÃO EXISTEM') && !sinistroRaw.includes('SEM INDICIO') && !sinistroRaw.includes('FALSE'))
+  )
+  const descricao = recuperado
+    ? 'SINISTRO RECUPERADO — VEÍCULO COM HISTÓRICO DE SINISTRO REPARADO'
+    : temSinistro
+      ? 'CONSTA INDÍCIO DE SINISTRO'
+      : 'NÃO EXISTEM INDÍCIOS DE SINISTRO'
+  return { temSinistro, recuperado, descricao }
 }
 
 // Lê débitos do binEstadual.debitosPendentes (fonte correta na v3)
@@ -925,7 +937,30 @@ export async function GET(
   }
 
   try {
-    const data = await consultarVeiculo(placa)
+    // Tenta ler do banco (consulta já paga) — evita nova chamada à Assertiva
+    let data: any = null
+    try {
+      const email = await getAuthEmail()
+      if (email) {
+        const svc = createServiceRoleClient() as any
+        const { data: row } = await svc
+          .from('consultas')
+          .select('resultado')
+          .eq('email', email)
+          .eq('tipo', 'veiculo')
+          .eq('documento', placa)
+          .order('criado_em', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (row?.resultado) {
+          data = typeof row.resultado === 'string' ? JSON.parse(row.resultado) : row.resultado
+        }
+      }
+    } catch { /* segue para fallback */ }
+
+    // Fallback: refaz consulta apenas se não houver dado salvo
+    if (!data) data = await consultarVeiculo(placa)
+
     const html = await buildHtml(placa, data)
 
     let pdfBuffer: Buffer | null = null
