@@ -96,6 +96,14 @@ export async function GET(
   const endsArr: any[]   = Array.isArray(resp.enderecos) ? resp.enderecos : []
   const end0 = endsArr[0] ?? {}
 
+  // Detecta falecido: Assertiva pode retornar campo booleano ou na situação
+  const falecidoBool = cad.falecido === true || cad.obito === true || cad.indicioObito === true
+  const falecidoSit  = typeof sitCpf === 'string' && (
+    sitCpf.toUpperCase().includes('FALEC') ||
+    sitCpf.toUpperCase().includes('OBITO') ||
+    sitCpf.toUpperCase().includes('ÓBITO')
+  )
+
   const basico = rawLocalize ? {
     nome:           cad.nome,
     nomeCompleto:   cad.nome,
@@ -106,6 +114,11 @@ export async function GET(
     sexo:           cad.sexo,
     nomeMae:        cad.maeNome ?? cad.nomeMae,
     nomePai:        cad.nomePai,
+    // Campos de óbito — adicionados pela Assertiva
+    falecido:       falecidoBool || falecidoSit,
+    obito:          cad.obito     ?? null,
+    indicioObito:   cad.indicioObito ?? null,
+    dataObito:      cad.dataObito ?? cad.dataFalecimento ?? null,
     telefone:       todosTels[0]?.numero,
     telefones:      todosTels,
     email:          emailsArr[0]?.email ?? emailsArr[0]?.enderecoEmail,
