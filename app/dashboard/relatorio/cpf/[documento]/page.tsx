@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   FileText, ArrowLeft, Loader2, User, AlertCircle,
-  CheckCircle, AlertTriangle, Phone,
-  MapPin, Briefcase, Users
+  CheckCircle, AlertTriangle, Phone, Mail,
+  MapPin, Briefcase, Users, Skull
 } from 'lucide-react'
 
 function maskCpf(c: string) {
@@ -129,6 +129,16 @@ export default function RelatorioCpfPage() {
   const sit    = v(b.situacaoCpf ?? b.situacao, 'REGULAR').toUpperCase()
   const cpfOk  = sit.includes('REGULAR') || sit.includes('ATIVO')
 
+  // Falecido — campo adicionado pela Assertiva
+  const isFalecido = !!(
+    b.falecido === true ||
+    b.obito === true ||
+    b.indicioObito === true ||
+    sit.includes('FALEC') ||
+    sit.includes('ÓBITO') ||
+    sit.includes('OBITO')
+  )
+
   // ── Empresas societárias ────────────────────────────────────────────────────
   const empresas: any[] = Array.isArray(soc.empresas ?? soc.lista) ? (soc.empresas ?? soc.lista) : []
 
@@ -166,7 +176,8 @@ export default function RelatorioCpfPage() {
 
   type S = 'ok' | 'warn' | 'error'
   const statusGrid: { label: string; status: S; detalhe: string }[] = [
-    { label: 'Situação CPF',        status: cpfOk ? 'ok' : 'error', detalhe: sit },
+    ...(isFalecido ? [{ label: 'TITULAR FALECIDO', status: 'error' as S, detalhe: 'Óbito registrado na base Assertiva' }] : []),
+    { label: 'Situação CPF',        status: isFalecido ? 'error' : cpfOk ? 'ok' : 'error', detalhe: sit },
     { label: 'Processos Judiciais', status: djTotal > 0 ? 'error' : 'ok', detalhe: djTotal > 0 ? `${djTotal} processo(s) — DataJud CNJ` : 'Nada consta' },
     { label: 'PEP',                 status: isPep ? 'error' : 'ok', detalhe: isPep ? 'Pessoa Politicamente Exposta' : 'Não identificado' },
     { label: 'Participação Soc.',   status: empresas.length > 0 ? 'warn' : 'ok', detalhe: empresas.length > 0 ? `${empresas.length} empresa(s)` : 'Nenhuma' },
@@ -209,6 +220,17 @@ export default function RelatorioCpfPage() {
         </div>
       </div>
 
+      {/* Alerta de falecido — banner crítico */}
+      {isFalecido && (
+        <div className="mb-4 p-4 bg-red-700 text-white rounded-xl flex items-center gap-3">
+          <Skull className="w-6 h-6 shrink-0" />
+          <div>
+            <p className="font-bold text-sm">TITULAR FALECIDO</p>
+            <p className="text-xs text-red-200 mt-0.5">A Assertiva registra óbito para este CPF. Qualquer transação em nome deste titular deve ser tratada com extrema cautela.</p>
+          </div>
+        </div>
+      )}
+
       {/* Status grid */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
         {statusGrid.map(s => <StatusBadge key={s.label} {...s} />)}
@@ -225,7 +247,8 @@ export default function RelatorioCpfPage() {
           <Campo label="Data nascimento"  value={v(b.dataNascimento)} />
           <Campo label="Idade"            value={v(b.idade)} />
           <Campo label="Sexo"             value={v(b.sexo)} />
-          <Campo label="Situação CPF"     value={sit} />
+          <Campo label="Situação CPF"     value={isFalecido ? `TITULAR FALECIDO — ${sit}` : sit} />
+          {b.dataObito && <Campo label="Data do óbito" value={v(b.dataObito)} />}
           <Campo label="Nome da mãe"      value={v(b.nomeMae ?? b.mae)} />
           {b.nomePai && <Campo label="Nome do pai" value={v(b.nomePai)} />}
         </div>

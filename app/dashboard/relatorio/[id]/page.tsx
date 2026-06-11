@@ -304,16 +304,16 @@ export default function RelatorioPage() {
         ? 'CONSTA INDÍCIO DE SINISTRO'
         : 'Não Existem Indícios de Sinistro'
 
-  // Leilão — filtra itens "NADA CONSTA" que a API retorna como registros vazios
+  // Leilão — preserva origem (base) de cada item antes de flatten
   const leilaoNull = !data.leilao
   const leilResp   = data.leilao?.resposta ?? data.leilao ?? {}
   const todosLeilaoRaw: any[] = Array.isArray(leilResp?.historicoLeilao)
-    ? leilResp.historicoLeilao
+    ? leilResp.historicoLeilao.map((l: any) => ({ ...l, _base: l._base ?? 'HISTÓRICO' }))
     : [
-        ...(Array.isArray(leilResp?.baseA)        ? leilResp.baseA        : []),
-        ...(Array.isArray(leilResp?.baseB)        ? leilResp.baseB        : []),
-        ...(Array.isArray(leilResp?.remarketing)  ? leilResp.remarketing  : []),
-        ...(Array.isArray(leilResp?.lotes)        ? leilResp.lotes        : []),
+        ...(Array.isArray(leilResp?.baseA)       ? leilResp.baseA.map((l: any)       => ({ ...l, _base: 'BASE A — JUDICIAL' }))      : []),
+        ...(Array.isArray(leilResp?.baseB)       ? leilResp.baseB.map((l: any)       => ({ ...l, _base: 'BASE B — FINANCEIRO' }))    : []),
+        ...(Array.isArray(leilResp?.remarketing) ? leilResp.remarketing.map((l: any) => ({ ...l, _base: 'REMARKETING' }))            : []),
+        ...(Array.isArray(leilResp?.lotes)       ? leilResp.lotes.map((l: any)       => ({ ...l, _base: 'JUDICIAL — LOTES' }))      : []),
       ]
   // Filtra registros reais: precisam ter pelo menos um campo identificador preenchido
   // e não podem ser respostas "NADA CONSTA" / "SEM REGISTRO"
@@ -591,8 +591,9 @@ export default function RelatorioPage() {
         ) : todosLeilao.map((l: any, i: number) => {
           const dataL  = val(l.data ?? l.dataLeilao ?? l.dataCadastro, '')
           const desc   = val(l.comitente ?? l.descricao ?? l.orgao ?? l.comarca ?? l.vara ?? l.leiloeiro ?? l.leilaoeiro ?? l.evento, '')
-          const linha  = [dataL, desc].filter(Boolean).join(' ')
-          return <CardStatus key={i} titulo={`LEILÃO ${i + 1}`} valor={linha || '---'} tipo="alerta" />
+          const linha  = [dataL, desc].filter(Boolean).join(' — ')
+          const base   = l._base ? ` (${l._base})` : ''
+          return <CardStatus key={i} titulo={`LEILÃO ${i + 1}${base}`} valor={linha || '---'} tipo="alerta" />
         })}
       </SecaoAcordion>
 
