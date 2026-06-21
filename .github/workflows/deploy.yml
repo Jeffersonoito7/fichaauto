@@ -1,0 +1,26 @@
+name: Deploy Ficha Auto
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOSTGATOR_HOST }}
+          username: ${{ secrets.HOSTGATOR_USER }}
+          key: ${{ secrets.HOSTGATOR_SSH_KEY }}
+          script: |
+            set -e
+            cd /var/www/ficha-auto
+            git pull origin main
+            export NVM_DIR="$HOME/.nvm"
+            source "$NVM_DIR/nvm.sh"
+            npm ci --production=false
+            npm run build
+            pm2 restart ficha-auto
+            echo "Deploy concluído: $(date)"
