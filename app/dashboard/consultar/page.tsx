@@ -134,99 +134,115 @@ function CardPreviewFipe({
   const marcaAbv = (dados.marca ?? '?').toUpperCase().slice(0, 2)
   const fipe     = moedaBR(dados.valorFipe)
   const mercado  = moedaBR(dados.valorMercado)
+  const nomeVeic = dados.marca && dados.modelo
+    ? `${dados.marca} ${dados.modelo}`
+    : dados.marca ?? dados.modelo ?? 'Veículo'
+  const anoStr = dados.anoFab
+    ? `${dados.anoFab}${dados.anoMod && dados.anoMod !== dados.anoFab ? `/${dados.anoMod}` : ''}`
+    : ''
+
+  const BLOQUEADOS = [
+    'Restrições DETRAN / DENATRAN',
+    'Roubo e Furto (BIN Federal)',
+    'Gravame / Alienação Fiduciária',
+    'Histórico de Leilão (3 bases)',
+    'Indício de Sinistro',
+    'RENAJUD (Restrição Judicial)',
+    'Score de Risco 0–100',
+    'Processos Judiciais (DataJud)',
+  ]
 
   return (
-    <div className="animate-fade-in">
-      {/* Card principal */}
-      <div className="card p-6 mb-4">
-        {/* Header com logo e placa */}
-        <div className="flex items-center gap-4 mb-5">
-          <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
-            style={{ backgroundColor: `${cor}15`, border: `2px solid ${cor}30` }}
-          >
+    <div className="animate-fade-in max-w-2xl mx-auto">
+
+      {/* Banner do veículo */}
+      <div className="rounded-2xl overflow-hidden mb-4"
+           style={{ background: `linear-gradient(135deg, ${cor}dd 0%, ${cor}99 100%)` }}>
+        <div className="p-5 flex items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center shrink-0 overflow-hidden border border-white/30">
             {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt={dados.marca ?? ''}
-                className="w-10 h-10 object-contain"
-                onError={() => setLogoError(true)}
-              />
+              <img src={logoUrl} alt={dados.marca ?? ''} className="w-11 h-11 object-contain"
+                   onError={() => setLogoError(true)} />
             ) : (
-              <span className="text-xl font-black" style={{ color: cor }}>{marcaAbv}</span>
+              <span className="text-2xl font-black text-white">{marcaAbv}</span>
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-black text-brand-dark text-lg leading-tight truncate">
-              {dados.marca && dados.modelo
-                ? `${dados.marca} ${dados.modelo}`
-                : dados.marca ?? dados.modelo ?? 'Veículo encontrado'}
+            <p className="text-white/60 text-[10px] uppercase tracking-widest">
+              {anoStr || 'Veículo encontrado'}
+              {dados.cor ? ` · ${dados.cor}` : ''}
+              {dados.combustivel ? ` · ${dados.combustivel}` : ''}
             </p>
-            {(dados.anoFab || dados.anoMod) && (
-              <p className="text-sm text-brand-gray font-medium">
-                {dados.anoFab ?? ''}{dados.anoMod && dados.anoMod !== dados.anoFab ? `/${dados.anoMod}` : ''}
-              </p>
-            )}
-            <div className="flex items-center gap-2 mt-1">
-              <span className="font-mono text-xs font-bold bg-brand-blue-light text-brand-blue px-2 py-0.5 rounded">
-                {placa}
-              </span>
-              {dados.cor && (
-                <span className="text-xs text-brand-gray">{dados.cor}</span>
-              )}
-              {dados.combustivel && (
-                <span className="text-xs text-brand-gray">• {dados.combustivel}</span>
-              )}
-            </div>
+            <p className="text-white font-extrabold text-lg leading-tight uppercase truncate">{nomeVeic}</p>
+            <span className="inline-block font-mono text-sm font-black text-white/90 tracking-[0.2em] bg-white/20 px-3 py-0.5 rounded-lg mt-1">
+              {placa}
+            </span>
+          </div>
+          <div className="shrink-0 text-right">
+            <span className="inline-block bg-white/20 text-white text-[10px] font-bold px-2.5 py-1 rounded-full border border-white/30">
+              GRÁTIS
+            </span>
           </div>
         </div>
+      </div>
 
-        {/* Valores FIPE */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
-          <div className="bg-brand-green-light rounded-xl p-3 border border-brand-green/20">
-            <p className="text-xs text-brand-gray mb-1">Tabela FIPE</p>
-            <p className="text-lg font-black text-brand-green">{fipe ?? '—'}</p>
-            {dados.mesReferencia && (
-              <p className="text-[10px] text-brand-gray mt-0.5">{dados.mesReferencia}</p>
-            )}
-          </div>
-          <div className="bg-brand-blue-light rounded-xl p-3 border border-brand-blue/20">
-            <p className="text-xs text-brand-gray mb-1">Valor de Mercado</p>
-            <p className="text-lg font-black text-brand-blue">{mercado ?? '—'}</p>
-            {dados.codigoFipe && (
-              <p className="text-[10px] text-brand-gray mt-0.5">Cód. {dados.codigoFipe}</p>
-            )}
-          </div>
+      {/* Valores FIPE em destaque */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <p className="text-[10px] font-bold uppercase text-gray-400 tracking-widest mb-1">Tabela FIPE</p>
+          <p className="text-2xl font-black text-brand-green">{fipe ?? '—'}</p>
+          {dados.mesReferencia && (
+            <p className="text-[10px] text-gray-400 mt-1">{dados.mesReferencia}</p>
+          )}
+          {dados.codigoFipe && (
+            <p className="text-[10px] text-gray-400">Cód. {dados.codigoFipe}</p>
+          )}
         </div>
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <p className="text-[10px] font-bold uppercase text-gray-400 tracking-widest mb-1">Valor de Mercado</p>
+          <p className="text-2xl font-black text-brand-blue">{mercado ?? '—'}</p>
+          {fipe && mercado && fipe !== mercado && (
+            <p className="text-[10px] text-gray-400 mt-1">Estimativa baseada na FIPE</p>
+          )}
+        </div>
+      </div>
 
-        {/* Aviso sobre dados adicionais */}
-        <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl mb-5">
-          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-800">
-            Esta é uma <strong>consulta gratuita</strong>. Para ver restrições, gravame, leilão,
-            RENAJUD e sinistro, faça a Consulta Completa.
+      {/* O que está bloqueado */}
+      <div className="bg-gray-900 rounded-2xl p-5 mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+          <p className="text-xs font-bold text-white">
+            Consulta gratuita — dados ocultos na versao completa:
           </p>
         </div>
-
-        {/* Botão principal */}
-        <button
-          onClick={onConsultaCompleta}
-          className="btn-primary w-full h-12 text-base mb-3"
-        >
-          <FileSearch className="w-5 h-5" />
-          Consulta Completa
-          <span className="ml-auto text-xs font-normal opacity-80 bg-white/20 px-2 py-0.5 rounded-full">
-            1 crédito
-          </span>
-        </button>
-
-        <button
-          onClick={onNovaConsulta}
-          className="w-full h-10 text-sm font-medium text-brand-gray hover:text-brand-dark border border-brand-border hover:border-brand-dark/30 rounded-xl transition-all"
-        >
-          Nova consulta
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          {BLOQUEADOS.map(item => (
+            <div key={item} className="flex items-center gap-2 text-xs text-gray-400">
+              <div className="w-3 h-3 rounded-full border border-dashed border-gray-600 shrink-0" />
+              {item}
+            </div>
+          ))}
+        </div>
       </div>
+
+      {/* Botões */}
+      <button
+        onClick={onConsultaCompleta}
+        className="w-full h-14 rounded-2xl bg-brand-green hover:opacity-90 text-white font-bold text-base flex items-center justify-center gap-3 transition-all shadow-lg mb-3"
+      >
+        <FileSearch className="w-5 h-5" />
+        Ver Relatório Completo
+        <span className="ml-auto text-xs font-normal bg-white/20 px-2.5 py-1 rounded-full">
+          1 crédito
+        </span>
+      </button>
+
+      <button
+        onClick={onNovaConsulta}
+        className="w-full h-10 text-sm font-medium text-gray-500 hover:text-brand-dark border border-gray-200 hover:border-gray-400 rounded-xl transition-all"
+      >
+        Consultar outra placa
+      </button>
     </div>
   )
 }
