@@ -3,6 +3,7 @@ import { consultarVeiculo } from '@/lib/providers'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getAuthEmail, salvarConsulta } from '@/lib/consulta-helper'
 import { PRECO } from '@/lib/products'
+import { salvarCacheDeResultado } from '@/lib/cache-placas'
 
 export async function POST(req: NextRequest) {
   try {
@@ -63,6 +64,9 @@ export async function POST(req: NextRequest) {
       descricao,
       resultado,
     })
+
+    // Alimenta o cache de placas com os dados da consulta paga (nao bloqueia response)
+    if (placa) salvarCacheDeResultado(input.toUpperCase(), resultado)
 
     return NextResponse.json({ success: true, token: saved?.token ?? null, ...resultado })
   } catch (err: any) {
