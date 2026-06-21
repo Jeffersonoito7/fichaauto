@@ -17,6 +17,10 @@ const navItems = [
   { href: '/dashboard/carteira',        icon: Wallet,    label: 'Carteira'      },
 ]
 
+const tenantItems = [
+  { href: '/dashboard/tenant',          icon: Shield,    label: 'Painel da Revenda' },
+]
+
 const adminItems = [
   { href: '/dashboard/admin',           icon: BarChart3, label: 'Dashboard Admin'  },
   { href: '/dashboard/admin/usuarios',  icon: Users,     label: 'Usuários'          },
@@ -28,13 +32,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [nomeUsuario, setNome]  = useState('')
   const [saldoNav, setSaldoNav] = useState<number | null>(null)
+  const [isTenantAdmin, setIsTenantAdmin] = useState(false)
 
   useEffect(() => {
     fetch('/api/auth/me')
       .then(r => r.json())
       .then(d => {
         if (d?.nome) setNome(d.nome.split(' ')[0])
-        if (d?.saldo !== undefined) setSaldoNav(Number(d.saldo))
+        if (d?.saldo_veiculo !== undefined) setSaldoNav(Number(d.saldo_veiculo))
+        if (d?.tenant_id && d?.tenant_role === 'admin') setIsTenantAdmin(true)
       })
       .catch(() => {})
   }, [])
@@ -82,6 +88,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Nav */}
       <nav className="flex-1 p-4 space-y-1">
         {navItems.map(item => <NavLink key={item.href} {...item} />)}
+
+        {isTenantAdmin && (
+          <div className="pt-4 pb-1">
+            <p className="text-xs font-semibold text-amber-500 px-3 mb-2 uppercase tracking-wider">Revenda</p>
+            {tenantItems.map(item => <NavLink key={item.href} {...item} />)}
+          </div>
+        )}
 
         <div className="pt-4 pb-1">
           <p className="text-xs font-semibold text-brand-gray px-3 mb-2 uppercase tracking-wider">Admin</p>

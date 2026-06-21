@@ -24,11 +24,13 @@ export async function GET(_req: NextRequest) {
     let pode_cnpj    = true
     let pode_lote    = false
     let pode_credito = false
+    let tenant_id:   string | null = null
+    let tenant_role: string | null = null
     try {
       const service = createServiceRoleClient()
       const { data } = await (service as any)
         .from('perfis')
-        .select('saldo_veiculo, saldo_cpf, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito')
+        .select('saldo_veiculo, saldo_cpf, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, tenant_id, tenant_role')
         .eq('email', email)
         .maybeSingle()
       saldo_veiculo    = parseFloat(data?.saldo_veiculo ?? '0')
@@ -40,9 +42,11 @@ export async function GET(_req: NextRequest) {
       pode_cnpj        = data?.pode_cnpj      ?? true
       pode_lote        = data?.pode_lote      ?? false
       pode_credito     = data?.pode_credito   ?? false
+      tenant_id        = data?.tenant_id      ?? null
+      tenant_role      = data?.tenant_role    ?? null
     } catch {}
 
-    return NextResponse.json({ nome, email, role, saldo_veiculo, saldo_cpf, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito })
+    return NextResponse.json({ nome, email, role, saldo_veiculo, saldo_cpf, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, tenant_id, tenant_role })
   } catch {
     return NextResponse.json({ erro: 'Token inválido' }, { status: 401 })
   }
