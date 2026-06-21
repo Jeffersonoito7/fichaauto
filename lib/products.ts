@@ -5,8 +5,8 @@
 // ─── PRODUTO 2: Consulta CPF ─────────────────────────────────────────────────
 export const PRECO = {
   placa: 36.90,
-  cpf:   29.90,
-  cnpj:  29.90,
+  cpf:   14.90,
+  cnpj:  14.90,
 } as const
 
 export type TipoConsulta = keyof typeof PRECO

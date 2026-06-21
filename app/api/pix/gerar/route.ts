@@ -16,10 +16,12 @@ export async function POST(req: NextRequest) {
     let saldoCreditado: number
     let creditosCreditados: number | null = null
     let descricaoPix: string
+    let produto: 'veiculo' | 'cpf' | 'credito'
 
     // ── Produto 3: Análise de Crédito ────────────────────────────────────────
     if (['credito_pack', 'credito_cpf', 'credito_cnpj'].includes(tipo)) {
       const t = tipo as TipoCreditoCompra
+      produto = 'credito'
       if (t === 'credito_pack') {
         valorPago          = CREDITO.packValor
         saldoCreditado     = 0
@@ -41,6 +43,7 @@ export async function POST(req: NextRequest) {
       if (quantidade !== 1 && quantidade !== PACK_QUANTIDADE) {
         return NextResponse.json({ erro: `Quantidade inválida. Use 1 ou ${PACK_QUANTIDADE}.` }, { status: 400 })
       }
+      produto = tipo === 'placa' ? 'veiculo' : 'cpf'
       const tipoConsulta = tipo as TipoConsulta
       const precoUnitario = PRECO[tipoConsulta]
       if (quantidade === 1) {
@@ -78,6 +81,7 @@ export async function POST(req: NextRequest) {
       valor:               valorPago,
       saldo_creditado:     saldoCreditado || null,
       creditos_creditados: creditosCreditados,
+      produto,
       status:              'pendente',
     })
 

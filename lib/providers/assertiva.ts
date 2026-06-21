@@ -330,6 +330,11 @@ export async function consultarRelacionamentosCpf(cpf: string) {
   return get(`/localize/v3/pessoas-de-referencia?cpf=${limpaCpf(cpf)}&idFinalidade=${FINALIDADE}`)
 }
 
+/** Histórico de veículos vinculados ao CPF */
+export async function consultarHistoricoVeiculosPorCpf(cpf: string) {
+  return get(`/veiculos/v3/historico-por-cpf?cpf=${limpaCpf(cpf)}&idFinalidade=${FINALIDADE}`)
+}
+
 // ═══════════════════════════════════════════════════════════════
 // MÓDULOS — EMPRESAS (CNPJ)
 // ═══════════════════════════════════════════════════════════════
@@ -497,7 +502,7 @@ export const MODULOS: ModuloInfo[] = [
 export interface ConsultaVeiculoResult {
   placa:         any; binFederal: any; sinistro: any
   gravame:       any; leilao:     any; chassi:   any
-  binEstadual:   any; precificador: any
+  binEstadual:   any
   erros:         string[]
 }
 
@@ -514,17 +519,16 @@ export async function consultarCompleto(placa: string, chassi?: string): Promise
   const placaData = await safe(() => consultarPlaca(placaLimpa), 'placa')
   const protocolo = placaData?.cabecalho?.protocolo as string | undefined
 
-  const [binFederal, sinistro, gravame, leilao, binEstadual, chassiData, precificador] = await Promise.all([
+  const [binFederal, sinistro, gravame, leilao, binEstadual, chassiData] = await Promise.all([
     safe(() => consultarBinFederal(placaLimpa, protocolo),    'binFederal'),
     safe(() => consultarSinistro(placaLimpa, protocolo),      'sinistro'),
     safe(() => consultarGravame(placaLimpa, protocolo),       'gravame'),
     safe(() => consultarLeilao(placaLimpa, protocolo),        'leilao'),
     safe(() => consultarBinEstadual(placaLimpa, protocolo),   'binEstadual'),
     chassi ? safe(() => consultarChassi(chassi), 'chassi') : Promise.resolve(null),
-    safe(() => consultarPrecificador(placaLimpa, protocolo),  'precificador'),
   ])
 
-  return { placa: placaData, binFederal, sinistro, gravame, leilao, binEstadual, chassi: chassiData, precificador, erros }
+  return { placa: placaData, binFederal, sinistro, gravame, leilao, binEstadual, chassi: chassiData, erros }
 }
 
 // ═══════════════════════════════════════════════════════════════

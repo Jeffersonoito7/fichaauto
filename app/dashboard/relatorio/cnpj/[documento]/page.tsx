@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { FileText, ArrowLeft, Loader2, Building2, AlertCircle, CheckCircle, AlertTriangle, Users } from 'lucide-react'
+import { FileText, ArrowLeft, Loader2, Building2, AlertCircle, CheckCircle, AlertTriangle, Users, ShieldAlert, ShieldCheck } from 'lucide-react'
 
 function maskCnpj(c: string) {
   const d = c.replace(/\D/g, '')
@@ -104,9 +104,19 @@ export default function RelatorioCnpjPage() {
   const totalNegat    = Number(sc.totalDebitos ?? negativacoes.length)
   const valorNegat    = Number(sc.valorTotalDebitos ?? 0)
 
+  const sanc           = data?.sancoes ?? {}
+  const temSancao      = !!(sanc?.temSancao)
+  const todasCertidoes: any[] = Array.isArray(sanc?.todasCertidoes) ? sanc.todasCertidoes : []
+  const ceisArr        = Array.isArray(sanc?.ceis) ? sanc.ceis : []
+  const cnepArr        = Array.isArray(sanc?.cnep) ? sanc.cnep : []
+  const inidoneos      = Array.isArray(sanc?.inidoneos)    ? sanc.inidoneos    : []
+  const inabilitados   = Array.isArray(sanc?.inabilitados) ? sanc.inabilitados : []
+  const totalSanc      = inidoneos.length + inabilitados.length + ceisArr.length + cnepArr.length
+
   const statusIcons: StatusIcon[] = [
     { label: 'Situação Cadastral',     status: sitOk     ? 'ok'  : 'error', detalhe: sit },
     { label: 'Score Empresarial',      status: scoreVal >= 700 ? 'ok' : scoreVal >= 400 ? 'warn' : 'error', detalhe: `${scoreVal} / 1000` },
+    { label: 'Sanções Gov. Federal',   status: temSancao ? 'error' : 'ok', detalhe: temSancao ? `${totalSanc} sanção(ões) — TCU/CEIS/CNEP` : 'Nada consta' },
     { label: 'Negativações',           status: totalNegat > 0 ? 'error' : 'ok', detalhe: totalNegat > 0 ? `${totalNegat} registro(s) — R$ ${valorNegat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Nada consta' },
     { label: 'Processos Judiciais',    status: totalProc > 0 ? 'error' : 'ok', detalhe: totalProc > 0 ? `${totalProc} processo(s)` : 'Nada consta' },
     { label: 'Protestos',              status: totalProt > 0 ? 'error' : 'ok', detalhe: totalProt > 0 ? `${totalProt} protesto(s)` : 'Nada consta' },
@@ -272,6 +282,36 @@ export default function RelatorioCnpjPage() {
           </div>
         </div>
       )}
+
+      {/* Sanções Gov. Federal — TCU / CEIS / CNEP */}
+      <div className={`card p-5 mb-4 border ${temSancao ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'}`}>
+        <h3 className={`text-sm font-bold mb-3 uppercase tracking-wide flex items-center gap-2 ${temSancao ? 'text-red-700' : 'text-green-700'}`}>
+          {temSancao ? <ShieldAlert className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+          Sanções Gov. Federal — TCU / CEIS / CNEP
+          {temSancao && <span className="ml-1 bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">{totalSanc}</span>}
+        </h3>
+        {todasCertidoes.length > 0 ? (
+          <div className="space-y-2">
+            {todasCertidoes.map((c: any, i: number) => {
+              const limpo = c.situacao === 'NADA_CONSTA'
+              return (
+                <div key={i} className={`flex items-center justify-between py-2 border-b last:border-0 ${limpo ? 'border-green-100' : 'border-red-200'}`}>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-semibold ${limpo ? 'text-green-700' : 'text-red-700'}`}>{c.descricao ?? c.tipo}</p>
+                    {c.observacao && <p className="text-xs text-gray-500 mt-0.5">{c.observacao}</p>}
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold ml-3 shrink-0 ${limpo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {limpo ? 'Nada consta' : c.situacao ?? 'CONSTA'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-green-700">Nada consta nos cadastros TCU (inidôneos, inabilitados), CEIS e CNEP.</p>
+        )}
+        <p className="text-xs text-gray-400 mt-3">Fonte: TCU (certidoes-apf.apps.tcu.gov.br) · CGU/CEIS/CNEP (Portal da Transparência)</p>
+      </div>
 
       {/* Processos / Protestos resumo */}
       {(totalProc > 0 || totalProt > 0) && (

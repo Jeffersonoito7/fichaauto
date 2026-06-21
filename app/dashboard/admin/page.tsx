@@ -33,6 +33,7 @@ export default async function AdminPage() {
     { label: 'Pacotes de crédito', href: '/dashboard/admin/pacotes',    desc: 'Configurar planos e preços'           },
     { label: 'Planos / Módulos',   href: '/dashboard/admin/tenants',    desc: 'Definir módulos por plano'            },
     { label: 'Histórico geral',    href: '/dashboard/historico',        desc: 'Ver todas as consultas realizadas'    },
+    { label: 'Integrações',        href: '/dashboard/admin/integracao', desc: 'Token PlacaFIPE e outras APIs externas' },
   ]
 
   return (

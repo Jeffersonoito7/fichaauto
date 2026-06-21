@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   FileText, ArrowLeft, Loader2, User, AlertCircle,
   CheckCircle, AlertTriangle, Phone, Mail,
-  MapPin, Briefcase, Users, Skull
+  MapPin, Briefcase, Users, Skull, ShieldAlert, ShieldCheck
 } from 'lucide-react'
 
 function maskCpf(c: string) {
@@ -174,10 +174,21 @@ export default function RelatorioCpfPage() {
   const dj      = data?.datajud ?? null
   const djTotal = dj?.total ?? 0
 
+  // ── Sanções Gov (TCU / CEIS / CNEP) ─────────────────────────────────────────
+  const sanc       = data?.sancoes ?? {}
+  const temSancao  = !!(sanc?.temSancao)
+  const inidoneos  = Array.isArray(sanc?.inidoneos)   ? sanc.inidoneos   : []
+  const inabilit   = Array.isArray(sanc?.inabilitados) ? sanc.inabilitados : []
+  const contasIrr  = Array.isArray(sanc?.contasIrreg) ? sanc.contasIrreg : []
+  const ceisArr    = Array.isArray(sanc?.ceis)         ? sanc.ceis         : []
+  const cnepArr    = Array.isArray(sanc?.cnep)         ? sanc.cnep         : []
+  const totalSanc  = inidoneos.length + inabilit.length + contasIrr.length + ceisArr.length + cnepArr.length
+
   type S = 'ok' | 'warn' | 'error'
   const statusGrid: { label: string; status: S; detalhe: string }[] = [
     ...(isFalecido ? [{ label: 'TITULAR FALECIDO', status: 'error' as S, detalhe: 'Óbito registrado na base Assertiva' }] : []),
     { label: 'Situação CPF',        status: isFalecido ? 'error' : cpfOk ? 'ok' : 'error', detalhe: sit },
+    { label: 'Sanções Gov. Federal', status: temSancao ? 'error' : 'ok', detalhe: temSancao ? `${totalSanc} sanção(ões) — TCU/CEIS/CNEP` : 'Nada consta' },
     { label: 'Processos Judiciais', status: djTotal > 0 ? 'error' : 'ok', detalhe: djTotal > 0 ? `${djTotal} processo(s) — DataJud CNJ` : 'Nada consta' },
     { label: 'PEP',                 status: isPep ? 'error' : 'ok', detalhe: isPep ? 'Pessoa Politicamente Exposta' : 'Não identificado' },
     { label: 'Participação Soc.',   status: empresas.length > 0 ? 'warn' : 'ok', detalhe: empresas.length > 0 ? `${empresas.length} empresa(s)` : 'Nenhuma' },
@@ -390,6 +401,68 @@ export default function RelatorioCpfPage() {
           </a>
         </div>
       )}
+
+      {/* Sanções Gov. Federal — TCU / CEIS / CNEP */}
+      <div className={`card p-5 mb-4 border ${temSancao ? 'border-red-300 bg-red-50' : 'border-green-200 bg-green-50'}`}>
+        <h3 className={`text-sm font-bold mb-3 uppercase tracking-wide flex items-center gap-2 ${temSancao ? 'text-red-700' : 'text-green-700'}`}>
+          {temSancao ? <ShieldAlert className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+          Sanções Gov. Federal — TCU / CEIS / CNEP
+          {temSancao && <span className="ml-1 bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">{totalSanc}</span>}
+        </h3>
+        {!temSancao ? (
+          <p className="text-xs text-green-700">Nada consta nos cadastros TCU (inidôneos, inabilitados, contas irregulares), CEIS e CNEP.</p>
+        ) : (
+          <div className="space-y-3">
+            {inidoneos.length > 0 && (
+              <div>
+                <p className="text-xs font-bold text-red-700 mb-1">Inidôneo TCU ({inidoneos.length})</p>
+                {inidoneos.slice(0, 3).map((s: any, i: number) => (
+                  <p key={i} className="text-xs text-red-600 py-1 border-b border-red-200 last:border-0">{s.nome ?? s.parteNome ?? JSON.stringify(s)}</p>
+                ))}
+              </div>
+            )}
+            {inabilit.length > 0 && (
+              <div>
+                <p className="text-xs font-bold text-red-700 mb-1">Inabilitado TCU ({inabilit.length})</p>
+                {inabilit.slice(0, 3).map((s: any, i: number) => (
+                  <p key={i} className="text-xs text-red-600 py-1 border-b border-red-200 last:border-0">{s.nome ?? s.parteNome ?? JSON.stringify(s)}</p>
+                ))}
+              </div>
+            )}
+            {contasIrr.length > 0 && (
+              <div>
+                <p className="text-xs font-bold text-red-700 mb-1">Contas Irregulares TCU ({contasIrr.length})</p>
+                {contasIrr.slice(0, 3).map((s: any, i: number) => (
+                  <p key={i} className="text-xs text-red-600 py-1 border-b border-red-200 last:border-0">{s.nome ?? s.parteNome ?? JSON.stringify(s)}</p>
+                ))}
+              </div>
+            )}
+            {ceisArr.length > 0 && (
+              <div>
+                <p className="text-xs font-bold text-red-700 mb-1">CEIS — Empresas Inidôneas/Suspensas ({ceisArr.length})</p>
+                {ceisArr.slice(0, 3).map((s: any, i: number) => (
+                  <div key={i} className="py-1 border-b border-red-200 last:border-0">
+                    <p className="text-xs text-red-700 font-medium">{s.nomeSancionado ?? s.nome ?? ''}</p>
+                    <p className="text-xs text-red-500">{s.orgaoSancionador ?? ''}{s.dataInicioSancao ? ` · ${s.dataInicioSancao}` : ''}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {cnepArr.length > 0 && (
+              <div>
+                <p className="text-xs font-bold text-red-700 mb-1">CNEP — Empresas Punidas ({cnepArr.length})</p>
+                {cnepArr.slice(0, 3).map((s: any, i: number) => (
+                  <div key={i} className="py-1 border-b border-red-200 last:border-0">
+                    <p className="text-xs text-red-700 font-medium">{s.nomeSancionado ?? s.nome ?? ''}</p>
+                    <p className="text-xs text-red-500">{s.orgaoSancionador ?? ''}{s.dataInicioSancao ? ` · ${s.dataInicioSancao}` : ''}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <p className="text-xs text-gray-400 mt-3">Fonte: TCU (certidoes.apps.tcu.gov.br) · CGU/CEIS/CNEP (Portal da Transparência)</p>
+      </div>
 
       {/* Relacionamentos */}
       {relacionamentos.length > 0 && (

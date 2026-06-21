@@ -3,10 +3,21 @@
 
 const BASE = 'https://brasilapi.com.br/api'
 
-export async function getFipePorPlaca(placa: string) {
-  const res = await fetch(`${BASE}/fipe/preco/v1?placa=${placa}`, { next: { revalidate: 86400 } })
-  if (!res.ok) return null
-  return res.json()
+// Busca preco FIPE pelo codigo (ex: "001004-9") — gratuito, atualizado mensalmente
+export async function getFipePorCodigo(codigoFipe: string) {
+  if (!codigoFipe) return null
+  try {
+    const res = await fetch(`${BASE}/fipe/preco/v1/${codigoFipe}`, {
+      next: { revalidate: 86400 },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    // BrasilAPI retorna array com um ou mais itens
+    return Array.isArray(data) ? data[0] ?? null : data
+  } catch {
+    return null
+  }
 }
 
 export async function getFipeTabelas() {

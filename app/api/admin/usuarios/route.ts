@@ -7,7 +7,7 @@ export async function GET() {
   // Buscar todos os perfis
   const { data: perfis, error } = await svc
     .from('perfis')
-    .select('user_id, nome, email, saldo, creditos_credito, ativo, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, obs_admin, atualizado_em, modulos_liberados')
+    .select('user_id, nome, email, saldo_veiculo, saldo_cpf, creditos_credito, ativo, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, obs_admin, atualizado_em, modulos_liberados')
     .order('atualizado_em', { ascending: false, nullsFirst: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

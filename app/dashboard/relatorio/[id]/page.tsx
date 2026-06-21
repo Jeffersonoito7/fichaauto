@@ -2,8 +2,61 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ArrowLeft, Download, ChevronDown, Loader2, XCircle, Lock } from 'lucide-react'
 import { temModulo, planoQueTemModulo, PLANOS, type PlanoId } from '@/lib/products'
+
+const BRAND_LOGO: Record<string, string> = {
+  TOYOTA: 'https://logo.clearbit.com/toyota.com',
+  HONDA: 'https://logo.clearbit.com/honda.com',
+  VOLKSWAGEN: 'https://logo.clearbit.com/vw.com',
+  VW: 'https://logo.clearbit.com/vw.com',
+  CHEVROLET: 'https://logo.clearbit.com/chevrolet.com',
+  GM: 'https://logo.clearbit.com/gm.com',
+  FORD: 'https://logo.clearbit.com/ford.com',
+  FIAT: 'https://logo.clearbit.com/fiat.com',
+  RENAULT: 'https://logo.clearbit.com/renault.com',
+  HYUNDAI: 'https://logo.clearbit.com/hyundai.com',
+  NISSAN: 'https://logo.clearbit.com/nissan.com',
+  MITSUBISHI: 'https://logo.clearbit.com/mitsubishi.com',
+  JEEP: 'https://logo.clearbit.com/jeep.com',
+  BMW: 'https://logo.clearbit.com/bmw.com',
+  'MERCEDES-BENZ': 'https://logo.clearbit.com/mercedes-benz.com',
+  MERCEDES: 'https://logo.clearbit.com/mercedes-benz.com',
+  AUDI: 'https://logo.clearbit.com/audi.com',
+  KIA: 'https://logo.clearbit.com/kia.com',
+  PEUGEOT: 'https://logo.clearbit.com/peugeot.com',
+  CITROEN: 'https://logo.clearbit.com/citroen.com',
+  VOLVO: 'https://logo.clearbit.com/volvocars.com',
+  SUBARU: 'https://logo.clearbit.com/subaru.com',
+  CHERY: 'https://logo.clearbit.com/chery.com',
+  JAC: 'https://logo.clearbit.com/jacmotors.com',
+  BYD: 'https://logo.clearbit.com/byd.com',
+  GWM: 'https://logo.clearbit.com/gwm.com',
+  HAVAL: 'https://logo.clearbit.com/haval.com',
+  DODGE: 'https://logo.clearbit.com/dodge.com',
+  RAM: 'https://logo.clearbit.com/ramtrucks.com',
+  PORSCHE: 'https://logo.clearbit.com/porsche.com',
+  LAND: 'https://logo.clearbit.com/landrover.com',
+  CAOA: 'https://logo.clearbit.com/caoachery.com.br',
+  SUZUKI: 'https://logo.clearbit.com/suzuki.com',
+  MINI: 'https://logo.clearbit.com/mini.com',
+  LEXUS: 'https://logo.clearbit.com/lexus.com',
+  FERRARI: 'https://logo.clearbit.com/ferrari.com',
+  LAMBORGHINI: 'https://logo.clearbit.com/lamborghini.com',
+}
+
+function extrairMarca(marcaModelo: string): string {
+  return marcaModelo.replace(/^I\//, '').split(/[\s\/]/)[0].toUpperCase()
+}
+
+function logoMarca(marcaModelo: string): string | null {
+  const marca = extrairMarca(marcaModelo)
+  for (const [key, url] of Object.entries(BRAND_LOGO)) {
+    if (marca.includes(key) || key.includes(marca)) return url
+  }
+  return null
+}
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface ProcessoDatajud {
@@ -457,18 +510,38 @@ export default function RelatorioPage() {
       </div>
 
       {/* Banner */}
-      <div className="rounded-2xl p-5 text-white mb-4"
-           style={{ background: 'linear-gradient(135deg, #007A3D 0%, #00A651 60%, #005C2E 100%)' }}>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <p className="text-white/55 text-[10px] uppercase tracking-widest mb-0.5">Ano Modelo {anoStr}</p>
-            <h2 className="text-xl font-extrabold uppercase leading-tight">{mm}</h2>
-            <p className="text-3xl font-mono font-extrabold tracking-[0.25em] mt-1">{placaFmt}</p>
-            {cor && <p className="text-white/55 text-xs mt-1">Cor {cor.toUpperCase()}</p>}
+      {(() => {
+        const urlLogo = logoMarca(mm)
+        return (
+          <div className="rounded-2xl p-5 text-white mb-4"
+               style={{ background: 'linear-gradient(135deg, #007A3D 0%, #00A651 60%, #005C2E 100%)' }}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-white/55 text-[10px] uppercase tracking-widest mb-0.5">Ano Modelo {anoStr}</p>
+                <div className="flex items-center gap-3 mt-0.5">
+                  {urlLogo && (
+                    <div className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center shrink-0 overflow-hidden border border-white/20">
+                      <Image
+                        src={urlLogo}
+                        alt={extrairMarca(mm)}
+                        width={32}
+                        height={32}
+                        className="object-contain"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                        unoptimized
+                      />
+                    </div>
+                  )}
+                  <h2 className="text-xl font-extrabold uppercase leading-tight">{mm}</h2>
+                </div>
+                <p className="text-3xl font-mono font-extrabold tracking-[0.25em] mt-1">{placaFmt}</p>
+                {cor && <p className="text-white/55 text-xs mt-1">Cor {cor.toUpperCase()}</p>}
+              </div>
+              <ScoreRing score={score} />
+            </div>
           </div>
-          <ScoreRing score={score} />
-        </div>
-      </div>
+        )
+      })()}
 
       {/* Erros da API */}
       {data.erros?.length > 0 && (

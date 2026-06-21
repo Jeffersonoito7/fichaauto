@@ -1,22 +1,33 @@
 import { consultarCompleto } from './assertiva'
-import { getFipePorPlaca }   from './brasilapi'
+import { getFipePorCodigo }  from './brasilapi'
 import { buscarProcessosProprietario } from './datajud'
 
 export async function consultarVeiculo(placa: string, chassi?: string) {
   const resultado = await consultarCompleto(placa, chassi)
 
-  // Extrair nome do proprietário para busca no DataJud
-  const placaResp = resultado.placa ?? {}
-  const pDesc     = placaResp.resposta?.descricao     ?? placaResp
-  const pIdent    = placaResp.resposta?.identificadores ?? placaResp
+  const placaResp  = resultado.placa ?? {}
+  const pDesc      = placaResp.resposta?.descricao      ?? placaResp
+  const pIdent     = placaResp.resposta?.identificadores ?? placaResp
+  const sinistroR  = resultado.sinistro?.resposta        ?? resultado.sinistro ?? {}
+  const tabelaFipe = sinistroR?.tabelaFipe ?? sinistroR?.fipe ?? {}
+
+  // Codigo FIPE: vem do sinistro/precificador da Assertiva
+  const codigoFipe: string =
+    tabelaFipe?.codigo      ?? tabelaFipe?.codigoFipe ??
+    sinistroR?.codigoFipe   ?? sinistroR?.codigo      ??
+    pDesc?.codigoFipe       ?? pDesc?.codFipe         ?? ''
+
+  // Nome do proprietario para DataJud
   const nomeProprietario: string | null =
-    pDesc?.proprietario     ?? pDesc?.nomeProprietario ??
-    pDesc?.nomeProp         ?? pIdent?.proprietario    ??
+    pDesc?.proprietario      ?? pDesc?.nomeProprietario ??
+    pDesc?.nomeProp          ?? pIdent?.proprietario    ??
     pIdent?.nomeProprietario ?? placaResp?.proprietario ?? null
 
-  // Enriquecer em paralelo: FIPE gratuita + DataJud
+  // BrasilAPI FIPE (gratuita) + DataJud em paralelo
   const [fipe, datajud] = await Promise.all([
-    getFipePorPlaca(placa).catch(() => null),
+    codigoFipe
+      ? getFipePorCodigo(codigoFipe).catch(() => null)
+      : Promise.resolve(null),
     nomeProprietario
       ? buscarProcessosProprietario(nomeProprietario).catch(() => null)
       : Promise.resolve(null),

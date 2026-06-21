@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthEmail, salvarConsulta } from '@/lib/consulta-helper'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getCnpj } from '@/lib/providers/brasilapi'
+import { consultarSancoesCnpj } from '@/lib/providers/sancoes-gov'
 import { PRECO } from '@/lib/products'
 
 const BASE_URL  = 'https://api.assertivasolucoes.com.br'
@@ -96,12 +97,12 @@ export async function GET(
   if (!email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
   const svc = createServiceRoleClient() as any
-  const { data: perfil } = await svc.from('perfis').select('saldo, role').eq('email', email).maybeSingle()
+  const { data: perfil } = await svc.from('perfis').select('saldo_cpf, role').eq('email', email).maybeSingle()
   const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
-  const saldo = parseFloat(perfil?.saldo ?? '0')
+  const saldo = parseFloat(perfil?.saldo_cpf ?? '0')
   const custo = PRECO.cnpj
   if (!isAdmin && saldo < custo) return NextResponse.json({ error: `Saldo insuficiente. Esta consulta custa R$ ${custo.toFixed(2).replace('.', ',')}. Recarregue sua carteira.` }, { status: 402 })
-  if (!isAdmin) await svc.from('perfis').update({ saldo: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() }).eq('email', email)
+  if (!isAdmin) await svc.from('perfis').update({ saldo_cpf: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() }).eq('email', email)
 
   const erros: string[] = []
   const avisos: string[] = []
@@ -172,7 +173,9 @@ export async function GET(
     if (fb) { qsaFinal = fb; avisos.push('Quadro societário via BrasilAPI') }
   }
 
-  const resultado = { cnpj, basico: basicoFinal, qsa: qsaFinal, relacionadas, erros, avisos }
+  const sancoes = await consultarSancoesCnpj(cnpj)
+
+  const resultado = { cnpj, basico: basicoFinal, qsa: qsaFinal, relacionadas, sancoes, erros, avisos }
   const saved = await salvarConsulta({ email, tipo: 'cnpj', documento: cnpj, descricao: basicoFinal?.razaoSocial ?? cnpj, resultado }).catch(() => null)
 
   return NextResponse.json({ ...resultado, token: saved?.token ?? null })

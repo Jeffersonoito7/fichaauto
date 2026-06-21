@@ -27,7 +27,8 @@ function moeda(v: number) {
 }
 
 export default function CarteiraPage() {
-  const [saldo, setSaldo]               = useState<number | null>(null)
+  const [saldoVeiculo, setSaldoVeiculo] = useState<number | null>(null)
+  const [saldoCpf, setSaldoCpf]         = useState<number | null>(null)
   const [creditosCredito, setCreditosC] = useState<number | null>(null)
   const [podeCredito, setPodeCredito]   = useState(false)
   const [opcao, setOpcao]               = useState<Opcao | null>(null)
@@ -42,7 +43,8 @@ export default function CarteiraPage() {
     fetch('/api/auth/me')
       .then(r => r.json())
       .then(d => {
-        if (typeof d?.saldo === 'number') setSaldo(d.saldo)
+        if (typeof d?.saldo_veiculo === 'number') setSaldoVeiculo(d.saldo_veiculo)
+        if (typeof d?.saldo_cpf === 'number') setSaldoCpf(d.saldo_cpf)
         if (typeof d?.creditos_credito === 'number') setCreditosC(d.creditos_credito)
         setPodeCredito(!!d?.pode_credito || d?.role === 'super_admin')
       })
@@ -60,7 +62,8 @@ export default function CarteiraPage() {
           clearInterval(pollRef.current!)
           setStep('confirmado')
           fetch('/api/auth/me').then(r => r.json()).then(d => {
-            if (typeof d?.saldo === 'number') setSaldo(d.saldo)
+            if (typeof d?.saldo_veiculo === 'number') setSaldoVeiculo(d.saldo_veiculo)
+            if (typeof d?.saldo_cpf === 'number') setSaldoCpf(d.saldo_cpf)
             if (typeof d?.creditos_credito === 'number') setCreditosC(d.creditos_credito)
           })
         }
@@ -112,12 +115,13 @@ export default function CarteiraPage() {
       ) : (
         <p className="text-brand-gray mb-1">{moeda(pixData?.saldoCreditado ?? 0)} adicionados ao seu saldo.</p>
       )}
-      <p className="text-2xl font-black text-brand-green mb-6">
-        Saldo: {saldo !== null ? moeda(saldo) : '—'}
+      <div className="text-2xl font-black text-brand-green mb-6 space-y-1">
+        <p>Veicular: {saldoVeiculo !== null ? moeda(saldoVeiculo) : '—'}</p>
+        <p>CPF/CNPJ: {saldoCpf !== null ? moeda(saldoCpf) : '—'}</p>
         {creditosCredito !== null && creditosCredito > 0 && (
           <span className="block text-base text-brand-blue font-semibold mt-1">{creditosCredito} crédito(s) de análise</span>
         )}
-      </p>
+      </div>
       <button onClick={() => { setStep('escolha'); setOpcao(null); setPixData(null) }} className="btn-primary">
         Recarregar novamente
       </button>
@@ -192,20 +196,28 @@ export default function CarteiraPage() {
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div className="rounded-2xl p-5 text-white" style={{ background: 'linear-gradient(135deg, #00703C, #00A651)' }}>
           <div className="flex items-center gap-2 mb-1">
-            <Wallet className="w-4 h-4 text-white/70" />
-            <p className="text-white/80 text-xs">Saldo Produtos 1 e 2</p>
+            <Car className="w-4 h-4 text-white/70" />
+            <p className="text-white/80 text-xs">Produto 1 — Veicular</p>
           </div>
-          <p className="text-3xl font-black">{saldo !== null ? moeda(saldo) : '—'}</p>
-          <p className="text-white/60 text-xs mt-1">Placa · CPF · CNPJ</p>
+          <p className="text-3xl font-black">{saldoVeiculo !== null ? moeda(saldoVeiculo) : '—'}</p>
+          <p className="text-white/60 text-xs mt-1">Consulta por Placa</p>
+        </div>
+        <div className="rounded-2xl p-5 text-white" style={{ background: 'linear-gradient(135deg, #1D4ED8, #3B82F6)' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <User className="w-4 h-4 text-white/70" />
+            <p className="text-white/80 text-xs">Produto 2 — Pessoas</p>
+          </div>
+          <p className="text-3xl font-black">{saldoCpf !== null ? moeda(saldoCpf) : '—'}</p>
+          <p className="text-white/60 text-xs mt-1">CPF · CNPJ</p>
         </div>
         {podeCredito && (
-          <div className="rounded-2xl p-5 text-white" style={{ background: 'linear-gradient(135deg, #1D4ED8, #3B82F6)' }}>
+          <div className="col-span-2 rounded-2xl p-4 text-white" style={{ background: 'linear-gradient(135deg, #7C3AED, #A855F7)' }}>
             <div className="flex items-center gap-2 mb-1">
               <CreditCard className="w-4 h-4 text-white/70" />
-              <p className="text-white/80 text-xs">Créditos Produto 3</p>
+              <p className="text-white/80 text-xs">Produto 3 — Análise de Crédito</p>
             </div>
             <p className="text-3xl font-black">{creditosCredito !== null ? creditosCredito : '—'}</p>
-            <p className="text-white/60 text-xs mt-1">Análise de Crédito</p>
+            <p className="text-white/60 text-xs mt-1">consultas disponíveis</p>
           </div>
         )}
       </div>

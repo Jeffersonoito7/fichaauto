@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const ASSERT_BASE  = 'https://api.assertivasolucoes.com.br'
-const TOKEN_URL    = 'https://api.assertivasolucoes.com.br/oauth2/v3/token'
+const ASSERT_BASE = 'https://api.assertivasolucoes.com.br'
+const TOKEN_URL   = 'https://api.assertivasolucoes.com.br/oauth2/v3/token'
+const BRASIL_BASE = 'https://brasilapi.com.br/api'
 
 let _token: string | null = null
 let _exp = 0
@@ -36,6 +37,19 @@ async function assertGet(path: string) {
   return res.json()
 }
 
+async function getFipePorCodigo(codigo: string) {
+  try {
+    const res = await fetch(`${BRASIL_BASE}/fipe/preco/v1/${codigo}`, {
+      next: { revalidate: 86400 },
+    })
+    if (!res.ok) return null
+    const arr = await res.json()
+    return Array.isArray(arr) ? arr[0] : arr
+  } catch {
+    return null
+  }
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ placa: string }> }
@@ -44,46 +58,43 @@ export async function GET(
   const placa = placaRaw.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
 
   try {
-    // 1. Consulta base para obter protocolo + dados básicos do veículo
+    // Consulta base Assertiva — apenas para identificação do veículo
     const base = await assertGet(
       `/veiculos/v3/consulta-base?tipo=placa&documento=${placa}&idFinalidade=2`
     )
-    const protocolo = base?.cabecalho?.protocolo
-    const cab       = base?.cabecalho ?? {}
-    const resp      = base?.resposta  ?? {}
-    const desc      = resp?.descricao ?? resp?.dadosCadastrais ?? resp?.identificacao ?? resp ?? {}
+    const cab  = base?.cabecalho ?? {}
+    const resp = base?.resposta  ?? {}
+    const desc = resp?.descricao ?? resp?.dadosCadastrais ?? resp?.identificacao ?? resp ?? {}
 
-    // Extrair dados de identificação do veículo
-    const marca      = cab?.marca      ?? desc?.marca      ?? resp?.marca      ?? null
-    const modelo     = cab?.modelo     ?? desc?.modelo     ?? resp?.modelo     ?? null
-    const anoFab     = cab?.anoFabricacao ?? desc?.anoFabricacao ?? resp?.anoFabricacao ?? null
-    const anoMod     = cab?.anoModelo  ?? desc?.anoModelo  ?? resp?.anoModelo  ?? null
-    const cor        = cab?.cor        ?? desc?.cor        ?? resp?.cor        ?? null
-    const combustivel = cab?.combustivel ?? desc?.combustivel ?? resp?.combustivel ?? null
-    const renavam    = cab?.renavam    ?? desc?.renavam    ?? resp?.renavam    ?? null
-    const chassi     = cab?.chassi     ?? desc?.chassi     ?? resp?.chassi     ?? null
+    const marca       = cab?.marca       ?? desc?.marca       ?? null
+    const modelo      = cab?.modelo      ?? desc?.modelo      ?? null
+    const anoFab      = cab?.anoFabricacao ?? desc?.anoFabricacao ?? null
+    const anoMod      = cab?.anoModelo   ?? desc?.anoModelo   ?? null
+    const cor         = cab?.cor         ?? desc?.cor         ?? null
+    const combustivel = cab?.combustivel ?? desc?.combustivel ?? null
+    const renavam     = cab?.renavam     ?? desc?.renavam     ?? null
+    const chassi      = cab?.chassi      ?? desc?.chassi      ?? null
 
-    // 2. Precificador — requer protocolo
-    let fipeData: any = {}
-    if (protocolo) {
-      try {
-        fipeData = await assertGet(
-          `/veiculos/v3/demais-consultas?tipo=placa&documento=${placa}&consulta=precificador&protocolo=${protocolo}&idFinalidade=2`
-        )
-      } catch { /* precificador pode não estar contratado */ }
+    // Tenta obter valor FIPE grátis via BrasilAPI com o código FIPE do veículo
+    const codigoFipe = desc?.codigoFipe ?? cab?.codigoFipe ?? desc?.codigo ?? null
+    let valorFipe    = null
+    let mesReferencia = null
+
+    if (codigoFipe) {
+      const fipe = await getFipePorCodigo(codigoFipe)
+      if (fipe) {
+        valorFipe    = fipe.value  ?? fipe.preco ?? fipe.price ?? null
+        mesReferencia = fipe.referenceMonth ?? fipe.mesReferencia ?? null
+      }
     }
 
-    const prec      = fipeData?.resposta ?? fipeData ?? {}
-    const precObj   = prec?.precificador ?? prec?.fipe ?? prec ?? {}
-
     return NextResponse.json({
-      placa,
-      marca, modelo, anoFab, anoMod, cor, combustivel, renavam, chassi,
-      valorFipe:     precObj?.valorFipe    ?? precObj?.valor   ?? prec?.valorFipe    ?? null,
-      valorMercado:  precObj?.valorMercado ?? prec?.valorMercado ?? null,
-      codigoFipe:    precObj?.codigoFipe   ?? precObj?.codigo  ?? null,
-      mesReferencia: precObj?.referenciaFipe ?? precObj?.referencia ?? prec?.mesReferencia ?? null,
-      fonte: 'assertiva',
+      placa, marca, modelo, anoFab, anoMod, cor, combustivel, renavam, chassi,
+      valorFipe,
+      valorMercado:  null,
+      codigoFipe,
+      mesReferencia,
+      fonte: codigoFipe ? 'brasilapi' : 'assertiva',
     })
   } catch {
     return NextResponse.json({ erro: 'Consulta FIPE indisponível', placa }, { status: 200 })

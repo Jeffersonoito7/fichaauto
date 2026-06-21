@@ -6,7 +6,8 @@ interface Usuario {
   user_id:          string
   nome:             string | null
   email:            string
-  saldo:            number
+  saldo_veiculo:    number
+  saldo_cpf:        number
   creditos_credito: number
   ativo:            boolean
   pode_placa:       boolean
@@ -59,7 +60,8 @@ export default function UsuariosPage() {
     setEditando(u)
     setForm({
       nome:             u.nome ?? '',
-      saldo:            u.saldo ?? 0,
+      saldo_veiculo:    u.saldo_veiculo ?? 0,
+      saldo_cpf:        u.saldo_cpf ?? 0,
       creditos_credito: u.creditos_credito ?? 0,
       ativo:            u.ativo,
       pode_placa:       u.pode_placa,
@@ -126,7 +128,8 @@ export default function UsuariosPage() {
             <thead className="bg-brand-gray-light border-b border-brand-border">
               <tr>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-brand-gray uppercase tracking-wider">Usuário</th>
-                <th className="text-center px-3 py-3 text-xs font-semibold text-brand-gray uppercase tracking-wider">Saldo P1/P2</th>
+                <th className="text-center px-3 py-3 text-xs font-semibold text-brand-gray uppercase tracking-wider">P1 Veicular</th>
+                <th className="text-center px-3 py-3 text-xs font-semibold text-brand-gray uppercase tracking-wider">P2 Pessoas</th>
                 <th className="text-center px-3 py-3 text-xs font-semibold text-brand-gray uppercase tracking-wider">Créditos P3</th>
                 <th className="text-center px-3 py-3 text-xs font-semibold text-brand-gray uppercase tracking-wider">Produtos</th>
                 <th className="text-center px-3 py-3 text-xs font-semibold text-brand-gray uppercase tracking-wider">Status</th>
@@ -141,8 +144,13 @@ export default function UsuariosPage() {
                     <p className="text-xs text-brand-gray truncate max-w-[200px]">{u.email}</p>
                   </td>
                   <td className="px-3 py-3 text-center">
-                    <span className={`font-bold text-sm ${(u.saldo ?? 0) > 0 ? 'text-brand-green' : 'text-brand-danger'}`}>
-                      {moeda(u.saldo ?? 0)}
+                    <span className={`font-bold text-sm ${(u.saldo_veiculo ?? 0) > 0 ? 'text-brand-green' : 'text-brand-danger'}`}>
+                      {moeda(u.saldo_veiculo ?? 0)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-center">
+                    <span className={`font-bold text-sm ${(u.saldo_cpf ?? 0) > 0 ? 'text-brand-green' : 'text-brand-danger'}`}>
+                      {moeda(u.saldo_cpf ?? 0)}
                     </span>
                   </td>
                   <td className="px-3 py-3 text-center">
@@ -176,7 +184,7 @@ export default function UsuariosPage() {
               ))}
               {filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-brand-gray">
+                  <td colSpan={7} className="text-center py-12 text-brand-gray">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     {busca ? 'Nenhum usuário encontrado' : 'Nenhum usuário cadastrado ainda'}
                   </td>
@@ -209,18 +217,27 @@ export default function UsuariosPage() {
               </div>
 
               {/* Saldos */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-brand-gray mb-1.5 font-medium">Saldo Produtos 1 e 2 (R$)</label>
+                  <label className="block text-xs text-brand-gray mb-1.5 font-medium">P1 Veicular (R$)</label>
                   <input
                     type="number" min={0} step={0.01}
                     className="input-base text-center font-bold"
-                    value={form.saldo ?? 0}
-                    onChange={e => setForm(f => ({ ...f, saldo: parseFloat(e.target.value) || 0 }))}
+                    value={form.saldo_veiculo ?? 0}
+                    onChange={e => setForm(f => ({ ...f, saldo_veiculo: parseFloat(e.target.value) || 0 }))}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-brand-gray mb-1.5 font-medium">Créditos Produto 3</label>
+                  <label className="block text-xs text-brand-gray mb-1.5 font-medium">P2 Pessoas (R$)</label>
+                  <input
+                    type="number" min={0} step={0.01}
+                    className="input-base text-center font-bold"
+                    value={form.saldo_cpf ?? 0}
+                    onChange={e => setForm(f => ({ ...f, saldo_cpf: parseFloat(e.target.value) || 0 }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-brand-gray mb-1.5 font-medium">Créditos P3</label>
                   <input
                     type="number" min={0} step={1}
                     className="input-base text-center font-bold"

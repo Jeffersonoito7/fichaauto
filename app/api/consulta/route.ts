@@ -23,12 +23,12 @@ export async function POST(req: NextRequest) {
     const service = createServiceRoleClient() as any
     const { data: perfil } = await service
       .from('perfis')
-      .select('saldo, role')
+      .select('saldo_veiculo, role')
       .eq('email', email)
       .maybeSingle()
 
     const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
-    const saldo = parseFloat(perfil?.saldo ?? '0')
+    const saldo = parseFloat(perfil?.saldo_veiculo ?? '0')
     const custo = PRECO.placa
 
     if (!isAdmin && saldo < custo) {
@@ -38,11 +38,11 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Debitar R$ 36,90 antes de executar (admin não debita)
+    // Debitar saldo veicular antes de executar (admin não debita)
     if (!isAdmin) {
       await service
         .from('perfis')
-        .update({ saldo: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() })
+        .update({ saldo_veiculo: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() })
         .eq('email', email)
     }
 
