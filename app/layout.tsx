@@ -31,7 +31,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-title" content="Ficha Auto" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
         {/* Ícone */}
-        <link rel="icon" href="/icon-192.png" type="image/png" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
       </head>
       <body>
         <RegisterSW />

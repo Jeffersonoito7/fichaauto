@@ -64,8 +64,15 @@ function header(agora: string, proto: string, pag: string, qrDataUrl: string): s
          style="border-bottom:2px solid #333;margin-bottom:0">
     <tr>
       <td width="130" valign="middle">
-        <img src="https://fichaauto.com.br/logo-horizontal.png"
-             style="height:34px;object-fit:contain;display:block" alt="Ficha Auto" />
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#1a7a5e,#00A651);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <polyline points="9 12 11 14 15 10"/>
+            </svg>
+          </div>
+          <span style="font-size:15px;font-weight:800;color:#111;letter-spacing:-0.3px">Ficha Auto</span>
+        </div>
       </td>
       <td align="center" valign="middle">
         <div style="font-size:15px;font-weight:700;color:#111">Consulta Veicular</div>
