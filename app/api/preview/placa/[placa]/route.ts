@@ -1,10 +1,12 @@
 // Rota pública gratuita — preview de placa com FIPE
 // Sem auth, sem débito de saldo
-// Fonte 1: PlacaFIPE (token via PLACAFIPE_TOKEN)
-// Fonte 2: Assertiva básico (fallback automático se PlacaFIPE indisponível)
+// Fonte 1: cache_placas (grátis, dados de consultas anteriores)
+// Fonte 2: PlacaFIPE (token via PLACAFIPE_TOKEN)
+// Fonte 3: Assertiva básico (fallback — cobrado, evitar ao máximo)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { consultarPlacaFipe } from '@/lib/providers/placafipe'
+import { getCachePlaca } from '@/lib/cache-placas'
 
 const TOKEN_URL = 'https://api.assertivasolucoes.com.br/oauth2/v3/token'
 const BASE_URL  = 'https://api.assertivasolucoes.com.br'
@@ -74,13 +76,35 @@ export async function GET(
     return NextResponse.json({ error: 'Placa inválida' }, { status: 400 })
   }
 
-  // Tenta PlacaFIPE primeiro (mais barato)
+  // 1. Cache local (gratuito — dados de consultas pagas anteriores)
+  const cache = await getCachePlaca(placa)
+  if (cache?.marca) {
+    return NextResponse.json({
+      placa,
+      marca:         cache.marca        ?? '',
+      modelo:        cache.modelo       ?? '',
+      anoFabricacao: cache.ano_fab      ?? '',
+      anoModelo:     cache.ano_mod      ?? '',
+      cor:           cache.cor          ?? '',
+      municipio:     '',
+      uf:            '',
+      combustivel:   cache.combustivel  ?? '',
+      chassi:        cache.chassi ? cache.chassi.slice(0, 5) + '*****' : '',
+      motor:         '',
+      fipeValor:     '',
+      fipeCodigo:    cache.codigo_fipe  ?? '',
+      fipeMes:       '',
+      fonte:         'cache' as const,
+    })
+  }
+
+  // 2. PlacaFIPE (barato — R$0,03)
   const resultadoPlacaFipe = await consultarPlacaFipe(placa)
   if (resultadoPlacaFipe) {
     return NextResponse.json(resultadoPlacaFipe)
   }
 
-  // Fallback: Assertiva básico
+  // 3. Assertiva básico (fallback pago — só chega aqui se as anteriores falharem)
   const resultadoAssertiva = await previewAssertiva(placa)
   if (resultadoAssertiva) {
     return NextResponse.json(resultadoAssertiva)
