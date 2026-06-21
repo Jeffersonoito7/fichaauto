@@ -8,13 +8,19 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Configurar chave SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HOSTGATOR_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.HOSTGATOR_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HOSTGATOR_HOST }}
-          username: ${{ secrets.HOSTGATOR_USER }}
-          key: ${{ secrets.HOSTGATOR_SSH_KEY }}
-          script: |
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=30 \
+              ${{ secrets.HOSTGATOR_USER }}@${{ secrets.HOSTGATOR_HOST }} << 'ENDSSH'
             set -e
             cd /var/www/ficha-auto
             git pull origin main
@@ -23,4 +29,5 @@ jobs:
             npm ci --production=false
             npm run build
             pm2 restart ficha-auto
-            echo "Deploy concluído: $(date)"
+            echo "Deploy concluido: $(date)"
+          ENDSSH
