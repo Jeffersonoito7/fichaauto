@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft, Loader2, AlertCircle, CheckCircle,
-  AlertTriangle, TrendingUp, FileText
+  AlertTriangle, TrendingUp, FileText, Download
 } from 'lucide-react'
 
 function maskCpf(c: string) {
@@ -110,9 +110,26 @@ export default function CreditoCpfPage() {
           <p className="text-brand-gray text-sm font-mono">{maskCpf(cpf)}</p>
         </div>
         <div className="ml-auto">
-          <a href={`/api/pdf/cpf/${cpf}`} target="_blank" className="btn-primary flex items-center gap-2 text-sm">
-            <FileText className="w-4 h-4" /> PDF
-          </a>
+          <button
+            onClick={async () => {
+              const res = await fetch(`/api/pdf/credito/cpf/${cpf}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+              })
+              if (!res.ok) { alert('Erro ao gerar PDF'); return }
+              const blob = await res.blob()
+              const url  = URL.createObjectURL(blob)
+              const a    = document.createElement('a')
+              a.href     = url
+              a.download = `credito-${cpf}.pdf`
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            <Download className="w-4 h-4" /> Baixar PDF
+          </button>
         </div>
       </div>
 
