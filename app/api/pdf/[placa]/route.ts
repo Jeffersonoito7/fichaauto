@@ -4,10 +4,17 @@ import { getAuthEmail } from '@/lib/consulta-helper'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { consultarVeiculo } from '@/lib/providers'
 
-const TENANT = {
-  nome:  'Ficha Auto',
-  cor:   '#00703C',
-  site:  'fichaauto.com.br',
+// TENANT_REF e mutavel para suportar white-label por request
+const TENANT_REF = { nome: 'Ficha Auto', cor: '#00703C', logoUrl: '', site: 'fichaauto.com.br' }
+// Alias para compatibilidade com o restante do codigo que usa TENANT.*
+const TENANT = TENANT_REF
+
+function getTenantInfo(req: NextRequest) {
+  const nome    = req.nextUrl.searchParams.get('tenant_nome') || req.headers.get('x-tenant-nome')         || 'Ficha Auto'
+  const cor     = req.nextUrl.searchParams.get('tenant_cor')  || req.headers.get('x-tenant-cor-primaria') || '#00703C'
+  const logoUrl = req.nextUrl.searchParams.get('tenant_logo') || req.headers.get('x-tenant-logo')         || ''
+  const site    = req.nextUrl.searchParams.get('tenant_site') || 'fichaauto.com.br'
+  return { nome, cor, logoUrl, site }
 }
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -889,7 +896,8 @@ function restricoesBinEst(data: any): string[] {
 /* ════════════════════════════════════════════════════════════════════════════
    BUILD HTML COMPLETO
 ════════════════════════════════════════════════════════════════════════════ */
-async function buildHtml(placa: string, data: any): Promise<string> {
+async function buildHtml(placa: string, data: any, tenantInfo?: { nome: string; cor: string; logoUrl: string; site: string }): Promise<string> {
+  Object.assign(TENANT_REF, tenantInfo ?? { nome: 'Ficha Auto', cor: '#00703C', logoUrl: '', site: 'fichaauto.com.br' })
   const agora = new Date().toLocaleString('pt-BR')
   const proto = protocolo()
   const qrUrl = `https://fichaauto.com.br/dashboard/relatorio/${placa}`
@@ -968,7 +976,7 @@ export async function GET(
     // Fallback: refaz consulta apenas se não houver dado salvo
     if (!data) data = await consultarVeiculo(placa)
 
-    const html = await buildHtml(placa, data)
+    const html = await buildHtml(placa, data, getTenantInfo(req))
 
     let pdfBuffer: Buffer | null = null
     try {

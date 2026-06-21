@@ -6,7 +6,8 @@ import {
   Search, History, Wallet, BarChart3,
   Users, LogOut, Menu, X, ChevronDown, Home, Shield
 } from 'lucide-react'
-import { LogoHorizontal, LogoIcon } from '@/components/LogoFichaAuto'
+import { LogoHorizontal } from '@/components/LogoFichaAuto'
+import { TenantLogo } from '@/components/TenantProvider'
 
 const navItems = [
   { href: '/dashboard',                 icon: Home,      label: 'Home'          },
@@ -63,7 +64,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Logo */}
       <div className="p-5 border-b border-brand-border">
         <Link href="/dashboard/consultar" className="flex items-center">
-          <LogoHorizontal height={32} theme="light" />
+          <TenantLogo height={32} />
         </Link>
       </div>
 
@@ -145,7 +146,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Menu className="w-5 h-5 text-brand-dark" />
           </button>
           <div className="flex items-center gap-1.5">
-            <LogoHorizontal height={28} theme="light" />
+            <TenantLogo height={28} />
           </div>
           <Link href="/dashboard/carteira" className="text-xs font-semibold text-brand-green bg-brand-green-light px-2.5 py-1 rounded-full">
             {saldoNav === null ? '—' : saldoNav.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
