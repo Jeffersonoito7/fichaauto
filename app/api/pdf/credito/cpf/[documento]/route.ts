@@ -269,11 +269,15 @@ export async function POST(
   const dados = await req.json().catch(() => ({}))
 
   try {
-    const puppeteer = await import('puppeteer')
-    const browser   = await puppeteer.default.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] })
-    const page      = await browser.newPage()
-    await page.setContent(html(cpf, dados), { waitUntil: 'domcontentloaded' })
-    const pdf = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' } })
+    const puppeteer = await import('puppeteer-core')
+    const browser   = await puppeteer.default.launch({
+      executablePath: '/usr/bin/chromium-browser',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      headless: true,
+    })
+    const page = await browser.newPage()
+    await page.setContent(html(cpf, dados), { waitUntil: 'networkidle0' })
+    const pdf = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '0', right: '0', bottom: '0', left: '0' } })
     await browser.close()
 
     return new NextResponse(pdf, {
