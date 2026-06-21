@@ -150,23 +150,25 @@ function SecaoAcordion({
   const [aberto, setAberto] = useState(defaultAberto)
   const temProblema = alerta > 0 || atencao > 0
   return (
-    <div className="rounded-xl overflow-hidden mb-3 shadow-md border border-gray-200">
+    <div className="rounded-xl overflow-hidden mb-3 border border-gray-200 shadow-sm">
       <button
         onClick={() => setAberto(v => !v)}
-        className={`w-full flex items-center justify-between px-5 py-4 transition-colors ${
-          temProblema ? 'bg-gray-800 hover:bg-gray-700' : 'bg-gray-700 hover:bg-gray-600'
+        className={`w-full flex items-center justify-between px-5 py-3.5 transition-colors ${
+          temProblema
+            ? 'bg-gray-900 hover:bg-gray-800'
+            : 'bg-gray-800 hover:bg-gray-700'
         }`}
       >
-        <div className="flex items-center gap-3 flex-wrap text-left">
-          <span className="font-extrabold text-base text-white tracking-wide">{titulo}</span>
-          <span className="text-[11px] font-bold bg-green-500/30 text-green-300 border border-green-500/40 px-2.5 py-0.5 rounded-full">{normal} NORMAL</span>
-          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${alerta > 0 ? 'bg-red-500/30 text-red-300 border-red-500/40' : 'bg-white/10 text-white/40 border-white/10'}`}>{alerta} ALERTA</span>
-          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${atencao > 0 ? 'bg-amber-500/30 text-amber-300 border-amber-500/40' : 'bg-white/10 text-white/40 border-white/10'}`}>{atencao} ATENÇÃO</span>
+        <div className="flex items-center gap-2.5 flex-wrap text-left">
+          <span className="font-bold text-sm text-white tracking-wide">{titulo}</span>
+          <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full">{normal} OK</span>
+          {alerta > 0 && <span className="text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/30 px-2 py-0.5 rounded-full">{alerta} ALERTA</span>}
+          {atencao > 0 && <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">{atencao} ATENÇÃO</span>}
         </div>
-        <ChevronDown className={`w-5 h-5 text-white/60 shrink-0 transition-transform ${aberto ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-white/50 shrink-0 transition-transform ${aberto ? 'rotate-180' : ''}`} />
       </button>
       {aberto && (
-        <div className="px-4 pb-4 pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 bg-gray-50">
+        <div className="px-4 pb-4 pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 bg-white">
           {children}
         </div>
       )}
@@ -176,14 +178,14 @@ function SecaoAcordion({
 
 function CardStatus({ titulo, valor, tipo }: { titulo: string; valor: string; tipo: TipoCard }) {
   const styles = {
-    normal:  { bg: 'bg-green-600',  border: 'border-green-700',  badge: 'bg-green-700/60' },
-    alerta:  { bg: 'bg-red-700',    border: 'border-red-800',    badge: 'bg-red-800/60'   },
-    atencao: { bg: 'bg-amber-500',  border: 'border-amber-600',  badge: 'bg-amber-600/60' },
+    normal:  { wrap: 'bg-emerald-50 border-l-4 border-l-emerald-500 border border-emerald-100', title: 'text-emerald-700', value: 'text-emerald-900' },
+    alerta:  { wrap: 'bg-red-50 border-l-4 border-l-red-500 border border-red-100',             title: 'text-red-600',     value: 'text-red-900'   },
+    atencao: { wrap: 'bg-amber-50 border-l-4 border-l-amber-500 border border-amber-100',       title: 'text-amber-600',   value: 'text-amber-900' },
   }[tipo]
   return (
-    <div className={`${styles.bg} text-white rounded-xl p-4 min-h-[90px] flex flex-col`}>
-      <p className={`text-[10px] font-extrabold uppercase tracking-[0.12em] mb-3 pb-2 border-b ${styles.border} leading-none opacity-90`}>{titulo}</p>
-      <p className="text-[15px] font-bold leading-snug mt-auto">{valor}</p>
+    <div className={`${styles.wrap} rounded-lg p-3.5 min-h-[80px] flex flex-col`}>
+      <p className={`text-[9px] font-extrabold uppercase tracking-widest mb-2 ${styles.title}`}>{titulo}</p>
+      <p className={`text-[13px] font-bold leading-snug mt-auto ${styles.value}`}>{valor}</p>
     </div>
   )
 }
@@ -191,13 +193,13 @@ function CardStatus({ titulo, valor, tipo }: { titulo: string; valor: string; ti
 function CardBloqueado({ titulo, planoNecessario }: { titulo: string; planoNecessario: PlanoId | null }) {
   const nome = planoNecessario ? PLANOS[planoNecessario]?.nome : 'Profissional'
   return (
-    <div className="bg-gray-700 text-white rounded-xl p-4 min-h-[90px] flex flex-col opacity-60 border border-dashed border-gray-500">
-      <div className="flex items-center gap-2 mb-2">
-        <Lock className="w-3.5 h-3.5 text-purple-400" />
-        <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] opacity-70">{titulo}</p>
+    <div className="bg-gray-50 rounded-lg p-3.5 min-h-[80px] flex flex-col border border-dashed border-gray-300">
+      <div className="flex items-center gap-1.5 mb-2">
+        <Lock className="w-3 h-3 text-purple-400" />
+        <p className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400">{titulo}</p>
       </div>
-      <p className="text-xs text-white/50 mt-auto">
-        Disponível no plano <span className="text-purple-300 font-bold">{nome}</span>
+      <p className="text-xs text-gray-400 mt-auto">
+        Plano <span className="text-purple-600 font-semibold">{nome}</span>
       </p>
     </div>
   )
@@ -513,35 +515,112 @@ export default function RelatorioPage() {
       {(() => {
         const urlLogo = logoMarca(mm)
         return (
-          <div className="rounded-2xl p-5 text-white mb-4"
-               style={{ background: 'linear-gradient(135deg, #007A3D 0%, #00A651 60%, #005C2E 100%)' }}>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="text-white/55 text-[10px] uppercase tracking-widest mb-0.5">Ano Modelo {anoStr}</p>
-                <div className="flex items-center gap-3 mt-0.5">
-                  {urlLogo && (
-                    <div className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center shrink-0 overflow-hidden border border-white/20">
-                      <Image
-                        src={urlLogo}
-                        alt={extrairMarca(mm)}
-                        width={32}
-                        height={32}
-                        className="object-contain"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                        unoptimized
-                      />
-                    </div>
-                  )}
-                  <h2 className="text-xl font-extrabold uppercase leading-tight">{mm}</h2>
+          <div className="rounded-2xl mb-4 overflow-hidden"
+               style={{ background: 'linear-gradient(135deg, #003d1f 0%, #00703C 50%, #00A651 100%)' }}>
+            <div className="p-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                {urlLogo && (
+                  <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center shrink-0 overflow-hidden border border-white/15">
+                    <Image
+                      src={urlLogo}
+                      alt={extrairMarca(mm)}
+                      width={40}
+                      height={40}
+                      className="object-contain"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                      unoptimized
+                    />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-white/50 text-[10px] uppercase tracking-widest">Ano {anoStr}</p>
+                  <h2 className="text-lg font-extrabold text-white uppercase leading-tight truncate">{mm}</h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="font-mono text-2xl font-black text-white tracking-[0.2em]">{placaFmt}</span>
+                    {cor && <span className="text-white/50 text-xs">{cor.toUpperCase()}</span>}
+                  </div>
                 </div>
-                <p className="text-3xl font-mono font-extrabold tracking-[0.25em] mt-1">{placaFmt}</p>
-                {cor && <p className="text-white/55 text-xs mt-1">Cor {cor.toUpperCase()}</p>}
               </div>
               <ScoreRing score={score} />
+            </div>
+            <div className="px-5 pb-3 flex items-center gap-2">
+              <span className="text-[10px] text-white/40">{agora}</span>
             </div>
           </div>
         )
       })()}
+
+      {/* ── RESUMO FINANCEIRO (visível sempre, como o MTix) ───────────────── */}
+      {(() => {
+        const totalDebitos = ipvaVal + licenciamento + multasTotal
+        const hasDebito = totalDebitos > 0 || temDebitoMultas
+        return (
+          <div className={`rounded-2xl p-5 mb-4 border-2 ${hasDebito ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}`}>
+            <div className="flex items-center justify-between mb-4">
+              <p className={`text-xs font-extrabold uppercase tracking-widest ${hasDebito ? 'text-red-600' : 'text-emerald-600'}`}>
+                Débitos Financeiros
+              </p>
+              {hasDebito
+                ? <span className="text-[10px] font-bold bg-red-600 text-white px-2.5 py-1 rounded-full">DÉBITOS ENCONTRADOS</span>
+                : <span className="text-[10px] font-bold bg-emerald-600 text-white px-2.5 py-1 rounded-full">SEM DÉBITOS</span>
+              }
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white rounded-xl p-3.5 border border-gray-100 shadow-sm">
+                <p className="text-[10px] font-bold uppercase text-gray-500 mb-1">IPVA</p>
+                <p className={`text-xl font-black ${ipvaVal > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {ipvaVal > 0 ? `R$ ${ipvaVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'NADA CONSTA'}
+                </p>
+              </div>
+              <div className="bg-white rounded-xl p-3.5 border border-gray-100 shadow-sm">
+                <p className="text-[10px] font-bold uppercase text-gray-500 mb-1">MULTAS</p>
+                <p className={`text-xl font-black ${multasTotal > 0 || temDebitoMultas ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {multasTotal > 0
+                    ? `R$ ${multasTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                    : temDebitoMultas ? 'EXISTE DÉBITO' : 'NADA CONSTA'}
+                </p>
+              </div>
+              <div className="bg-white rounded-xl p-3.5 border border-gray-100 shadow-sm">
+                <p className="text-[10px] font-bold uppercase text-gray-500 mb-1">LICENCIAMENTO</p>
+                <p className={`text-xl font-black ${licenciamento > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {licenciamento > 0 ? `R$ ${licenciamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'NADA CONSTA'}
+                </p>
+              </div>
+            </div>
+            {totalDebitos > 0 && (
+              <div className="mt-3 pt-3 border-t border-red-200 flex items-center justify-between">
+                <p className="text-xs text-red-600 font-semibold">Total de débitos</p>
+                <p className="text-lg font-black text-red-700">
+                  R$ {totalDebitos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ── STATUS RÁPIDO ──────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {[
+          { label: 'Leilão',   ok: !temLeilao,     null: leilaoNull  },
+          { label: 'Roubo/Furto', ok: !temRoubo,   null: binFedNull  },
+          { label: 'Sinistro', ok: !temSinistro && !sinistroRecuperado, null: sinistroNull },
+          { label: 'RENAJUD',  ok: !temRenajud,    null: false        },
+          { label: 'IPVA',     ok: ipvaVal === 0,  null: binEstNull   },
+          { label: 'Multas',   ok: multasTotal === 0 && !temDebitoMultas, null: binEstNull },
+        ].map(({ label, ok, null: isNull }) => (
+          <span key={label} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${
+            isNull
+              ? 'bg-gray-100 text-gray-500 border-gray-200'
+              : ok
+                ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                : 'bg-red-100 text-red-700 border-red-200'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isNull ? 'bg-gray-400' : ok ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            {label}
+          </span>
+        ))}
+      </div>
 
       {/* Erros da API */}
       {data.erros?.length > 0 && (
