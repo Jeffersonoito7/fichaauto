@@ -60,6 +60,7 @@ export default function LandingPage() {
             <a href="#funcionalidades" className="hover:text-brand-blue transition-colors">Funcionalidades</a>
             <a href="#precos" className="hover:text-brand-blue transition-colors">Preços</a>
             <a href="#como-funciona" className="hover:text-brand-blue transition-colors">Como funciona</a>
+            <Link href="/planos" className="hover:text-brand-blue transition-colors font-semibold text-brand-green">Para Empresas</Link>
           </div>
           <div className="flex items-center gap-3">
             <Link href="/login" className="text-sm font-medium text-brand-blue hover:text-brand-blue-dark transition-colors">
