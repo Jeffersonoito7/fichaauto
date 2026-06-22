@@ -139,7 +139,7 @@ export default function PlanosPage() {
           </Link>
           <div className="flex items-center gap-4">
             <Link href="/login" className="text-sm text-brand-gray hover:text-brand-dark transition-colors">Entrar</Link>
-            <Link href="/cadastro" className="bg-brand-green text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+            <Link href="/cadastro/empresa" className="bg-brand-green text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
               Criar conta gratis
             </Link>
           </div>
@@ -161,7 +161,7 @@ export default function PlanosPage() {
             Creditos pre-pagos via Pix. Sem contrato, sem fidelidade.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/cadastro"
+            <Link href="/cadastro/empresa"
               className="bg-brand-green text-white font-bold px-8 py-4 rounded-xl hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
               Criar conta gratis <ChevronRight className="w-4 h-4" />
             </Link>
@@ -249,7 +249,7 @@ export default function PlanosPage() {
                     </div>
 
                     {/* CTA */}
-                    <Link href="/cadastro"
+                    <Link href="/cadastro/empresa"
                       className={`w-full text-center py-3 rounded-xl font-semibold text-sm transition-colors ${c.btn}`}>
                       Comecar agora
                     </Link>
@@ -335,7 +335,7 @@ export default function PlanosPage() {
             Compre creditos quando quiser, comece a consultar em minutos.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/cadastro"
+            <Link href="/cadastro/empresa"
               className="bg-white text-brand-green font-bold px-10 py-4 rounded-xl hover:bg-gray-50 transition-colors inline-flex items-center gap-2">
               Criar conta gratis <ChevronRight className="w-4 h-4" />
             </Link>
