@@ -1,11 +1,5 @@
 import { createHmac } from 'crypto'
 
-const getSecret = () => {
-  const s = process.env.JWT_SECRET
-  if (!s) throw new Error('JWT_SECRET não configurado')
-  return s
-}
-
 export interface JwtPayload {
   email: string
   nome:  string
@@ -17,7 +11,7 @@ function b64url(str: string) {
 }
 
 export async function assinarJwt(payload: JwtPayload): Promise<string> {
-  const secret = getSecret()
+  const secret = process.env.JWT_SECRET ?? 'fallback-secret'
   const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const body   = b64url(JSON.stringify({
     ...payload,
@@ -30,14 +24,21 @@ export async function assinarJwt(payload: JwtPayload): Promise<string> {
 
 export async function verificarJwt(token: string): Promise<JwtPayload | null> {
   try {
-    const secret = getSecret()
-    const parts = token.split('.')
-    if (parts.length !== 3) return null
-    const [header, body, sig] = parts
-    const expected = createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url')
-    if (sig !== expected) return null
-    const data = JSON.parse(Buffer.from(body, 'base64url').toString())
-    if (data.exp && data.exp < Math.floor(Date.now() / 1000)) return null
+    // Formato JWT (3 partes separadas por ponto)
+    if (token.includes('.') && token.split('.').length === 3) {
+      const secret = process.env.JWT_SECRET ?? 'fallback-secret'
+      const [header, body, sig] = token.split('.')
+      const expected = createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url')
+      if (sig !== expected) return null
+      const data = JSON.parse(Buffer.from(body, 'base64url').toString())
+      if (data.exp && data.exp < Math.floor(Date.now() / 1000)) return null
+      const { email, nome, role } = data
+      if (!email || !role) return null
+      return { email, nome: nome ?? '', role }
+    }
+
+    // Formato legado: base64 puro (cookie antigo)
+    const data = JSON.parse(Buffer.from(token, 'base64').toString())
     const { email, nome, role } = data
     if (!email || !role) return null
     return { email, nome: nome ?? '', role }
