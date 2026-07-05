@@ -8,7 +8,7 @@ const ADMIN_NOME  = process.env.ADMIN_NOME  ?? 'Administrador'
 // Rate limiting em memória: máx 5 tentativas a cada 15 min por IP
 const tentativas = new Map<string, number[]>()
 const JANELA_MS  = 15 * 60 * 1000
-const MAX_TENT   = 5
+const MAX_TENT   = 20
 
 function verificarRateLimit(ip: string): boolean {
   const agora = Date.now()
