@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { verificarJwt } from '@/lib/jwt'
 
 export async function GET(_req: NextRequest) {
   try {
@@ -11,7 +12,8 @@ export async function GET(_req: NextRequest) {
       return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 })
     }
 
-    const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf-8'))
+    const payload = await verificarJwt(token)
+    if (!payload) return NextResponse.json({ erro: 'Token inválido' }, { status: 401 })
     const { email, nome, role } = payload
 
     // Tenta buscar saldo e plano via service role

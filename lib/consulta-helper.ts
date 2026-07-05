@@ -1,20 +1,15 @@
 import { cookies } from 'next/headers'
 import { createServiceRoleClient } from './supabase-server'
+import { verificarJwt } from './jwt'
 import { randomUUID } from 'crypto'
-
-export function getEmailFromCookie(token: string): string | null {
-  try {
-    const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf-8'))
-    return payload?.email ?? null
-  } catch { return null }
-}
 
 export async function getAuthEmail(): Promise<string | null> {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('ficha-auth')?.value
     if (!token) return null
-    return getEmailFromCookie(token)
+    const payload = await verificarJwt(token)
+    return payload?.email ?? null
   } catch { return null }
 }
 

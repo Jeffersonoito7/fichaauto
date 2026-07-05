@@ -102,7 +102,6 @@ export async function GET(
   const saldo = parseFloat(perfil?.saldo_cpf ?? '0')
   const custo = PRECO.cnpj
   if (!isAdmin && saldo < custo) return NextResponse.json({ error: `Saldo insuficiente. Esta consulta custa R$ ${custo.toFixed(2).replace('.', ',')}. Recarregue sua carteira.` }, { status: 402 })
-  if (!isAdmin) await svc.from('perfis').update({ saldo_cpf: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() }).eq('email', email)
 
   const erros: string[] = []
   const avisos: string[] = []
@@ -176,6 +175,10 @@ export async function GET(
   const sancoes = await consultarSancoesCnpj(cnpj)
 
   const resultado = { cnpj, basico: basicoFinal, qsa: qsaFinal, relacionadas, sancoes, erros, avisos }
+
+  // Debitar somente após retorno da API (evita perda de saldo em falha externa)
+  if (!isAdmin) await svc.from('perfis').update({ saldo_cpf: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() }).eq('email', email)
+
   const saved = await salvarConsulta({ email, tipo: 'cnpj', documento: cnpj, descricao: basicoFinal?.razaoSocial ?? cnpj, resultado }).catch(() => null)
 
   return NextResponse.json({ ...resultado, token: saved?.token ?? null })

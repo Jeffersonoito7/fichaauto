@@ -39,18 +39,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Debitar saldo veicular antes de executar (admin não debita)
+    const resultado = await consultarVeiculo(
+      placa  ? input : '',
+      chassi ? input : undefined,
+    )
+
+    // Debitar somente após retorno da API (evita perda de saldo em falha externa)
     if (!isAdmin) {
       await service
         .from('perfis')
         .update({ saldo_veiculo: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() })
         .eq('email', email)
     }
-
-    const resultado = await consultarVeiculo(
-      placa  ? input : '',
-      chassi ? input : undefined,
-    )
 
     // Extrair descrição do veículo para o histórico
     const pDesc = resultado.placa?.resposta?.descricao ?? resultado.placa?.resposta ?? {}

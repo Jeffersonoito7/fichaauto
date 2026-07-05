@@ -952,28 +952,34 @@ export async function GET(
   }
 
   try {
+    const email = await getAuthEmail()
+    if (!email) {
+      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    }
+
     // Tenta ler do banco (consulta já paga) — evita nova chamada à Assertiva
     let data: any = null
     try {
-      const email = await getAuthEmail()
-      if (email) {
-        const svc = createServiceRoleClient() as any
-        const { data: row } = await svc
-          .from('consultas')
-          .select('resultado')
-          .eq('email', email)
-          .eq('tipo', 'veiculo')
-          .eq('documento', placa)
-          .order('criado_em', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        if (row?.resultado) {
+      const svc = createServiceRoleClient() as any
+      const { data: row } = await svc
+        .from('consultas')
+        .select('resultado')
+        .eq('email', email)
+        .eq('tipo', 'veiculo')
+        .eq('documento', placa)
+        .order('criado_em', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (row?.resultado) {
+        try {
           data = typeof row.resultado === 'string' ? JSON.parse(row.resultado) : row.resultado
+        } catch {
+          console.error('[pdf] resultado corrompido para', placa)
         }
       }
     } catch { /* segue para fallback */ }
 
-    // Fallback: refaz consulta apenas se não houver dado salvo
+    // Fallback: refaz consulta se não houver dado salvo no banco
     if (!data) data = await consultarVeiculo(placa)
 
     const html = await buildHtml(placa, data, getTenantInfo(req))

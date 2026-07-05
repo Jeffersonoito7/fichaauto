@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
+import { verificarJwt } from '@/lib/jwt'
 
 function service() {
   return createClient(
@@ -14,8 +15,8 @@ async function getEmailFromCookie(): Promise<string | null> {
     const cookieStore = await cookies()
     const token = cookieStore.get('ficha-auth')?.value
     if (!token) return null
-    const payload = JSON.parse(Buffer.from(token, 'base64').toString('utf-8'))
-    return payload.email ?? null
+    const payload = await verificarJwt(token)
+    return payload?.email ?? null
   } catch { return null }
 }
 
