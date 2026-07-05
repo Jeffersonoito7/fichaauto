@@ -29,8 +29,9 @@ export async function GET(_req: NextRequest) {
     let tenant_id:   string | null = null
     let tenant_role: string | null = null
     try {
-      const service = createServiceRoleClient()
-      const { data } = await (service as any)
+      // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
+      const service = createServiceRoleClient() as any
+      const { data } = await service
         .from('perfis')
         .select('saldo_veiculo, saldo_cpf, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, tenant_id, tenant_role')
         .eq('email', email)
@@ -46,7 +47,9 @@ export async function GET(_req: NextRequest) {
       pode_credito     = data?.pode_credito   ?? false
       tenant_id        = data?.tenant_id      ?? null
       tenant_role      = data?.tenant_role    ?? null
-    } catch {}
+    } catch (e: any) {
+      console.error('[/api/auth/me] falha ao buscar perfil no banco:', e?.message ?? e)
+    }
 
     return NextResponse.json({ nome, email, role, saldo_veiculo, saldo_cpf, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, tenant_id, tenant_role })
   } catch {

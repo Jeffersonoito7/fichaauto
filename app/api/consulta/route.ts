@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { consultarVeiculo } from '@/lib/providers'
 import { createServiceRoleClient } from '@/lib/supabase-server'
-import { getAuthEmail, salvarConsulta } from '@/lib/consulta-helper'
+import { getAuthEmail, salvarConsulta, registrarAuditoria } from '@/lib/consulta-helper'
 import { PRECO } from '@/lib/products'
 import { salvarCacheDeResultado } from '@/lib/cache-placas'
 
@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Verificar saldo com service role (ignora RLS)
+    // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
     const service = createServiceRoleClient() as any
     const { data: perfil } = await service
       .from('perfis')
@@ -65,8 +66,9 @@ export async function POST(req: NextRequest) {
       resultado,
     })
 
-    // Alimenta o cache de placas com os dados da consulta paga (nao bloqueia response)
+    // Fire-and-forget: cache e audit log não bloqueiam a resposta
     if (placa) salvarCacheDeResultado(input.toUpperCase(), resultado)
+    registrarAuditoria({ email, acao: 'consulta_placa', documento: input.toUpperCase(), custo: isAdmin ? 0 : custo })
 
     return NextResponse.json({ success: true, token: saved?.token ?? null, ...resultado })
   } catch (err: any) {

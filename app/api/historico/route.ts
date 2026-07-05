@@ -18,8 +18,9 @@ export async function GET(_req: NextRequest) {
 
     // Tenta buscar histórico de consultas via service role
     try {
-      const service = createServiceRoleClient()
-      const { data } = await (service as any)
+      // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
+      const service = createServiceRoleClient() as any
+      const { data } = await service
         .from('consultas')
         .select('id, tipo, documento, descricao, created_at, status, plano')
         .eq('email', email)
@@ -38,11 +39,13 @@ export async function GET(_req: NextRequest) {
         }))
         return NextResponse.json(lista)
       }
-    } catch {}
+    } catch (e: any) {
+      console.error('[/api/historico] falha ao buscar consultas:', e?.message ?? e)
+    }
 
-    // Retorna lista vazia se tabela não existe ou usuário sem histórico
     return NextResponse.json([])
-  } catch {
+  } catch (e: any) {
+    console.error('[/api/historico] erro inesperado:', e?.message ?? e)
     return NextResponse.json([])
   }
 }

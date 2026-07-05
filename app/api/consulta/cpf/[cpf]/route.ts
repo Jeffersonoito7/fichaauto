@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthEmail, salvarConsulta } from '@/lib/consulta-helper'
+import { getAuthEmail, salvarConsulta, registrarAuditoria } from '@/lib/consulta-helper'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { buscarProcessosProprietario } from '@/lib/providers/datajud'
 import { consultarSancoesCpf } from '@/lib/providers/sancoes-gov'
@@ -56,6 +56,7 @@ export async function GET(
   const email = await getAuthEmail()
   if (!email) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
+  // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
   const svc = createServiceRoleClient() as any
   const { data: perfil } = await svc.from('perfis').select('saldo_cpf, role').eq('email', email).maybeSingle()
   const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
@@ -162,6 +163,7 @@ export async function GET(
   if (!isAdmin) await svc.from('perfis').update({ saldo_cpf: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() }).eq('email', email)
 
   const saved = await salvarConsulta({ email, tipo: 'cpf', documento: cpf, descricao, resultado })
+  registrarAuditoria({ email, acao: 'consulta_cpf', documento: cpf, custo: isAdmin ? 0 : custo })
 
   return NextResponse.json({ ...resultado, token: saved?.token ?? null })
 }

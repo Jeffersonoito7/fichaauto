@@ -960,6 +960,7 @@ export async function GET(
     // Tenta ler do banco (consulta já paga) — evita nova chamada à Assertiva
     let data: any = null
     try {
+      // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
       const svc = createServiceRoleClient() as any
       const { data: row } = await svc
         .from('consultas')

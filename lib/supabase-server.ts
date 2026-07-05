@@ -14,7 +14,9 @@ export async function createClient() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
-          } catch {}
+          } catch {
+            // Em Server Components os cookies são read-only; erro esperado do SSR
+          }
         },
       },
     }

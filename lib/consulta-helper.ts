@@ -13,6 +13,31 @@ export async function getAuthEmail(): Promise<string | null> {
   } catch { return null }
 }
 
+export async function registrarAuditoria(opts: {
+  email: string
+  acao: string
+  documento?: string
+  custo?: number
+  ip?: string
+  sucesso?: boolean
+  detalhes?: string
+}): Promise<void> {
+  try {
+    const svc = createServiceRoleClient() as any
+    await svc.from('audit_logs').insert({
+      email:     opts.email,
+      acao:      opts.acao,
+      documento: opts.documento ?? null,
+      custo:     opts.custo ?? null,
+      ip:        opts.ip ?? null,
+      sucesso:   opts.sucesso ?? true,
+      detalhes:  opts.detalhes ?? null,
+    })
+  } catch (e: any) {
+    console.error('[registrarAuditoria]', e?.message ?? e)
+  }
+}
+
 export async function salvarConsulta(opts: {
   email: string
   tipo: 'veiculo' | 'cpf' | 'cnpj'
@@ -21,6 +46,7 @@ export async function salvarConsulta(opts: {
   resultado?: any
 }) {
   try {
+    // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
     const svc = createServiceRoleClient() as any
     const token = randomUUID().replace(/-/g, '')
     const expires_at = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
