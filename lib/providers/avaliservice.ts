@@ -1,6 +1,6 @@
 // AvaliService — Consulta veicular completa
 // Docs: https://avaliservice.com.br
-// TODO: Adicionar API_KEY após fechar contrato
+// Configurar AVALISERVICE_API_KEY no Vercel quando fechar contrato
 
 const BASE_URL = process.env.AVALISERVICE_BASE_URL ?? 'https://api.avaliservice.com.br'
 const API_KEY  = process.env.AVALISERVICE_API_KEY  ?? ''

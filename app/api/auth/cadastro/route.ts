@@ -9,6 +9,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ erro: 'Nome e e-mail são obrigatórios.' }, { status: 400 })
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+    if (!emailRegex.test(email.trim())) {
+      return NextResponse.json({ erro: 'E-mail inválido.' }, { status: 400 })
+    }
+
+    if (nome.trim().length < 3) {
+      return NextResponse.json({ erro: 'Nome deve ter pelo menos 3 caracteres.' }, { status: 400 })
+    }
+
     const supabase = createServiceRoleClient()
 
     // Verifica se já existe

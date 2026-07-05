@@ -1,9 +1,9 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   History, Search, Car, User, Building2,
-  Loader2, ChevronRight, AlertCircle
+  Loader2, ChevronRight, AlertCircle, ChevronLeft
 } from 'lucide-react'
 
 interface Consulta {
@@ -14,6 +14,14 @@ interface Consulta {
   data: string
   status: string
   plano: string
+}
+
+interface HistoricoResp {
+  lista:       Consulta[]
+  total:       number
+  page:        number
+  pageSize:    number
+  totalPages:  number
 }
 
 const TIPO_CONFIG = {
@@ -30,20 +38,32 @@ function fmtData(iso: string) {
 
 export default function HistoricoPage() {
   const router = useRouter()
-  const [consultas, setConsultas] = useState<Consulta[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [busca, setBusca]         = useState('')
+  const [consultas, setConsultas]   = useState<Consulta[]>([])
+  const [total, setTotal]           = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [page, setPage]             = useState(1)
+  const [loading, setLoading]       = useState(true)
+  const [busca, setBusca]           = useState('')
 
-  useEffect(() => {
-    fetch('/api/historico')
+  const carregar = useCallback((p: number) => {
+    setLoading(true)
+    fetch(`/api/historico?page=${p}`)
       .then(r => r.json())
-      .then(d => { setConsultas(Array.isArray(d) ? d : []); setLoading(false) })
-      .catch(() => setLoading(false))
+      .then((d: HistoricoResp) => {
+        setConsultas(d.lista ?? [])
+        setTotal(d.total ?? 0)
+        setTotalPages(d.totalPages ?? 0)
+        setPage(d.page ?? p)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => { carregar(1) }, [carregar])
+
   function abrirRelatorio(c: Consulta) {
-    if (c.tipo === 'cpf')   { router.push(`/dashboard/relatorio/cpf/${c.documento.replace(/\D/g, '')}`);  return }
-    if (c.tipo === 'cnpj')  { router.push(`/dashboard/relatorio/cnpj/${c.documento.replace(/\D/g, '')}`); return }
+    if (c.tipo === 'cpf')  { router.push(`/dashboard/relatorio/cpf/${c.documento.replace(/\D/g, '')}`);  return }
+    if (c.tipo === 'cnpj') { router.push(`/dashboard/relatorio/cnpj/${c.documento.replace(/\D/g, '')}`); return }
     router.push(`/dashboard/relatorio/${c.documento}`)
   }
 
@@ -136,10 +156,33 @@ export default function HistoricoPage() {
         </div>
       )}
 
-      {!loading && consultas.length > 0 && (
-        <p className="text-xs text-brand-gray text-center mt-4">
-          {consultas.length} consulta(s) no total · últimas 50 exibidas
-        </p>
+      {!loading && total > 0 && (
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-xs text-brand-gray">
+            {total} consulta{total !== 1 ? 's' : ''} no total
+          </p>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => carregar(page - 1)}
+                disabled={page <= 1}
+                className="p-1.5 rounded-lg border border-brand-border hover:bg-brand-gray-light disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4 text-brand-dark" />
+              </button>
+              <span className="text-xs text-brand-gray font-medium">
+                {page} / {totalPages}
+              </span>
+              <button
+                onClick={() => carregar(page + 1)}
+                disabled={page >= totalPages}
+                className="p-1.5 rounded-lg border border-brand-border hover:bg-brand-gray-light disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4 text-brand-dark" />
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

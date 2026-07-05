@@ -1,6 +1,6 @@
 // ConsultarPlaca — Alternativa ao AvaliService
 // Docs: https://docs.consultarplaca.com.br
-// TODO: Adicionar API_KEY após fechar contrato
+// Configurar CONSULTARPLACA_API_KEY no Vercel quando fechar contrato
 
 const BASE_URL = process.env.CONSULTARPLACA_BASE_URL ?? 'https://api.consultarplaca.com.br'
 const API_KEY  = process.env.CONSULTARPLACA_API_KEY  ?? ''
