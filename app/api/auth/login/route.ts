@@ -5,27 +5,7 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? ''
 const ADMIN_SENHA = process.env.ADMIN_SENHA ?? ''
 const ADMIN_NOME  = process.env.ADMIN_NOME  ?? 'Administrador'
 
-// Rate limiting em memória: máx 5 tentativas a cada 15 min por IP
-const tentativas = new Map<string, number[]>()
-const JANELA_MS  = 15 * 60 * 1000
-const MAX_TENT   = 20
-
-function verificarRateLimit(ip: string): boolean {
-  const agora = Date.now()
-  const lista  = (tentativas.get(ip) ?? []).filter(t => agora - t < JANELA_MS)
-  if (lista.length >= MAX_TENT) return false
-  lista.push(agora)
-  tentativas.set(ip, lista)
-  return true
-}
-
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
-
-  if (!verificarRateLimit(ip)) {
-    return NextResponse.json({ erro: 'Muitas tentativas. Tente novamente em 15 minutos.' }, { status: 429 })
-  }
-
   const { email, senha } = await req.json()
 
   if (!ADMIN_EMAIL || !ADMIN_SENHA) {
