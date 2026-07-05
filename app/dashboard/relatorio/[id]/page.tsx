@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowLeft, Download, ChevronDown, Loader2, XCircle, Lock } from 'lucide-react'
+import { ArrowLeft, Download, ChevronDown, Loader2, XCircle, Lock, Share2, Check } from 'lucide-react'
 import { temModulo, planoQueTemModulo, PLANOS, type PlanoId } from '@/lib/products'
 
 const BRAND_LOGO: Record<string, string> = {
@@ -213,6 +213,8 @@ export default function RelatorioPage() {
   const [erro, setErro]         = useState('')
   const [semSaldo, setSemSaldo] = useState(false)
   const [plano, setPlano]       = useState<PlanoId | null>(null)
+  const [token, setToken]       = useState<string | null>(null)
+  const [copiado, setCopiado]   = useState(false)
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => { if (d?.plano) setPlano(d.plano) }).catch(() => {})
@@ -230,6 +232,7 @@ export default function RelatorioPage() {
         if (res.status === 402) { setSemSaldo(true); setErro(json.error); return }
         if (!res.ok) throw new Error(json.error || 'Erro na consulta')
         setData(json)
+        if (json.token) setToken(json.token)
       } catch (e: any) {
         setErro(e.message)
       } finally {
@@ -505,10 +508,24 @@ export default function RelatorioPage() {
             <p className="text-xs text-brand-gray">{agora}</p>
           </div>
         </div>
-        <a href={`/api/pdf/${id}`} target="_blank"
-           className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue/90 text-white rounded-xl transition-colors">
-          <Download className="w-4 h-4" /> Visualizar PDF Completo
-        </a>
+        <div className="flex items-center gap-2">
+          {token && (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}/r/${token}`)
+                setCopiado(true)
+                setTimeout(() => setCopiado(false), 2500)
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-brand-green-light hover:bg-brand-green/10 text-brand-green rounded-xl transition-colors border border-brand-green/20"
+            >
+              {copiado ? <><Check className="w-4 h-4" /> Link copiado!</> : <><Share2 className="w-4 h-4" /> Compartilhar</>}
+            </button>
+          )}
+          <a href={`/api/pdf/${id}`} target="_blank"
+             className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue/90 text-white rounded-xl transition-colors">
+            <Download className="w-4 h-4" /> Visualizar PDF Completo
+          </a>
+        </div>
       </div>
 
       {/* Banner */}

@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { FileText, ArrowLeft, Loader2, Building2, AlertCircle, CheckCircle, AlertTriangle, Users, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { FileText, ArrowLeft, Loader2, Building2, AlertCircle, CheckCircle, AlertTriangle, Users, ShieldAlert, ShieldCheck, Share2, Check } from 'lucide-react'
 
 function maskCnpj(c: string) {
   const d = c.replace(/\D/g, '')
@@ -51,6 +51,8 @@ export default function RelatorioCnpjPage() {
   const [data, setData]       = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro]       = useState('')
+  const [token, setToken]     = useState<string | null>(null)
+  const [copiado, setCopiado] = useState(false)
 
   useEffect(() => {
     fetch(`/api/consulta/cnpj/${cnpj}`)
@@ -60,6 +62,7 @@ export default function RelatorioCnpjPage() {
           setErro(d?.error ?? 'Erro ao consultar CNPJ.')
         } else {
           setData(d)
+          if (d.token) setToken(d.token)
         }
         setLoading(false)
       })
@@ -137,7 +140,19 @@ export default function RelatorioCnpjPage() {
           <h1 className="text-xl font-bold text-brand-dark">Relatório CNPJ</h1>
           <p className="text-brand-gray text-sm font-mono">{maskCnpj(cnpj)}</p>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {token && (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}/r/${token}`)
+                setCopiado(true)
+                setTimeout(() => setCopiado(false), 2500)
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-brand-green-light hover:bg-brand-green/10 text-brand-green rounded-xl transition-colors border border-brand-green/20"
+            >
+              {copiado ? <><Check className="w-4 h-4" /> Copiado!</> : <><Share2 className="w-4 h-4" /> Compartilhar</>}
+            </button>
+          )}
           <a
             href={`/api/pdf/cnpj/${cnpj}`}
             target="_blank"

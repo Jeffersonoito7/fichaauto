@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   FileText, ArrowLeft, Loader2, User, AlertCircle,
   CheckCircle, AlertTriangle, Phone, Mail,
-  MapPin, Briefcase, Users, Skull, ShieldAlert, ShieldCheck
+  MapPin, Briefcase, Users, Skull, ShieldAlert, ShieldCheck, Share2, Check
 } from 'lucide-react'
 
 function maskCpf(c: string) {
@@ -88,6 +88,8 @@ export default function RelatorioCpfPage() {
   const [data, setData]       = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro]       = useState('')
+  const [token, setToken]     = useState<string | null>(null)
+  const [copiado, setCopiado] = useState(false)
 
   useEffect(() => {
     fetch(`/api/consulta/cpf/${cpf}`)
@@ -97,6 +99,7 @@ export default function RelatorioCpfPage() {
           setErro(d?.error ?? 'Erro ao consultar CPF.')
         } else {
           setData(d)
+          if (d.token) setToken(d.token)
         }
         setLoading(false)
       })
@@ -205,7 +208,19 @@ export default function RelatorioCpfPage() {
           <h1 className="text-xl font-bold text-brand-dark">Relatório CPF</h1>
           <p className="text-brand-gray text-sm font-mono">{maskCpf(cpf)}</p>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {token && (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}/r/${token}`)
+                setCopiado(true)
+                setTimeout(() => setCopiado(false), 2500)
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-brand-green-light hover:bg-brand-green/10 text-brand-green rounded-xl transition-colors border border-brand-green/20"
+            >
+              {copiado ? <><Check className="w-4 h-4" /> Copiado!</> : <><Share2 className="w-4 h-4" /> Compartilhar</>}
+            </button>
+          )}
           <a href={`/api/pdf/cpf/${cpf}`} target="_blank" className="btn-primary flex items-center gap-2 text-sm">
             <FileText className="w-4 h-4" /> Baixar PDF
           </a>
