@@ -33,7 +33,11 @@ export async function POST(req: NextRequest) {
     })
     return res
   } catch (e: any) {
-    console.error('[POST /api/auth/login] erro:', e?.message ?? e)
-    return NextResponse.json({ erro: e?.message ?? 'Erro interno' }, { status: 500 })
+    const msg = String(e?.message ?? e ?? 'erro desconhecido')
+    console.error('[POST /api/auth/login]', msg)
+    return new Response(JSON.stringify({ erro: msg }), {
+      status: 500,
+      headers: { 'content-type': 'application/json' },
+    })
   }
 }
