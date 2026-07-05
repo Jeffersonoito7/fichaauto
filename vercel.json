@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/monitorar?secret=91b2afc487b9d24327cab5eb2195182566158f3adceed08321b1900e5e568bd6",
+      "schedule": "0 */12 * * *"
+    }
+  ]
+}

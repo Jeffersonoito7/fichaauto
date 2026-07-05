@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Search, History, Wallet, BarChart3,
-  Users, LogOut, Menu, X, ChevronDown, Home, Shield
+  Users, LogOut, Menu, X, ChevronDown, Home, Shield, Bell
 } from 'lucide-react'
 import { LogoHorizontal } from '@/components/LogoFichaAuto'
 import { TenantLogo } from '@/components/TenantProvider'
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/dashboard/historico',       icon: History,   label: 'Histórico'     },
   { href: '/dashboard/associacoes',     icon: Shield,    label: 'Associações'   },
   { href: '/dashboard/carteira',        icon: Wallet,    label: 'Carteira'      },
+  { href: '/dashboard/monitoramento',   icon: Bell,      label: 'Monitoramento' },
 ]
 
 const tenantItems = [
