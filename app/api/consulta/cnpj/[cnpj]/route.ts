@@ -98,8 +98,9 @@ export async function GET(
 
   // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
   const svc = createServiceRoleClient() as any
-  const { data: perfil } = await svc.from('perfis').select('saldo_cpf, role').eq('email', email).maybeSingle()
+  const { data: perfil } = await svc.from('perfis').select('saldo_cpf, role, pode_cnpj').eq('email', email).maybeSingle()
   const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
+  if (!isAdmin && !perfil?.pode_cnpj) return NextResponse.json({ error: 'Sem permissão para consulta de CNPJ.' }, { status: 403 })
   const saldo = parseFloat(perfil?.saldo_cpf ?? '0')
   const custo = PRECO.cnpj
   if (!isAdmin && saldo < custo) return NextResponse.json({ error: `Saldo insuficiente. Esta consulta custa R$ ${custo.toFixed(2).replace('.', ',')}. Recarregue sua carteira.` }, { status: 402 })

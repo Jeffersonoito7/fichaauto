@@ -264,6 +264,19 @@ export default function UsuariosPage() {
               {/* Status */}
               <Toggle label="Conta ativa" checked={!!form.ativo} onChange={v => setForm(f => ({ ...f, ativo: v }))} />
 
+              {/* Senha */}
+              <div>
+                <label className="block text-xs text-brand-gray mb-1.5 font-medium">Senha de acesso</label>
+                <input
+                  type="password"
+                  className="input-base text-sm"
+                  placeholder="Deixe em branco para não alterar (min. 6 caracteres)"
+                  value={(form as any).senha ?? ''}
+                  onChange={e => setForm(f => ({ ...f, senha: e.target.value } as any))}
+                />
+                <p className="text-[10px] text-brand-gray/60 mt-1">Defina uma senha para o usuario conseguir fazer login.</p>
+              </div>
+
               {/* Obs */}
               <div>
                 <label className="block text-xs text-brand-gray mb-1.5 font-medium">Observação interna</label>

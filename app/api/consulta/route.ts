@@ -25,13 +25,17 @@ export async function POST(req: NextRequest) {
     const service = createServiceRoleClient() as any
     const { data: perfil } = await service
       .from('perfis')
-      .select('saldo_veiculo, role')
+      .select('saldo_veiculo, role, pode_placa, ativo')
       .eq('email', email)
       .maybeSingle()
 
     const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
     const saldo = parseFloat(perfil?.saldo_veiculo ?? '0')
     const custo = PRECO.placa
+
+    if (!isAdmin && !perfil?.pode_placa) {
+      return NextResponse.json({ error: 'Sem permissão para consulta veicular.' }, { status: 403 })
+    }
 
     if (!isAdmin && saldo < custo) {
       return NextResponse.json(

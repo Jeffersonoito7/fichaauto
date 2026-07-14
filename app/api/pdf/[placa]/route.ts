@@ -194,6 +194,7 @@ function tabelaGen(cols: string[], linhas: string[][]): string {
 function pag1(placa: string, data: any, agora: string, proto: string, qr: string): string {
   const p    = normalizaPlacaV3(data.placa)
   const deb  = debitosBinEst(data)
+  const prop = proprietarioBinEst(data)
   const restOutrasUFs = restricoesBinEst(data)
   const binFed = normalizaBinFederalV3(data.binFederal)
   const leilao = normalizaLeilaoV3(data.leilao)
@@ -254,6 +255,7 @@ function pag1(placa: string, data: any, agora: string, proto: string, qr: string
     ['Renavam',      `<span style="font-family:monospace">${v(p.renavam)}</span>`, 'Chassi', `<span style="font-family:monospace">${v(p.chassi)}</span>`],
     ['Cambio',       v(p.cambio ?? p.transmissao), 'Motor', `<span style="font-family:monospace">${v(p.motor ?? p.numeroMotor)}</span>`],
     ['Municipio/UF', `${v(p.municipio, '-')}/${v(p.uf, '-')}`, 'Num. Carroceria', v(p.numCarroceria)],
+    ['Proprietário', prop.nome ? `<strong>${prop.nome}</strong>` : '---', 'CPF/Doc Proprietário', prop.documento || '---'],
   ])}
 
   ${secTitle('Características')}
@@ -874,6 +876,15 @@ function normalizaSinistroV3(raw: any): { temSinistro: boolean; recuperado: bool
       ? 'CONSTA INDÍCIO DE SINISTRO'
       : 'NÃO EXISTEM INDÍCIOS DE SINISTRO'
   return { temSinistro, recuperado, descricao }
+}
+
+// Proprietário atual do binEstadual
+function proprietarioBinEst(data: any): { nome: string; documento: string } {
+  const mov = data.binEstadual?.resposta?.movimentacao ?? {}
+  return {
+    nome:      mov.proprietarioAtual          ?? mov.nomeProprietario ?? '',
+    documento: mov.documentoProprietarioAtual ?? mov.cpfProprietario  ?? '',
+  }
 }
 
 // Lê débitos do binEstadual.debitosPendentes (fonte correta na v3)
