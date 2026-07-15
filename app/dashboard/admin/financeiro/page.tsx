@@ -1,9 +1,9 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   DollarSign, Plus, X, Save, Loader2, CheckCircle,
   Clock, AlertCircle, XCircle, FileText, Settings,
-  Eye, Copy, ExternalLink, Ban
+  Eye, ExternalLink, Ban, Upload, ShieldCheck, Receipt
 } from 'lucide-react'
 
 interface Tenant { id: string; nome: string; nome_fantasia: string | null; email_contato: string | null }
@@ -37,8 +37,8 @@ const CONFIG_CAMPOS = [
     { chave: 'nfse_cnpj',          label: 'CNPJ',              tipo: 'text', placeholder: '00.000.000/0000-00' },
     { chave: 'nfse_razao_social',  label: 'Razao Social',      tipo: 'text', placeholder: 'OITO7 DIGITAL LTDA' },
     { chave: 'nfse_inscricao_mun', label: 'Inscricao Municipal', tipo: 'text', placeholder: '000000' },
-    { chave: 'nfse_login',         label: 'Login prefeitura',   tipo: 'text', placeholder: 'login' },
-    { chave: 'nfse_password',      label: 'Senha prefeitura',   tipo: 'password', placeholder: '******' },
+    { chave: 'nfse_municipio_ibge',label: 'Codigo IBGE',        tipo: 'text', placeholder: '2611101' },
+    { chave: 'nfse_url_servico',   label: 'URL do servico SOAP', tipo: 'text', placeholder: 'https://nfse.petrolina.pe.gov.br/...' },
     { chave: 'nfse_aliquota',      label: 'Aliquota ISS (%)',   tipo: 'text', placeholder: '5.00' },
     { chave: 'nfse_item_lc116',    label: 'Item LC 116',        tipo: 'text', placeholder: '1.07' },
   ]},
@@ -47,6 +47,8 @@ const CONFIG_CAMPOS = [
     { chave: 'boleto_instrucoes',  label: 'Instrucoes',         tipo: 'text', placeholder: 'Pagamento referente a...' },
   ]},
 ]
+
+interface CertStatus { configurado: boolean; titular?: string; validoAte?: string | null; erro?: string }
 
 export default function FinanceiroPage() {
   const [aba,       setAba]       = useState<Aba>('cobrancas')
@@ -60,18 +62,28 @@ export default function FinanceiroPage() {
   const [erro,      setErro]      = useState('')
   const [form,      setForm]      = useState({ tenant_id: '', descricao: '', valor: '', vencimento: '', obs: '' })
   const [configEdit, setConfigEdit] = useState<Record<string, string>>({})
+  const [certStatus, setCertStatus] = useState<CertStatus | null>(null)
+  const [certFile,   setCertFile]   = useState<File | null>(null)
+  const [certSenha,  setCertSenha]  = useState('')
+  const [certCarregando, setCertCarregando] = useState(false)
+  const [certErro,   setCertErro]   = useState('')
+  const [emitindo,   setEmitindo]   = useState(false)
+  const [emitErro,   setEmitErro]   = useState('')
+  const certInputRef = useRef<HTMLInputElement>(null)
 
   const carregar = useCallback(async () => {
     setLoading(true)
-    const [c, t, cfg] = await Promise.all([
+    const [c, t, cfg, cs] = await Promise.all([
       fetch('/api/admin/financeiro/cobrancas').then(r => r.json()).catch(() => []),
       fetch('/api/admin/tenants').then(r => r.json()).catch(() => []),
       fetch('/api/admin/financeiro/config').then(r => r.json()).catch(() => ({})),
+      fetch('/api/admin/nfse/certificado').then(r => r.json()).catch(() => null),
     ])
     setCobrancas(Array.isArray(c) ? c : [])
     setTenants(Array.isArray(t) ? t : [])
     setConfig(cfg)
     setConfigEdit(cfg)
+    setCertStatus(cs)
     setLoading(false)
   }, [])
 
@@ -104,6 +116,45 @@ export default function FinanceiroPage() {
     })
     await carregar()
     setDetalhe(null)
+  }
+
+  async function uploadCert() {
+    if (!certFile) { setCertErro('Selecione o arquivo .pfx'); return }
+    setCertCarregando(true)
+    setCertErro('')
+    try {
+      const arrayBuf = await certFile.arrayBuffer()
+      const pfx_base64 = Buffer.from(arrayBuf).toString('base64')
+      const res = await fetch('/api/admin/nfse/certificado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pfx_base64, senha: certSenha }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setCertErro(d.erro ?? 'Erro ao salvar certificado'); return }
+      setCertStatus(d)
+      setCertFile(null)
+      setCertSenha('')
+    } catch (e: any) {
+      setCertErro(e?.message ?? 'Erro inesperado')
+    } finally {
+      setCertCarregando(false)
+    }
+  }
+
+  async function emitirNfse(cobrancaId: string) {
+    setEmitindo(true)
+    setEmitErro('')
+    const res = await fetch('/api/admin/nfse/emitir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cobranca_id: cobrancaId }),
+    })
+    const d = await res.json()
+    if (!res.ok) { setEmitErro(d.erro ?? 'Erro ao emitir NFS-e'); setEmitindo(false); return }
+    await carregar()
+    setDetalhe(prev => prev ? { ...prev, nfse_numero: d.numero } : prev)
+    setEmitindo(false)
   }
 
   async function salvarConfig() {
@@ -214,6 +265,59 @@ export default function FinanceiroPage() {
       {/* Configuracoes */}
       {aba === 'config' && (
         <div className="space-y-6">
+          {/* Certificado digital */}
+          <div className="card p-5">
+            <h3 className="font-semibold text-brand-dark mb-1">Certificado Digital (NFS-e)</h3>
+            <p className="text-xs text-brand-gray mb-4">Arquivo .pfx (A1) usado para assinar as notas fiscais digitalmente.</p>
+            {certStatus?.configurado ? (
+              <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl p-3 mb-4">
+                <ShieldCheck className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-green-800">Certificado configurado</p>
+                  {certStatus.titular && <p className="text-xs text-green-700">Titular: {certStatus.titular}</p>}
+                  {certStatus.validoAte && <p className="text-xs text-green-700">Valido ate: {new Date(certStatus.validoAte).toLocaleDateString('pt-BR')}</p>}
+                  {certStatus.erro && <p className="text-xs text-red-600">{certStatus.erro}</p>}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-xs text-amber-800">
+                Nenhum certificado configurado. Faca o upload do arquivo .pfx abaixo.
+              </div>
+            )}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-brand-gray mb-1.5">Arquivo .pfx</label>
+                <div
+                  className="border-2 border-dashed border-brand-border rounded-xl p-4 text-center cursor-pointer hover:border-brand-green transition-colors"
+                  onClick={() => certInputRef.current?.click()}
+                >
+                  <Upload className="w-6 h-6 text-brand-gray/50 mx-auto mb-1" />
+                  <p className="text-xs text-brand-gray">{certFile ? certFile.name : 'Clique para selecionar o arquivo .pfx'}</p>
+                  <input ref={certInputRef} type="file" accept=".pfx,.p12" className="hidden" onChange={e => setCertFile(e.target.files?.[0] ?? null)} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-brand-gray mb-1.5">Senha do certificado</label>
+                <input
+                  type="password"
+                  className="input-base text-sm"
+                  placeholder="Senha do arquivo .pfx"
+                  value={certSenha}
+                  onChange={e => setCertSenha(e.target.value)}
+                />
+              </div>
+              {certErro && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-xl">{certErro}</p>}
+              <button
+                onClick={uploadCert}
+                disabled={certCarregando || !certFile}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-green text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-40"
+              >
+                {certCarregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {certStatus?.configurado ? 'Atualizar certificado' : 'Salvar certificado'}
+              </button>
+            </div>
+          </div>
+
           {CONFIG_CAMPOS.map(({ secao, campos }) => (
             <div key={secao} className="card p-5">
               <h3 className="font-semibold text-brand-dark mb-4">{secao}</h3>
@@ -352,32 +456,37 @@ export default function FinanceiroPage() {
 
               {/* NFS-e */}
               <div className="border border-brand-border rounded-xl p-4">
-                <p className="text-xs font-semibold text-brand-gray mb-3 uppercase tracking-wide">Nota Fiscal</p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-brand-gray uppercase tracking-wide">Nota Fiscal</p>
+                  {!detalhe.nfse_numero && (
+                    <button
+                      onClick={() => emitirNfse(detalhe.id)}
+                      disabled={emitindo}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-green text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-40"
+                    >
+                      {emitindo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Receipt className="w-3 h-3" />}
+                      Emitir NFS-e
+                    </button>
+                  )}
+                </div>
+                {emitErro && <p className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded mb-2">{emitErro}</p>}
                 <div className="space-y-2">
-                  <div>
-                    <label className="block text-xs text-brand-gray mb-1">Numero da NF</label>
-                    <div className="flex gap-2">
-                      <input className="input-base text-xs flex-1" placeholder="12345" defaultValue={detalhe.nfse_numero ?? ''} id="nfse_numero" />
-                      <button onClick={() => {
-                        const v = (document.getElementById('nfse_numero') as HTMLInputElement)?.value
-                        atualizarStatus(detalhe.id, { nfse_numero: v })
-                      }} className="px-3 py-1.5 bg-brand-green text-white rounded-lg text-xs">Salvar</button>
+                  {detalhe.nfse_numero ? (
+                    <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-green-800 font-semibold">NFS-e emitida: #{detalhe.nfse_numero}</p>
+                      </div>
+                      <a
+                        href={`/api/admin/nfse/danfse/${detalhe.nfse_numero}`}
+                        target="_blank"
+                        className="flex items-center gap-1 text-xs text-brand-blue hover:underline shrink-0"
+                      >
+                        <FileText className="w-3 h-3" /> PDF
+                      </a>
                     </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-brand-gray mb-1">URL do PDF da NF</label>
-                    <div className="flex gap-2">
-                      <input className="input-base text-xs flex-1" placeholder="https://..." defaultValue={detalhe.nfse_pdf_url ?? ''} id="nfse_pdf" />
-                      <button onClick={() => {
-                        const v = (document.getElementById('nfse_pdf') as HTMLInputElement)?.value
-                        atualizarStatus(detalhe.id, { nfse_pdf_url: v })
-                      }} className="px-3 py-1.5 bg-brand-green text-white rounded-lg text-xs">Salvar</button>
-                    </div>
-                  </div>
-                  {detalhe.nfse_pdf_url && (
-                    <a href={detalhe.nfse_pdf_url} target="_blank" className="flex items-center gap-1 text-xs text-brand-blue hover:underline">
-                      <FileText className="w-3 h-3" /> Ver nota fiscal
-                    </a>
+                  ) : (
+                    <p className="text-xs text-brand-gray">Nenhuma NFS-e emitida. Clique em Emitir NFS-e para emitir automaticamente.</p>
                   )}
                 </div>
               </div>
