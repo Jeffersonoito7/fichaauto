@@ -25,7 +25,7 @@ const tenantItems = [
 const adminItems = [
   { href: '/dashboard/admin',            icon: BarChart3, label: 'Dashboard Admin'  },
   { href: '/dashboard/admin/usuarios',   icon: Users,     label: 'Usuários'          },
-  { href: '/dashboard/admin/tenants',    icon: Shield,    label: 'Tenants / Módulos' },
+  { href: '/dashboard/admin/tenants',    icon: Shield,    label: 'Empresas / Módulos' },
   { href: '/dashboard/admin/financeiro', icon: Wallet,    label: 'Financeiro'        },
 ]
 
