@@ -50,7 +50,7 @@ function ModalTenant({
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900">
-            {inicial.id ? 'Editar Tenant' : 'Novo Tenant'}
+            {inicial.id ? 'Editar Tenant' : 'Nova Empresa'}
           </h2>
           <button onClick={onFechar} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
             <X className="w-4 h-4 text-gray-500" />
@@ -198,7 +198,7 @@ function ModalTenant({
             <input type="checkbox" id="ativo" checked={form.ativo}
               onChange={e => campo('ativo', e.target.checked)}
               className="w-4 h-4 accent-brand-green" />
-            <label htmlFor="ativo" className="text-sm text-gray-700">Tenant ativo</label>
+            <label htmlFor="ativo" className="text-sm text-gray-700">Empresa ativa</label>
           </div>
         </div>
 
@@ -275,22 +275,22 @@ export default function TenantsAdminPage() {
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tenants White-Label</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{tenants.length} clientes cadastrados</p>
+          <h1 className="text-2xl font-bold text-gray-900">Empresas Clientes</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{tenants.length} empresas cadastradas</p>
         </div>
         <button onClick={() => setModal({})}
           className="flex items-center gap-2 px-4 py-2.5 bg-brand-green text-white rounded-xl text-sm font-bold hover:opacity-90 transition-all">
-          <Plus className="w-4 h-4" /> Novo Tenant
+          <Plus className="w-4 h-4" /> Nova Empresa
         </button>
       </div>
 
       {tenants.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
           <Building2 className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-          <p className="text-gray-500 font-medium">Nenhum tenant cadastrado ainda.</p>
+          <p className="text-gray-500 font-medium">Nenhuma empresa cadastrada ainda.</p>
           <button onClick={() => setModal({})}
             className="mt-4 text-sm text-brand-green font-semibold hover:underline">
-            Criar o primeiro tenant
+            Criar a primeira empresa
           </button>
         </div>
       ) : (
