@@ -45,7 +45,13 @@ export function parsePfx(pfxBuffer: Buffer, senha: string): {
 } {
   const p12Der = forge.util.createBuffer(pfxBuffer.toString('binary'))
   const p12Asn1 = forge.asn1.fromDer(p12Der)
-  const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, senha)
+  // strict=false necessario para certificados A1 brasileiros com criptografia legada (RC2)
+  let p12: forge.pkcs12.Pkcs12Pfx
+  try {
+    p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, senha)
+  } catch {
+    p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, senha)
+  }
 
   let privateKey: forge.pki.PrivateKey | null = null
   let cert: forge.pki.Certificate | null = null
