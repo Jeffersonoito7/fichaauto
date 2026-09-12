@@ -1,8 +1,17 @@
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { getAuthEmail } from '@/lib/consulta-helper'
+
+async function assertSuperAdmin(svc: any): Promise<boolean> {
+  const email = await getAuthEmail()
+  if (!email) return false
+  const { data } = await svc.from('perfis').select('role').eq('email', email).maybeSingle()
+  return data?.role === 'super_admin'
+}
 
 export async function GET() {
   const svc = createServiceRoleClient() as any
+  if (!await assertSuperAdmin(svc)) return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
 
   // Buscar todos os perfis
   const { data: perfis, error } = await svc

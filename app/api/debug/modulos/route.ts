@@ -1,4 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthEmail } from '@/lib/consulta-helper'
+import { createServiceRoleClient } from '@/lib/supabase-server'
+
+async function assertSuperAdmin(): Promise<boolean> {
+  const email = await getAuthEmail()
+  if (!email) return false
+  const svc = createServiceRoleClient() as any
+  const { data } = await svc.from('perfis').select('role').eq('email', email).maybeSingle()
+  return data?.role === 'super_admin'
+}
 
 const BASE_URL   = 'https://api.assertivasolucoes.com.br'
 const TOKEN_URL  = 'https://api.assertivasolucoes.com.br/oauth2/v3/token'
@@ -37,6 +47,8 @@ async function testar(token: string, path: string): Promise<{ status: number; ok
 }
 
 export async function GET(req: NextRequest) {
+  if (!await assertSuperAdmin()) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
+
   const placa = (req.nextUrl.searchParams.get('placa') ?? 'BRA2E19').replace(/[^A-Z0-9]/gi, '').toUpperCase()
   const cpf   = (req.nextUrl.searchParams.get('cpf')   ?? '02625410337').replace(/\D/g, '')
   const cnpj  = (req.nextUrl.searchParams.get('cnpj')  ?? '').replace(/\D/g, '')

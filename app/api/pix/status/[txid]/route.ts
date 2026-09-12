@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getAuthEmail } from '@/lib/consulta-helper'
 
 // Busca status de pagamento PIX na EFÍ e credita saldo se confirmado.
 // Chamado pelo frontend em polling a cada 5s — dispensa webhook com mTLS.
@@ -138,6 +139,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ txid: string }> }
 ) {
+  const email = await getAuthEmail()
+  if (!email) return NextResponse.json({ status: 'nao_autorizado' }, { status: 401 })
+
   const { txid } = await params
 
   const supabase = createClient(
@@ -145,13 +149,29 @@ export async function GET(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
+  // Verifica se a transacao pertence ao usuario autenticado
   const { data: transacao } = await supabase
     .from('transacoes_pix')
-    .select('*')
+    .select('txid, status, saldo_creditado, valor, user_id, tenant_id, produto, creditos_creditados')
     .eq('txid', txid)
     .single()
 
   if (!transacao) return NextResponse.json({ status: 'nao_encontrado' })
+
+  // Busca user_id do email autenticado para comparar
+  const { data: perfil } = await supabase
+    .from('perfis')
+    .select('user_id, role, tenant_id')
+    .eq('email', email)
+    .maybeSingle()
+
+  const isSuperAdmin = perfil?.role === 'super_admin'
+  const isOwner = perfil?.user_id === transacao.user_id
+  const isTenantAdmin = perfil?.tenant_id && perfil.tenant_id === transacao.tenant_id
+
+  if (!isSuperAdmin && !isOwner && !isTenantAdmin) {
+    return NextResponse.json({ status: 'nao_encontrado' })
+  }
 
   // Se já está pago no banco, retorna direto
   if (transacao.status === 'pago') {

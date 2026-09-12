@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac } from 'crypto'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { getAuthEmail } from '@/lib/consulta-helper'
 
 function hashSenha(senha: string): string {
   const salt = process.env.JWT_SECRET ?? 'fallback-secret'
@@ -11,6 +12,11 @@ export async function PATCH(req: NextRequest, context: any) {
   const { id } = await context.params
   const body = await req.json()
   const svc = createServiceRoleClient() as any
+
+  const email = await getAuthEmail()
+  if (!email) return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
+  const { data: caller } = await svc.from('perfis').select('role').eq('email', email).maybeSingle()
+  if (caller?.role !== 'super_admin') return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
 
   const campos: Record<string, any> = {}
   const permitidos = [
