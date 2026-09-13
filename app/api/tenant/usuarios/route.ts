@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import { createHmac } from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { verificarJwt } from '@/lib/jwt'
+import { hashSenha } from '@/lib/hash-senha'
 
 function service() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
-}
-
-function hashSenha(senha: string): string {
-  const salt = process.env.JWT_SECRET ?? 'fallback-secret'
-  return createHmac('sha256', salt).update(senha).digest('hex')
 }
 
 async function getAdminContext(): Promise<{ tenantId: string; email: string } | null> {
@@ -91,7 +86,7 @@ export async function POST(req: NextRequest) {
   const { error } = await db.from('perfis').insert({
     nome:              nome.trim(),
     email:             email.toLowerCase().trim(),
-    senha_hash:        hashSenha(senha),
+    senha_hash:        await hashSenha(senha),
     tenant_id:         tenantId,
     tenant_role:       tenant_role ?? 'user',
     ativo:             true,
@@ -135,7 +130,7 @@ export async function PATCH(req: NextRequest) {
   if (pode_credito      !== undefined) campos.pode_credito      = pode_credito
   if (modulos_liberados !== undefined) campos.modulos_liberados = modulos_liberados
   if (ativo             !== undefined) campos.ativo             = ativo
-  if (senha && senha.length >= 6)      campos.senha_hash        = hashSenha(senha)
+  if (senha && senha.length >= 6)      campos.senha_hash        = await hashSenha(senha)
 
   const { data, error } = await db.from('perfis').update(campos).eq('id', usuario_id).select().single()
   if (error) return NextResponse.json({ erro: error.message }, { status: 500 })

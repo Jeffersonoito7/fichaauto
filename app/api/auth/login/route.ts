@@ -1,16 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createHmac }   from 'crypto'
 import { assinarJwt }   from '@/lib/jwt'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { hashSenha, verificarSenha } from '@/lib/hash-senha'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? ''
 const ADMIN_SENHA = process.env.ADMIN_SENHA ?? ''
 const ADMIN_NOME  = process.env.ADMIN_NOME  ?? 'Administrador'
-
-function hashSenha(senha: string): string {
-  const salt = process.env.JWT_SECRET ?? 'fallback-secret'
-  return createHmac('sha256', salt).update(senha).digest('hex')
-}
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}))
@@ -55,8 +50,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ erro: 'Senha não configurada. Entre em contato com o administrador.' }, { status: 403 })
   }
 
-  if (perfil.senha_hash !== hashSenha(senha)) {
+  const senhaCorreta = await verificarSenha(senha, perfil.senha_hash)
+  if (!senhaCorreta) {
     return NextResponse.json({ erro: 'E-mail ou senha incorretos.' }, { status: 401 })
+  }
+
+  // Migracao transparente: se ainda estiver em HMAC, re-salvar como bcrypt
+  if (!perfil.senha_hash.startsWith('$2')) {
+    const novoHash = await hashSenha(senha)
+    await supabase.from('perfis').update({ senha_hash: novoHash }).eq('email', emailNorm)
   }
 
   const role = perfil.role === 'super_admin' ? 'super_admin' : 'user'

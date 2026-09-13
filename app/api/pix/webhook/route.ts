@@ -42,60 +42,36 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // 3. Recarga de tenant (B2B) — credita no saldo da empresa
-      if (transacao.tenant_id) {
-        const saldoCreditado = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
-        const campo = transacao.produto === 'cpf' ? 'saldo_cpf' : 'saldo_veiculo'
+      // 3. Recarga de tenant (B2B) — ativa assinatura por 30 dias
+      if (transacao.tenant_id && transacao.produto === 'assinatura') {
+        const vence = new Date()
+        vence.setDate(vence.getDate() + 30)
 
-        const { data: tenant } = await supabase
-          .from('tenants')
-          .select('saldo_veiculo, saldo_cpf')
-          .eq('id', transacao.tenant_id)
-          .single()
-
-        if (!tenant) {
-          console.error(`[PIX webhook] txid=${txid} tenant ${transacao.tenant_id} não encontrado`)
-          continue
-        }
-
-        const saldoAtual = parseFloat(tenant[campo as keyof typeof tenant] as string ?? '0')
         const { error: errTenant } = await supabase
           .from('tenants')
-          .update({ [campo]: parseFloat((saldoAtual + saldoCreditado).toFixed(2)) })
+          .update({
+            assinatura_ativa:    true,
+            assinatura_vence_em: vence.toISOString(),
+          })
           .eq('id', transacao.tenant_id)
 
         if (errTenant) {
-          console.error(`[PIX webhook] falha ao creditar tenant txid=${txid}`, errTenant)
+          console.error(`[PIX webhook] falha ao ativar assinatura txid=${txid}`, errTenant)
           await supabase.from('transacoes_pix').update({ status: 'pendente', pago_em: null }).eq('txid', txid)
           continue
         }
 
-        console.log(`[PIX webhook] txid=${txid} tenant=${transacao.tenant_id} +R$${saldoCreditado} ${campo}`)
+        console.log(`[PIX webhook] txid=${txid} tenant=${transacao.tenant_id} assinatura ativa ate ${vence.toISOString()}`)
         continue
       }
 
-      // 4. Buscar saldo atual do usuário (individual)
-      const { data: perfil } = await supabase
-        .from('perfis')
-        .select('saldo_veiculo, saldo_cpf, creditos_credito')
-        .eq('user_id', transacao.user_id)
-        .single()
-
-      if (!perfil) {
-        console.error(`[PIX webhook] txid=${txid} usuário ${transacao.user_id} não encontrado`)
-        continue
-      }
-
-      // 5. Creditar na carteira correta
+      // 4. Creditar atomicamente via RPC (elimina race condition de read+write)
       if (transacao.creditos_creditados) {
-        // Produto 3: contagem de consultas de crédito
-        const { error: errCredito } = await supabase
-          .from('perfis')
-          .update({
-            creditos_credito: Number(perfil.creditos_credito ?? 0) + Number(transacao.creditos_creditados),
-            atualizado_em: new Date().toISOString(),
-          })
-          .eq('user_id', transacao.user_id)
+        const { error: errCredito } = await supabase.rpc('creditar_saldo', {
+          p_user_id: transacao.user_id,
+          p_campo:   'creditos_credito',
+          p_valor:   Number(transacao.creditos_creditados),
+        })
 
         if (errCredito) {
           console.error(`[PIX webhook] falha ao creditar créditos txid=${txid}`, errCredito)
@@ -106,18 +82,14 @@ export async function POST(req: NextRequest) {
         console.log(`[PIX webhook] txid=${txid} user=${transacao.user_id} +${transacao.creditos_creditados} créditos`)
 
       } else {
-        // Produto 1 ou 2: valor em reais
         const saldoCreditado = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
         const campo = transacao.produto === 'cpf' ? 'saldo_cpf' : 'saldo_veiculo'
-        const saldoAtual = parseFloat(perfil[campo as keyof typeof perfil] as string ?? '0')
 
-        const { error: errSaldo } = await supabase
-          .from('perfis')
-          .update({
-            [campo]: parseFloat((saldoAtual + saldoCreditado).toFixed(2)),
-            atualizado_em: new Date().toISOString(),
-          })
-          .eq('user_id', transacao.user_id)
+        const { error: errSaldo } = await supabase.rpc('creditar_saldo', {
+          p_user_id: transacao.user_id,
+          p_campo:   campo,
+          p_valor:   saldoCreditado,
+        })
 
         if (errSaldo) {
           console.error(`[PIX webhook] falha ao creditar saldo txid=${txid}`, errSaldo)

@@ -13,6 +13,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCachePlaca, setCachePlaca, DadosBasicosPlaca } from '@/lib/cache-placas'
 
+// Rate limit simples por IP: max 20 req/min por IP
+const _rl = new Map<string, { count: number; reset: number }>()
+const RL_MAX = 20
+const RL_WINDOW_MS = 60_000
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now()
+  const entry = _rl.get(ip)
+  if (!entry || now > entry.reset) {
+    _rl.set(ip, { count: 1, reset: now + RL_WINDOW_MS })
+    return true
+  }
+  if (entry.count >= RL_MAX) return false
+  entry.count++
+  return true
+}
+
 const ASSERT_BASE = 'https://api.assertivasolucoes.com.br'
 const TOKEN_URL   = 'https://api.assertivasolucoes.com.br/oauth2/v3/token'
 const BRASIL_BASE = 'https://brasilapi.com.br/api'
@@ -125,9 +142,14 @@ async function consultarAssertiva(placa: string): Promise<DadosBasicosPlaca | nu
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ placa: string }> }
 ) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json({ erro: 'Muitas requisições. Tente novamente em 1 minuto.' }, { status: 429 })
+  }
+
   const { placa: placaRaw } = await params
   const placa = placaRaw.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
 
