@@ -45,7 +45,8 @@ export async function getCachePlaca(placa: string): Promise<DadosBasicosPlaca | 
       .maybeSingle()
 
     return data ?? null
-  } catch {
+  } catch (e) {
+    console.error('[cache-placas] getCachePlaca erro:', e)
     return null
   }
 }
@@ -60,8 +61,8 @@ export async function setCachePlaca(dados: DadosBasicosPlaca): Promise<void> {
         { ...dados, placa: dados.placa.toUpperCase(), atualizado_em: new Date().toISOString() },
         { onConflict: 'placa' },
       )
-  } catch {
-    // cache nao pode travar o fluxo principal
+  } catch (e) {
+    console.error('[cache-placas] setCachePlaca erro:', e)
   }
 }
 
@@ -90,7 +91,7 @@ export async function salvarCacheDeResultado(placa: string, resultado: any): Pro
     if (!marca && !modelo) return // dados insuficientes, nao salva
 
     await setCachePlaca({ placa, marca, modelo, ano_fab, ano_mod, cor, combustivel, renavam, chassi, codigo_fipe })
-  } catch {
-    // nao bloqueia
+  } catch (e) {
+    console.error('[cache-placas] salvarCacheDeResultado erro:', e)
   }
 }
