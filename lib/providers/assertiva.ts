@@ -10,7 +10,7 @@ const FINALIDADE = 2 // Ciclo de crédito (LGPD)
 let _token: string | null = null
 let _tokenExpiry = 0
 
-async function getToken(): Promise<string> {
+export async function getToken(): Promise<string> {
   if (_token && Date.now() < _tokenExpiry) return _token
 
   const basic = Buffer.from(`${LOGIN}:${PASSWORD}`).toString('base64')

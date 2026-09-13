@@ -1,32 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthEmail, salvarConsulta } from '@/lib/consulta-helper'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { getToken } from '@/lib/providers/assertiva'
 import { CREDITO } from '@/lib/products'
 
 const BASE_URL   = 'https://api.assertivasolucoes.com.br'
-const TOKEN_URL  = 'https://api.assertivasolucoes.com.br/oauth2/v3/token'
 const FINALIDADE = 2
-
-let _token: string | null = null
-let _tokenExpiry = 0
-
-async function getToken(): Promise<string> {
-  if (_token && Date.now() < _tokenExpiry) return _token
-  const basic = Buffer.from(
-    `${process.env.ASSERTIVA_LOGIN ?? ''}:${process.env.ASSERTIVA_PASSWORD ?? ''}`
-  ).toString('base64')
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Authorization': `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=client_credentials',
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error(`Token error ${res.status}`)
-  const json = await res.json()
-  _token = json.access_token ?? json.token
-  _tokenExpiry = Date.now() + (json.expires_in ?? 3600) * 1000 - 300_000
-  return _token!
-}
 
 async function assertivaGet(path: string) {
   const token = await getToken()
@@ -72,12 +51,6 @@ export async function GET(
     }, { status: 402 })
   }
 
-  if (!isAdmin) {
-    await svc.from('perfis')
-      .update({ creditos_credito: creditos - 1, atualizado_em: new Date().toISOString() })
-      .eq('email', email)
-  }
-
   const erros: string[] = []
   const safe = async (path: string, nome: string) => {
     try { return await assertivaGet(path) }
@@ -88,6 +61,12 @@ export async function GET(
     safe(`/score/v3/pf/credito/${cpf}?idFinalidade=${FINALIDADE}`, 'score'),
     safe(`/score/v3/pf/acoes/${cpf}?idFinalidade=${FINALIDADE}`,   'acoes'),
   ])
+
+  if (!isAdmin) {
+    await svc.from('perfis')
+      .update({ creditos_credito: creditos - 1, atualizado_em: new Date().toISOString() })
+      .eq('email', email)
+  }
 
   // Extrair score
   const sc = rawScore?.resposta?.score ?? {}
