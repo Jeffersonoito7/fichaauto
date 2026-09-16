@@ -9,37 +9,46 @@ import {
 } from 'lucide-react'
 
 const BRAND_LOGO: Record<string, string> = {
-  TOYOTA:        'https://logo.clearbit.com/toyota.com',
-  HONDA:         'https://logo.clearbit.com/honda.com',
-  VOLKSWAGEN:    'https://logo.clearbit.com/vw.com',
-  VW:            'https://logo.clearbit.com/vw.com',
-  CHEVROLET:     'https://logo.clearbit.com/chevrolet.com',
-  GM:            'https://logo.clearbit.com/gm.com',
-  FORD:          'https://logo.clearbit.com/ford.com',
-  FIAT:          'https://logo.clearbit.com/fiat.com',
-  RENAULT:       'https://logo.clearbit.com/renault.com',
-  HYUNDAI:       'https://logo.clearbit.com/hyundai.com',
-  NISSAN:        'https://logo.clearbit.com/nissan.com',
-  MITSUBISHI:    'https://logo.clearbit.com/mitsubishi.com',
-  JEEP:          'https://logo.clearbit.com/jeep.com',
-  BMW:           'https://logo.clearbit.com/bmw.com',
-  'MERCEDES-BENZ': 'https://logo.clearbit.com/mercedes-benz.com',
-  MERCEDES:      'https://logo.clearbit.com/mercedes-benz.com',
-  AUDI:          'https://logo.clearbit.com/audi.com',
-  KIA:           'https://logo.clearbit.com/kia.com',
-  PEUGEOT:       'https://logo.clearbit.com/peugeot.com',
-  CITROEN:       'https://logo.clearbit.com/citroen.com',
-  VOLVO:         'https://logo.clearbit.com/volvocars.com',
-  SUBARU:        'https://logo.clearbit.com/subaru.com',
-  CHERY:         'https://logo.clearbit.com/chery.com',
-  JAC:           'https://logo.clearbit.com/jacmotors.com',
-  BYD:           'https://logo.clearbit.com/byd.com',
-  GWM:           'https://logo.clearbit.com/gwm.com',
-  HAVAL:         'https://logo.clearbit.com/haval.com',
-  DODGE:         'https://logo.clearbit.com/dodge.com',
-  RAM:           'https://logo.clearbit.com/ramtrucks.com',
-  PORSCHE:       'https://logo.clearbit.com/porsche.com',
-  LAND:          'https://logo.clearbit.com/landrover.com',
+  TOYOTA:          'https://logo.clearbit.com/toyota.com',
+  HONDA:           'https://logo.clearbit.com/honda.com',
+  VOLKSWAGEN:      'https://logo.clearbit.com/vw.com',
+  VW:              'https://logo.clearbit.com/vw.com',
+  CHEVROLET:       'https://logo.clearbit.com/chevrolet.com',
+  GM:              'https://logo.clearbit.com/gm.com',
+  FORD:            'https://logo.clearbit.com/ford.com',
+  FIAT:            'https://logo.clearbit.com/fiat.com',
+  RENAULT:         'https://logo.clearbit.com/renault.com',
+  HYUNDAI:         'https://logo.clearbit.com/hyundai.com',
+  NISSAN:          'https://logo.clearbit.com/nissan.com',
+  MITSUBISHI:      'https://logo.clearbit.com/mitsubishi.com',
+  JEEP:            'https://logo.clearbit.com/jeep.com',
+  BMW:             'https://logo.clearbit.com/bmw.com',
+  MERCEDESBENZ:    'https://logo.clearbit.com/mercedes-benz.com',
+  MERCEDES:        'https://logo.clearbit.com/mercedes-benz.com',
+  AUDI:            'https://logo.clearbit.com/audi.com',
+  KIA:             'https://logo.clearbit.com/kia.com',
+  PEUGEOT:         'https://logo.clearbit.com/peugeot.com',
+  CITROEN:         'https://logo.clearbit.com/citroen.com',
+  VOLVO:           'https://logo.clearbit.com/volvocars.com',
+  SUBARU:          'https://logo.clearbit.com/subaru.com',
+  CHERY:           'https://logo.clearbit.com/chery.com',
+  JAC:             'https://logo.clearbit.com/jacmotors.com',
+  BYD:             'https://logo.clearbit.com/byd.com',
+  GWM:             'https://logo.clearbit.com/gwm.com',
+  HAVAL:           'https://logo.clearbit.com/haval.com',
+  DODGE:           'https://logo.clearbit.com/dodge.com',
+  RAM:             'https://logo.clearbit.com/ramtrucks.com',
+  PORSCHE:         'https://logo.clearbit.com/porsche.com',
+  LAND:            'https://logo.clearbit.com/landrover.com',
+  YAMAHA:          'https://logo.clearbit.com/yamaha-motor.com',
+  SUZUKI:          'https://logo.clearbit.com/suzuki.com',
+  KAWASAKI:        'https://logo.clearbit.com/kawasaki.com',
+  TRIUMPH:         'https://logo.clearbit.com/triumphmotorcycles.com',
+  HARLEYDAVIDSON:  'https://logo.clearbit.com/harley-davidson.com',
+  HARLEY:          'https://logo.clearbit.com/harley-davidson.com',
+  DUCATI:          'https://logo.clearbit.com/ducati.com',
+  DAFRA:           'https://logo.clearbit.com/dafra.com.br',
+  SHINERAY:        'https://logo.clearbit.com/shineray.com.br',
 }
 
 function extrairMarca(marcaModelo: string): string {
@@ -49,21 +58,13 @@ function extrairMarca(marcaModelo: string): string {
 
 function logoUrl(marcaModelo: string): string | null {
   const marca = extrairMarca(marcaModelo)
+  // Busca exata
+  if (BRAND_LOGO[marca]) return BRAND_LOGO[marca]
+  // Busca parcial
   for (const [key, url] of Object.entries(BRAND_LOGO)) {
     if (marca.includes(key) || key.includes(marca)) return url
   }
   return null
-}
-
-function formatarPlacaExibicao(placa: string): string {
-  const p = placa.replace(/[^A-Z0-9]/gi, '').toUpperCase()
-  if (p.length === 7) {
-    // Mercosul: AAA0A00 — sem hifen
-    // Antiga: AAA0000 — com hifen
-    const isMercosul = /[A-Z]/.test(p[4])
-    return isMercosul ? `${p.slice(0, 3)} ${p.slice(3)}` : `${p.slice(0, 3)}-${p.slice(3)}`
-  }
-  return p
 }
 
 interface Dados {
@@ -78,99 +79,8 @@ interface Dados {
   combustivel: string
   fipeValor: string
   fipeMes: string
+  fipeCodigo: string
   fonte: string
-}
-
-// Placa brasileira estilo Mercosul
-function PlacaVisual({ placa, uf }: { placa: string; uf?: string }) {
-  const formatada = formatarPlacaExibicao(placa)
-  const estado = uf || 'BR'
-
-  return (
-    <div
-      className="relative mx-auto select-none"
-      style={{ width: 280, height: 72 }}
-      aria-label={`Placa ${placa}`}
-    >
-      {/* Corpo da placa com bordas arredondadas e sombra */}
-      <div
-        className="absolute inset-0 rounded-lg overflow-hidden"
-        style={{
-          background: '#fff',
-          border: '3px solid #1a1a2e',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.8)',
-        }}
-      >
-        {/* Faixa azul topo - estilo Mercosul */}
-        <div
-          className="flex items-center justify-between px-3"
-          style={{
-            background: 'linear-gradient(135deg, #003087 0%, #0044cc 100%)',
-            height: 22,
-          }}
-        >
-          {/* Bandeira mini */}
-          <div className="flex items-center gap-1">
-            <div className="rounded-sm overflow-hidden" style={{ width: 18, height: 12 }}>
-              <svg viewBox="0 0 18 12" width="18" height="12">
-                <rect width="18" height="12" fill="#009c3b" />
-                <polygon points="9,1 17,6 9,11 1,6" fill="#fedf00" />
-                <circle cx="9" cy="6" r="3.2" fill="#002776" />
-                <path d="M6.5,5.5 Q9,4 11.5,5.5" stroke="#fff" strokeWidth="0.7" fill="none" />
-              </svg>
-            </div>
-            <span className="text-white font-bold" style={{ fontSize: 8, letterSpacing: 1 }}>BRASIL</span>
-          </div>
-          {/* Estado */}
-          <span className="text-white font-bold" style={{ fontSize: 9, letterSpacing: 2 }}>
-            {estado}
-          </span>
-          {/* Mercosul */}
-          <span className="text-white opacity-70" style={{ fontSize: 7, letterSpacing: 0.5 }}>
-            MERCOSUL
-          </span>
-        </div>
-
-        {/* Caracteres da placa */}
-        <div
-          className="flex items-center justify-center"
-          style={{ height: 46 }}
-        >
-          <span
-            style={{
-              fontFamily: '"FE-Schrift", "Arial Black", "Impact", sans-serif',
-              fontSize: 36,
-              fontWeight: 900,
-              letterSpacing: 6,
-              color: '#111',
-              lineHeight: 1,
-              textShadow: '1px 1px 0 rgba(0,0,0,0.15)',
-            }}
-          >
-            {formatada}
-          </span>
-        </div>
-      </div>
-
-      {/* Parafusos */}
-      {[{ left: 8, top: 32 }, { left: 265, top: 32 }].map((pos, i) => (
-        <div
-          key={i}
-          className="absolute rounded-full"
-          style={{
-            left: pos.left,
-            top: pos.top,
-            width: 7,
-            height: 7,
-            background: 'radial-gradient(circle at 35% 35%, #d0d0d0, #888)',
-            border: '1px solid #555',
-            transform: 'translateY(-50%)',
-            zIndex: 10,
-          }}
-        />
-      ))}
-    </div>
-  )
 }
 
 function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
@@ -189,12 +99,12 @@ function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value
 }
 
 const SECOES_BLOQUEADAS = [
-  { label: 'Restrições e Bloqueios',    icon: Shield,       desc: 'DETRAN, RENAJUD e BIN Federal' },
-  { label: 'Gravame / Financiamento',   icon: Tag,          desc: 'Banco financiador e parcelas' },
-  { label: 'Histórico de Leilão',       icon: Gavel,        desc: 'Sinistros e leilões registrados' },
-  { label: 'Roubo e Furto',             icon: AlertCircle,  desc: 'SINARM e INFOSEG nacionais' },
-  { label: 'Histórico FIPE',            icon: TrendingUp,   desc: 'Variação de preço nos últimos meses' },
-  { label: 'Processos Judiciais',       icon: ClipboardList,desc: 'DataJud — tribunais federais e estaduais' },
+  { label: 'Restricoes e Bloqueios',   icon: Shield,        desc: 'DETRAN, RENAJUD e BIN Federal' },
+  { label: 'Gravame / Financiamento',  icon: Tag,           desc: 'Banco financiador e parcelas' },
+  { label: 'Historico de Leilao',      icon: Gavel,         desc: 'Sinistros e leiloes registrados' },
+  { label: 'Roubo e Furto',            icon: AlertCircle,   desc: 'SINARM e INFOSEG nacionais' },
+  { label: 'Historico FIPE',           icon: TrendingUp,    desc: 'Variacao de preco nos ultimos meses' },
+  { label: 'Processos Judiciais',      icon: ClipboardList, desc: 'DataJud — tribunais federais e estaduais' },
 ]
 
 export default function FipeResultadoPage() {
@@ -203,6 +113,7 @@ export default function FipeResultadoPage() {
   const [dados, setDados] = useState<Dados | null>(null)
   const [erro, setErro]   = useState('')
   const [loading, setLoading] = useState(true)
+  const [logoOk, setLogoOk] = useState(true)
 
   useEffect(() => {
     fetch(`/api/preview/placa/${placa}`)
@@ -211,13 +122,18 @@ export default function FipeResultadoPage() {
         if (d.error) setErro(d.error)
         else setDados(d)
       })
-      .catch(() => setErro('Erro de conexão. Verifique sua internet e tente novamente.'))
+      .catch(() => setErro('Erro de conexao. Verifique sua internet e tente novamente.'))
       .finally(() => setLoading(false))
   }, [placa])
 
   const placaStr = (placa ?? '').toUpperCase()
   const logo = dados ? logoUrl(dados.marca) : null
   const marcaNome = dados ? extrairMarca(dados.marca) : ''
+
+  // Nome limpo da montadora para exibicao
+  const nomeVeiculo = dados
+    ? dados.marca.replace(/^I\//, '').trim()
+    : ''
 
   return (
     <div className="min-h-screen" style={{ background: '#f4f6f9' }}>
@@ -238,9 +154,7 @@ export default function FipeResultadoPage() {
         {/* Loading */}
         {loading && (
           <div className="bg-white rounded-2xl p-12 flex flex-col items-center gap-4 shadow-sm">
-            <div className="relative">
-              <div className="w-16 h-16 rounded-full border-4 border-gray-100 border-t-green-600 animate-spin" />
-            </div>
+            <div className="w-16 h-16 rounded-full border-4 border-gray-100 border-t-green-600 animate-spin" />
             <div className="text-center">
               <p className="text-sm font-semibold text-gray-700">Consultando placa</p>
               <p className="text-xs text-gray-400 mt-1 font-mono tracking-widest">{placaStr}</p>
@@ -255,10 +169,10 @@ export default function FipeResultadoPage() {
               <AlertCircle className="w-8 h-8 text-red-400" />
             </div>
             <div>
-              <p className="font-bold text-gray-800 text-lg">Placa não encontrada</p>
+              <p className="font-bold text-gray-800 text-lg">Placa nao encontrada</p>
               <p className="text-sm text-gray-400 mt-1 max-w-xs">
-                A placa <span className="font-mono font-bold text-gray-600">{placaStr}</span> não consta nos nossos registros.
-                Verifique se digitou corretamente.
+                A placa <span className="font-mono font-bold text-gray-600">{placaStr}</span> nao
+                consta nos nossos registros. Verifique se digitou corretamente.
               </p>
             </div>
             <Link
@@ -272,76 +186,68 @@ export default function FipeResultadoPage() {
 
         {dados && !loading && (
           <>
-            {/* Card topo: placa + marca + modelo */}
+            {/* Card principal */}
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-              {/* Topo verde escuro */}
+              {/* Header do card */}
               <div
-                className="px-5 pt-5 pb-4"
+                className="px-5 pt-5 pb-5"
                 style={{ background: 'linear-gradient(135deg, #14532d 0%, #166534 100%)' }}
               >
-                <div className="flex items-start justify-between gap-3 mb-5">
+                <div className="flex items-center gap-4">
+                  {/* Logo da montadora */}
+                  <div className="w-20 h-20 rounded-2xl bg-white flex items-center justify-center shrink-0 p-2.5 shadow-sm">
+                    {logo && logoOk ? (
+                      <img
+                        src={logo}
+                        alt={marcaNome}
+                        className="w-full h-full object-contain"
+                        onError={() => setLogoOk(false)}
+                      />
+                    ) : (
+                      <Car className="w-10 h-10 text-gray-300" />
+                    )}
+                  </div>
+
                   <div className="flex-1 min-w-0">
-                    <p className="text-green-300 text-xs font-semibold uppercase tracking-widest mb-1">
-                      Consulta gratuita
+                    <p className="text-green-300 text-xs font-semibold uppercase tracking-widest mb-0.5">
+                      {dados.fonte === 'cache' ? 'Cache' : 'Consulta gratuita'}
                     </p>
-                    <h1 className="text-white text-xl font-bold leading-tight truncate">
-                      {dados.marca} {dados.modelo}
+                    <h1 className="text-white text-lg font-bold leading-tight line-clamp-2">
+                      {nomeVeiculo}
                     </h1>
-                    <p className="text-green-200 text-sm mt-0.5">
-                      {dados.anoFabricacao}
+                    <p className="text-green-200 text-sm mt-0.5 font-mono tracking-wider">
+                      {placaStr}
+                      {dados.anoFabricacao ? ` · ${dados.anoFabricacao}` : ''}
                       {dados.anoModelo && dados.anoModelo !== dados.anoFabricacao
                         ? `/${dados.anoModelo}`
                         : ''}
                     </p>
                   </div>
-                  {logo ? (
-                    <div className="w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center p-2 shrink-0">
-                      <img
-                        src={logo}
-                        alt={marcaNome}
-                        className="w-full h-full object-contain filter brightness-0 invert"
-                        onError={e => (e.currentTarget.style.display = 'none')}
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-                      <Car className="w-7 h-7 text-green-200" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Placa visual */}
-                <div className="flex justify-center">
-                  <PlacaVisual placa={dados.placa} uf={dados.uf} />
                 </div>
               </div>
 
               {/* Valor FIPE */}
               {dados.fipeValor ? (
-                <div className="px-5 py-4 border-b border-gray-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Valor FIPE</p>
-                      <p className="text-2xl font-bold text-gray-900 mt-0.5">{dados.fipeValor}</p>
-                      {dados.fipeMes && (
-                        <p className="text-xs text-gray-400 mt-0.5">Referencia: {dados.fipeMes}</p>
-                      )}
-                    </div>
-                    <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center">
-                      <TrendingUp className="w-6 h-6 text-green-600" />
-                    </div>
+                <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Valor FIPE</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-0.5">{dados.fipeValor}</p>
+                    {dados.fipeMes && (
+                      <p className="text-xs text-gray-400 mt-0.5">Ref.: {dados.fipeMes}</p>
+                    )}
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center">
+                    <TrendingUp className="w-6 h-6 text-green-600" />
                   </div>
                 </div>
               ) : (
-                <div className="px-5 py-4 border-b border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center">
-                      <TrendingUp className="w-6 h-6 text-gray-300" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Valor FIPE</p>
-                      <p className="text-sm text-gray-400">Disponivel na consulta completa</p>
-                    </div>
+                <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-gray-300" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 font-medium">Valor FIPE</p>
+                    <p className="text-sm text-gray-300">Disponivel na consulta completa</p>
                   </div>
                 </div>
               )}
@@ -350,7 +256,8 @@ export default function FipeResultadoPage() {
               <div className="px-5">
                 <InfoRow icon={Palette}  label="Cor"          value={dados.cor} />
                 <InfoRow icon={Fuel}     label="Combustivel"  value={dados.combustivel} />
-                <InfoRow icon={MapPin}   label="Municipio"    value={dados.municipio ? `${dados.municipio} — ${dados.uf}` : ''} />
+                <InfoRow icon={MapPin}   label="Municipio"
+                  value={dados.municipio ? `${dados.municipio} / ${dados.uf}` : ''} />
               </div>
             </div>
 
@@ -378,9 +285,8 @@ export default function FipeResultadoPage() {
               ))}
             </div>
 
-            {/* Texto de rodape */}
             <p className="text-center text-xs text-gray-400 px-4">
-              Dados basicos via tabela FIPE oficial. Para restricoes, gravame e historico completo, adquira o relatorio.
+              Dados basicos via tabela FIPE oficial. Para restricoes, gravame e historico, adquira o relatorio completo.
             </p>
           </>
         )}
@@ -394,7 +300,7 @@ export default function FipeResultadoPage() {
           >
             <span className="block text-base">Relatorio Completo</span>
             <span className="block text-sm font-medium opacity-80 mt-0.5">
-              Sem cadastro — R$ 34,00
+              Sem cadastro — R$&nbsp;34,00
             </span>
           </Link>
         )}
