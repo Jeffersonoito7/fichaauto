@@ -63,7 +63,7 @@ async function previewAssertiva(placa: string) {
     // resposta.identificadores + resposta.descricao + resposta.localizacao
     const ids  = d?.resposta?.identificadores ?? {}
     const desc = d?.resposta?.descricao       ?? {}
-    const loc  = d?.resposta?.localizacao     ?? {}
+    const mov  = d?.resposta?.movimentacao    ?? {}
     if (!desc?.marcaModelo) return null
     const chassiRaw = ids.chassi ?? ''
     const motorRaw  = ids.numeroMotor ?? ''
@@ -74,8 +74,8 @@ async function previewAssertiva(placa: string) {
       anoFabricacao: String(desc.anoFabricacao ?? ''),
       anoModelo:     String(desc.anoModelo     ?? ''),
       cor:           desc.cor         ?? '',
-      municipio:     loc.municipio    ?? loc.cidade ?? '',
-      uf:            loc.uf           ?? loc.estado ?? '',
+      municipio:     mov.municipio    ?? mov.cidade ?? '',
+      uf:            mov.uf           ?? mov.estado ?? '',
       combustivel:   desc.combustivel ?? '',
       chassi:        chassiRaw ? chassiRaw.slice(0, 5) + '*'.repeat(chassiRaw.length - 5) : '',
       motor:         motorRaw  ? motorRaw.slice(0, 4)  + '****' : '',
