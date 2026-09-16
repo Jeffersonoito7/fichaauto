@@ -53,30 +53,34 @@ async function getTokenAssertiva(): Promise<string> {
 async function previewAssertiva(placa: string) {
   try {
     const token = await getTokenAssertiva()
-    // Endpoint correto da Assertiva v3: consulta-base (nao consulta-placa)
     const res = await fetch(
       `${BASE_URL}/veiculos/v3/consulta-base?tipo=placa&documento=${placa}&idFinalidade=${FINALIDADE}`,
       { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }
     )
     if (!res.ok) return null
     const d = await res.json()
-    // Assertiva v3: dados em resposta.dadosCadastrais ou resposta diretamente
-    const v = d?.resposta?.dadosCadastrais ?? d?.resposta ?? d
-    if (!v?.marca && !v?.fabricante) return null
+    // Assertiva v3 consulta-base: estrutura real confirmada
+    // resposta.identificadores + resposta.descricao + resposta.localizacao
+    const ids  = d?.resposta?.identificadores ?? {}
+    const desc = d?.resposta?.descricao       ?? {}
+    const loc  = d?.resposta?.localizacao     ?? {}
+    if (!desc?.marcaModelo) return null
+    const chassiRaw = ids.chassi ?? ''
+    const motorRaw  = ids.numeroMotor ?? ''
     return {
       placa:         placa,
-      marca:         v.marca         ?? v.fabricante ?? '',
-      modelo:        v.modelo        ?? v.versao     ?? '',
-      anoFabricacao: String(v.anoFabricacao ?? v.anoFab ?? v.ano ?? ''),
-      anoModelo:     String(v.anoModelo     ?? v.anoMod ?? v.ano ?? ''),
-      cor:           v.cor           ?? '',
-      municipio:     v.municipio     ?? v.cidade     ?? '',
-      uf:            v.uf            ?? v.estado     ?? '',
-      combustivel:   v.combustivel   ?? '',
-      chassi:        (v.chassi       ?? '').slice(0, 5) + '*****',
-      motor:         (v.motor        ?? '').slice(0, 4) + '****',
+      marca:         desc.marcaModelo ?? '',
+      modelo:        '',
+      anoFabricacao: String(desc.anoFabricacao ?? ''),
+      anoModelo:     String(desc.anoModelo     ?? ''),
+      cor:           desc.cor         ?? '',
+      municipio:     loc.municipio    ?? loc.cidade ?? '',
+      uf:            loc.uf           ?? loc.estado ?? '',
+      combustivel:   desc.combustivel ?? '',
+      chassi:        chassiRaw ? chassiRaw.slice(0, 5) + '*'.repeat(chassiRaw.length - 5) : '',
+      motor:         motorRaw  ? motorRaw.slice(0, 4)  + '****' : '',
       fipeValor:     '',
-      fipeCodigo:    v.codigoFipe    ?? v.fipe?.codigo ?? '',
+      fipeCodigo:    '',
       fipeMes:       '',
       fonte:         'assertiva' as const,
     }
