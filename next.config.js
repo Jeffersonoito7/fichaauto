@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Desabilita minificacao no servidor (build usa pouca RAM, sem perda funcional)
+  swcMinify: false,
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '*.supabase.co' },
