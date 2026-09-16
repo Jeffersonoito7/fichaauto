@@ -53,28 +53,31 @@ async function getTokenAssertiva(): Promise<string> {
 async function previewAssertiva(placa: string) {
   try {
     const token = await getTokenAssertiva()
+    // Endpoint correto da Assertiva v3: consulta-base (nao consulta-placa)
     const res = await fetch(
-      `${BASE_URL}/veiculos/v3/consulta-placa?placa=${placa}&idFinalidade=${FINALIDADE}`,
+      `${BASE_URL}/veiculos/v3/consulta-base?tipo=placa&documento=${placa}&idFinalidade=${FINALIDADE}`,
       { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }
     )
     if (!res.ok) return null
     const d = await res.json()
-    const v = d?.resposta ?? d
+    // Assertiva v3: dados em resposta.dadosCadastrais ou resposta diretamente
+    const v = d?.resposta?.dadosCadastrais ?? d?.resposta ?? d
+    if (!v?.marca && !v?.fabricante) return null
     return {
       placa:         placa,
       marca:         v.marca         ?? v.fabricante ?? '',
       modelo:        v.modelo        ?? v.versao     ?? '',
-      anoFabricacao: String(v.anoFabricacao ?? v.ano ?? ''),
-      anoModelo:     String(v.anoModelo     ?? v.ano ?? ''),
+      anoFabricacao: String(v.anoFabricacao ?? v.anoFab ?? v.ano ?? ''),
+      anoModelo:     String(v.anoModelo     ?? v.anoMod ?? v.ano ?? ''),
       cor:           v.cor           ?? '',
       municipio:     v.municipio     ?? v.cidade     ?? '',
-      uf:            v.uf            ?? '',
+      uf:            v.uf            ?? v.estado     ?? '',
       combustivel:   v.combustivel   ?? '',
       chassi:        (v.chassi       ?? '').slice(0, 5) + '*****',
       motor:         (v.motor        ?? '').slice(0, 4) + '****',
-      fipeValor:     v.fipe?.valor   ?? v.valorFipe  ?? '',
-      fipeCodigo:    v.fipe?.codigo  ?? '',
-      fipeMes:       v.fipe?.mesReferencia ?? '',
+      fipeValor:     '',
+      fipeCodigo:    v.codigoFipe    ?? v.fipe?.codigo ?? '',
+      fipeMes:       '',
       fonte:         'assertiva' as const,
     }
   } catch {
