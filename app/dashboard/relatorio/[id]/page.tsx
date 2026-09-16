@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { ArrowLeft, Download, ChevronDown, Loader2, XCircle, Lock, Share2, Check } from 'lucide-react'
-import { temModulo, planoQueTemModulo, PLANOS, type PlanoId } from '@/lib/products'
+import { temModulo, planoQueTemModulo } from '@/lib/products'
 
 const BRAND_LOGO: Record<string, string> = {
   TOYOTA: 'https://logo.clearbit.com/toyota.com',
@@ -190,8 +190,7 @@ function CardStatus({ titulo, valor, tipo }: { titulo: string; valor: string; ti
   )
 }
 
-function CardBloqueado({ titulo, planoNecessario }: { titulo: string; planoNecessario: PlanoId | null }) {
-  const nome = planoNecessario ? PLANOS[planoNecessario]?.nome : 'Profissional'
+function CardBloqueado({ titulo }: { titulo: string }) {
   return (
     <div className="bg-gray-50 rounded-lg p-3.5 min-h-[80px] flex flex-col border border-dashed border-gray-300">
       <div className="flex items-center gap-1.5 mb-2">
@@ -199,7 +198,7 @@ function CardBloqueado({ titulo, planoNecessario }: { titulo: string; planoNeces
         <p className="text-[9px] font-extrabold uppercase tracking-widest text-gray-400">{titulo}</p>
       </div>
       <p className="text-xs text-gray-400 mt-auto">
-        Plano <span className="text-purple-600 font-semibold">{nome}</span>
+        Disponível em breve
       </p>
     </div>
   )
@@ -212,12 +211,12 @@ export default function RelatorioPage() {
   const [loading, setLoading]   = useState(true)
   const [erro, setErro]         = useState('')
   const [semSaldo, setSemSaldo] = useState(false)
-  const [plano, setPlano]       = useState<PlanoId | null>(null)
+  const [assinaturaAtiva, setAssinaturaAtiva] = useState(false)
   const [token, setToken]       = useState<string | null>(null)
   const [copiado, setCopiado]   = useState(false)
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => { if (d?.plano) setPlano(d.plano) }).catch(() => {})
+    fetch('/api/auth/me').then(r => r.json()).then(d => { if (d?.assinatura_ativa) setAssinaturaAtiva(true) }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -956,46 +955,46 @@ export default function RelatorioPage() {
         normal={0}
         alerta={0}
         atencao={
-          temModulo(plano, 'placa_recall') ||
-          temModulo(plano, 'placa_sinistro_plus') ||
-          temModulo(plano, 'placa_frota_locadora') ? 0 : 1
+          temModulo(assinaturaAtiva, 'placa_recall') ||
+          temModulo(assinaturaAtiva, 'placa_sinistro_plus') ||
+          temModulo(assinaturaAtiva, 'placa_frota_locadora') ? 0 : 1
         }
       >
-        {temModulo(plano, 'placa_recall')
+        {temModulo(assinaturaAtiva, 'placa_recall')
           ? <CardStatus titulo="RECALL" valor="NENHUM RECALL PENDENTE" tipo="normal" />
-          : <CardBloqueado titulo="RECALL POR PLACA/CHASSI" planoNecessario={planoQueTemModulo('placa_recall')} />}
+          : <CardBloqueado titulo="RECALL POR PLACA/CHASSI"  />}
 
-        {temModulo(plano, 'placa_historico_proprietarios')
+        {temModulo(assinaturaAtiva, 'placa_historico_proprietarios')
           ? <CardStatus titulo="HISTÓRICO PROPRIETÁRIOS" valor="AGUARDANDO DADO" tipo="normal" />
-          : <CardBloqueado titulo="HISTÓRICO DE PROPRIETÁRIOS" planoNecessario={planoQueTemModulo('placa_historico_proprietarios')} />}
+          : <CardBloqueado titulo="HISTÓRICO DE PROPRIETÁRIOS"  />}
 
-        {temModulo(plano, 'placa_sinistro_plus')
+        {temModulo(assinaturaAtiva, 'placa_sinistro_plus')
           ? <CardStatus titulo="SINISTRO PLUS" valor="AGUARDANDO DADO" tipo="normal" />
-          : <CardBloqueado titulo="SINISTRO PLUS (AMPLIADO)" planoNecessario={planoQueTemModulo('placa_sinistro_plus')} />}
+          : <CardBloqueado titulo="SINISTRO PLUS (AMPLIADO)"  />}
 
-        {temModulo(plano, 'placa_frota_locadora')
+        {temModulo(assinaturaAtiva, 'placa_frota_locadora')
           ? <CardStatus titulo="FROTA LOCADORA" valor="AGUARDANDO DADO" tipo="normal" />
-          : <CardBloqueado titulo="HISTÓRICO FROTA LOCADORA" planoNecessario={planoQueTemModulo('placa_frota_locadora')} />}
+          : <CardBloqueado titulo="HISTÓRICO FROTA LOCADORA"  />}
 
-        {temModulo(plano, 'placa_frota_policial')
+        {temModulo(assinaturaAtiva, 'placa_frota_policial')
           ? <CardStatus titulo="FROTA POLICIAL" valor="AGUARDANDO DADO" tipo="normal" />
-          : <CardBloqueado titulo="HISTÓRICO FROTA POLICIAL" planoNecessario={planoQueTemModulo('placa_frota_policial')} />}
+          : <CardBloqueado titulo="HISTÓRICO FROTA POLICIAL"  />}
 
-        {temModulo(plano, 'placa_frota_taxi')
+        {temModulo(assinaturaAtiva, 'placa_frota_taxi')
           ? <CardStatus titulo="FROTA TÁXI" valor="AGUARDANDO DADO" tipo="normal" />
-          : <CardBloqueado titulo="HISTÓRICO TÁXI" planoNecessario={planoQueTemModulo('placa_frota_taxi')} />}
+          : <CardBloqueado titulo="HISTÓRICO TÁXI"  />}
 
-        {temModulo(plano, 'placa_veiculo_crime')
+        {temModulo(assinaturaAtiva, 'placa_veiculo_crime')
           ? <CardStatus titulo="VEÍCULO EM CRIME" valor="AGUARDANDO DADO" tipo="normal" />
-          : <CardBloqueado titulo="VEÍCULO UTILIZADO EM CRIME" planoNecessario={planoQueTemModulo('placa_veiculo_crime')} />}
+          : <CardBloqueado titulo="VEÍCULO UTILIZADO EM CRIME"  />}
 
-        {temModulo(plano, 'placa_transferencia_seguradora')
+        {temModulo(assinaturaAtiva, 'placa_transferencia_seguradora')
           ? <CardStatus titulo="TRANSF. SEGURADORA" valor="AGUARDANDO DADO" tipo="normal" />
-          : <CardBloqueado titulo="TRANSFERÊNCIA P/ SEGURADORA" planoNecessario={planoQueTemModulo('placa_transferencia_seguradora')} />}
+          : <CardBloqueado titulo="TRANSFERÊNCIA P/ SEGURADORA"  />}
 
-        {temModulo(plano, 'placa_chassi_decoder')
+        {temModulo(assinaturaAtiva, 'placa_chassi_decoder')
           ? <CardStatus titulo="DECODIFICADOR VIN" valor="AGUARDANDO DADO" tipo="normal" />
-          : <CardBloqueado titulo="DECODIFICADOR DE CHASSI (VIN)" planoNecessario={planoQueTemModulo('placa_chassi_decoder')} />}
+          : <CardBloqueado titulo="DECODIFICADOR DE CHASSI (VIN)"  />}
       </SecaoAcordion>
 
       {/* ── GRAVAME ────────────────────────────────────────────────────────── */}

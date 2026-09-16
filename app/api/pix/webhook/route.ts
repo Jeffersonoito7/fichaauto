@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { consultarVeiculo } from '@/lib/providers'
+import { randomUUID } from 'crypto'
 
 // EFÍ envia POST para: /api/pix/webhook?token=PIX_WEBHOOK_SECRET
 // Cadastrar essa URL exata no painel EFÍ (Configurações > PIX > Webhook)
@@ -42,7 +44,47 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // 3. Recarga de tenant (B2B) — ativa assinatura por 30 dias
+      // 3. Consulta avulsa (sem conta) — executa Assertiva e gera token
+      if (transacao.produto === 'avulsa') {
+        const placa = (transacao.descricao ?? '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+        if (!placa) {
+          console.error(`[PIX webhook] avulsa sem placa txid=${txid}`)
+          continue
+        }
+
+        try {
+          const resultado = await consultarVeiculo(placa)
+          const token = randomUUID().replace(/-/g, '')
+          const expires_at = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
+
+          const pDesc = resultado.placa?.resposta?.descricao ?? resultado.placa?.resposta ?? {}
+          const marca = pDesc.marcaModelo ?? pDesc.marca ?? placa
+
+          await supabase.from('consultas' as any).insert({
+            email:      'avulsa@fichaauto.com.br',
+            tipo:       'veiculo',
+            documento:  placa,
+            descricao:  marca,
+            status:     'realizada',
+            token,
+            resultado:  JSON.stringify(resultado),
+            expires_at,
+          })
+
+          await supabase
+            .from('transacoes_pix')
+            .update({ resultado_token: token } as any)
+            .eq('txid', txid)
+
+          console.log(`[PIX webhook] avulsa txid=${txid} placa=${placa} token=${token}`)
+        } catch (e: any) {
+          console.error(`[PIX webhook] avulsa falha ao consultar placa txid=${txid}`, e.message)
+          // Nao reverte o pagamento — deixa como pago e log para revisao manual
+        }
+        continue
+      }
+
+      // 4. Recarga de tenant (B2B) — ativa assinatura por 30 dias
       if (transacao.tenant_id && transacao.produto === 'assinatura') {
         const vence = new Date()
         vence.setDate(vence.getDate() + 30)

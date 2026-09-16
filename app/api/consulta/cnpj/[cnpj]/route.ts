@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthEmail, salvarConsulta, registrarAuditoria } from '@/lib/consulta-helper'
+import { getAuthEmail, salvarConsulta, registrarAuditoria, tenantComAssinaturaAtiva } from '@/lib/consulta-helper'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getCnpj } from '@/lib/providers/brasilapi'
 import { consultarSancoesCnpj } from '@/lib/providers/sancoes-gov'
@@ -100,10 +100,11 @@ export async function GET(
   const svc = createServiceRoleClient() as any
   const { data: perfil } = await svc.from('perfis').select('saldo_cpf, role, pode_cnpj').eq('email', email).maybeSingle()
   const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
-  if (!isAdmin && !perfil?.pode_cnpj) return NextResponse.json({ error: 'Sem permissão para consulta de CNPJ.' }, { status: 403 })
+  const isAssinante = !isAdmin && await tenantComAssinaturaAtiva(email)
+  if (!isAdmin && !isAssinante && !perfil?.pode_cnpj) return NextResponse.json({ error: 'Sem permissão para consulta de CNPJ.' }, { status: 403 })
   const saldo = parseFloat(perfil?.saldo_cpf ?? '0')
   const custo = PRECO.cnpj
-  if (!isAdmin && saldo < custo) return NextResponse.json({ error: `Saldo insuficiente. Esta consulta custa R$ ${custo.toFixed(2).replace('.', ',')}. Recarregue sua carteira.` }, { status: 402 })
+  if (!isAdmin && !isAssinante && saldo < custo) return NextResponse.json({ error: `Saldo insuficiente. Esta consulta custa R$ ${custo.toFixed(2).replace('.', ',')}. Recarregue sua carteira.` }, { status: 402 })
 
   const erros: string[] = []
   const avisos: string[] = []
@@ -178,8 +179,8 @@ export async function GET(
 
   const resultado = { cnpj, basico: basicoFinal, qsa: qsaFinal, relacionadas, sancoes, erros, avisos }
 
-  // Debitar somente após retorno da API (evita perda de saldo em falha externa)
-  if (!isAdmin) await svc.from('perfis').update({ saldo_cpf: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() }).eq('email', email)
+  // Debitar somente após retorno da API — assinantes de tenant nao debitam saldo individual
+  if (!isAdmin && !isAssinante) await svc.from('perfis').update({ saldo_cpf: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() }).eq('email', email)
 
   const saved = await salvarConsulta({ email, tipo: 'cnpj', documento: cnpj, descricao: basicoFinal?.razaoSocial ?? cnpj, resultado }).catch(() => null)
   registrarAuditoria({ email, acao: 'consulta_cnpj', documento: cnpj, custo: isAdmin ? 0 : custo })

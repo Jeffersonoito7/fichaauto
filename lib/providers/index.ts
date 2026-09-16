@@ -1,6 +1,7 @@
 import { consultarCompleto } from './assertiva'
 import { getFipePorCodigo }  from './brasilapi'
 import { buscarProcessosProprietario } from './datajud'
+import { getCachePlaca } from '@/lib/cache-placas'
 
 export async function consultarVeiculo(placa: string, chassi?: string) {
   const resultado = await consultarCompleto(placa, chassi)
@@ -12,10 +13,16 @@ export async function consultarVeiculo(placa: string, chassi?: string) {
   const tabelaFipe = sinistroR?.tabelaFipe ?? sinistroR?.fipe ?? {}
 
   // Codigo FIPE: vem do sinistro/precificador da Assertiva
-  const codigoFipe: string =
+  let codigoFipe: string =
     tabelaFipe?.codigo      ?? tabelaFipe?.codigoFipe ??
     sinistroR?.codigoFipe   ?? sinistroR?.codigo      ??
     pDesc?.codigoFipe       ?? pDesc?.codFipe         ?? ''
+
+  // Fallback: busca codigo FIPE no cache de placas (salvo pela consulta gratuita)
+  if (!codigoFipe) {
+    const cache = await getCachePlaca(placa).catch(() => null)
+    codigoFipe = cache?.codigo_fipe ?? ''
+  }
 
   // Nome do proprietario para DataJud
   const nomeProprietario: string | null =

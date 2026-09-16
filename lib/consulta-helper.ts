@@ -3,6 +3,35 @@ import { createServiceRoleClient } from './supabase-server'
 import { verificarJwt } from './jwt'
 import { randomUUID } from 'crypto'
 
+/**
+ * Verifica se o usuario pertence a um tenant com assinatura ativa.
+ * Se sim, o consumo e ilimitado e nao deve debitar saldo individual.
+ */
+export async function tenantComAssinaturaAtiva(email: string): Promise<boolean> {
+  try {
+    const svc = createServiceRoleClient() as any
+    const { data: perfil } = await svc
+      .from('perfis')
+      .select('tenant_id')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (!perfil?.tenant_id) return false
+
+    const { data: tenant } = await svc
+      .from('tenants')
+      .select('assinatura_ativa, assinatura_vence_em')
+      .eq('id', perfil.tenant_id)
+      .maybeSingle()
+
+    if (!tenant?.assinatura_ativa) return false
+    if (!tenant.assinatura_vence_em) return false
+    return new Date(tenant.assinatura_vence_em) > new Date()
+  } catch {
+    return false
+  }
+}
+
 export async function getAuthEmail(): Promise<string | null> {
   try {
     const cookieStore = await cookies()

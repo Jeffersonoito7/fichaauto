@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { consultarVeiculo } from '@/lib/providers'
 import { createServiceRoleClient } from '@/lib/supabase-server'
-import { getAuthEmail, salvarConsulta, registrarAuditoria } from '@/lib/consulta-helper'
+import { getAuthEmail, salvarConsulta, registrarAuditoria, tenantComAssinaturaAtiva } from '@/lib/consulta-helper'
 import { PRECO } from '@/lib/products'
 import { salvarCacheDeResultado } from '@/lib/cache-placas'
 
@@ -30,14 +30,15 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
+    const isAssinante = !isAdmin && await tenantComAssinaturaAtiva(email)
     const saldo = parseFloat(perfil?.saldo_veiculo ?? '0')
     const custo = PRECO.placa
 
-    if (!isAdmin && !perfil?.pode_placa) {
+    if (!isAdmin && !isAssinante && !perfil?.pode_placa) {
       return NextResponse.json({ error: 'Sem permissão para consulta veicular.' }, { status: 403 })
     }
 
-    if (!isAdmin && saldo < custo) {
+    if (!isAdmin && !isAssinante && saldo < custo) {
       return NextResponse.json(
         { error: `Saldo insuficiente. Esta consulta custa R$ ${custo.toFixed(2).replace('.', ',')}. Recarregue sua carteira.` },
         { status: 402 }
@@ -50,7 +51,8 @@ export async function POST(req: NextRequest) {
     )
 
     // Debitar somente após retorno da API (evita perda de saldo em falha externa)
-    if (!isAdmin) {
+    // Assinantes de tenant nao debitam saldo individual
+    if (!isAdmin && !isAssinante) {
       await service
         .from('perfis')
         .update({ saldo_veiculo: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() })

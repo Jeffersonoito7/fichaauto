@@ -3,10 +3,27 @@
 // Fonte 1: cache_placas (grátis, dados de consultas anteriores)
 // Fonte 2: PlacaFIPE (token via PLACAFIPE_TOKEN)
 // Fonte 3: Assertiva básico (fallback — cobrado, evitar ao máximo)
+// Valor FIPE sempre via BrasilAPI (grátis) usando o codigo_fipe
 
 import { NextRequest, NextResponse } from 'next/server'
 import { consultarPlacaFipe } from '@/lib/providers/placafipe'
 import { getCachePlaca } from '@/lib/cache-placas'
+import { getFipePorCodigo } from '@/lib/providers/brasilapi'
+
+async function enriquecerFipe(dados: any): Promise<any> {
+  if (dados.fipeValor || !dados.fipeCodigo) return dados
+  try {
+    const fipe = await getFipePorCodigo(dados.fipeCodigo)
+    if (!fipe) return dados
+    const valor = fipe.valor ?? fipe.price ?? fipe.preco ?? null
+    const ref   = fipe.referenceMonth ?? fipe.mesReferencia ?? null
+    if (!valor) return dados
+    const valorFmt = `R$ ${Number(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+    return { ...dados, fipeValor: valorFmt, fipeMes: ref ?? dados.fipeMes }
+  } catch {
+    return dados
+  }
+}
 
 const TOKEN_URL = 'https://api.assertivasolucoes.com.br/oauth2/v3/token'
 const BASE_URL  = 'https://api.assertivasolucoes.com.br'
@@ -79,7 +96,7 @@ export async function GET(
   // 1. Cache local (gratuito — dados de consultas pagas anteriores)
   const cache = await getCachePlaca(placa)
   if (cache?.marca) {
-    return NextResponse.json({
+    const dadosCache = {
       placa,
       marca:         cache.marca        ?? '',
       modelo:        cache.modelo       ?? '',
@@ -95,19 +112,20 @@ export async function GET(
       fipeCodigo:    cache.codigo_fipe  ?? '',
       fipeMes:       '',
       fonte:         'cache' as const,
-    })
+    }
+    return NextResponse.json(await enriquecerFipe(dadosCache))
   }
 
   // 2. PlacaFIPE (barato — R$0,03)
   const resultadoPlacaFipe = await consultarPlacaFipe(placa)
   if (resultadoPlacaFipe) {
-    return NextResponse.json(resultadoPlacaFipe)
+    return NextResponse.json(await enriquecerFipe(resultadoPlacaFipe))
   }
 
   // 3. Assertiva básico (fallback pago — só chega aqui se as anteriores falharem)
   const resultadoAssertiva = await previewAssertiva(placa)
   if (resultadoAssertiva) {
-    return NextResponse.json(resultadoAssertiva)
+    return NextResponse.json(await enriquecerFipe(resultadoAssertiva))
   }
 
   return NextResponse.json({ error: 'Veículo não encontrado' }, { status: 404 })

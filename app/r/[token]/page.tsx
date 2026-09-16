@@ -86,8 +86,17 @@ function RelatórioVeiculo({ r }: { r: any }) {
 
       {r.fipe && (
         <Section title="Valor FIPE">
-          <Row label="Valor FIPE" value={moeda(r.fipe?.resposta?.valorFipe ?? r.fipe?.resposta?.fipe?.valor)} />
-          <Row label="Referência" value={v(r.fipe?.resposta?.mesReferencia ?? r.fipe?.resposta?.fipe?.mesReferencia, '')} />
+          <Row label="Valor FIPE" value={moeda(
+            r.fipe?.valor ?? r.fipe?.price ?? r.fipe?.preco ??
+            r.fipe?.resposta?.valorFipe ?? r.fipe?.resposta?.fipe?.valor
+          )} />
+          <Row label="Referência" value={v(
+            r.fipe?.referenceMonth ?? r.fipe?.mesReferencia ??
+            r.fipe?.resposta?.mesReferencia ?? r.fipe?.resposta?.fipe?.mesReferencia, ''
+          )} />
+          {r.fipe?.vehicleType != null && (
+            <Row label="Código FIPE" value={v(r.fipe?.codeFipe ?? r.fipe?.codigoFipe, '')} />
+          )}
         </Section>
       )}
     </>

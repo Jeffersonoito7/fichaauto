@@ -1,6 +1,6 @@
 'use client'
-import { PLANOS, MODULOS, todosOsPlanos, type PlanoId, type ModuloId } from '@/lib/products'
-import { Check, Lock, Zap, ExternalLink } from 'lucide-react'
+import { MODULOS, ASSINATURA_B2B, type ModuloId } from '@/lib/products'
+import { Shield, Infinity as InfinityIcon, CheckCircle2 } from 'lucide-react'
 
 const FONTE_BADGE: Record<string, { label: string; cor: string }> = {
   assertiva:  { label: 'Assertiva',  cor: 'bg-green-100 text-green-700'  },
@@ -11,44 +11,32 @@ const FONTE_BADGE: Record<string, { label: string; cor: string }> = {
 
 const GRUPOS_MODULOS: { titulo: string; modulos: ModuloId[] }[] = [
   {
-    titulo: 'Placa / Veicular — Assertiva + DataJud',
+    titulo: 'Placa / Veicular',
     modulos: [
       'placa_identificacao', 'placa_bin_federal', 'placa_bin_estadual',
       'placa_sinistro', 'placa_gravame', 'placa_leilao', 'placa_fipe',
-      'placa_processos_cnj',
-    ],
-  },
-  {
-    titulo: 'Placa / Veicular — FutureData (a contratar)',
-    modulos: [
-      'placa_recall', 'placa_historico_proprietarios', 'placa_sinistro_plus',
-      'placa_frota_locadora', 'placa_frota_policial', 'placa_frota_taxi',
-      'placa_veiculo_crime', 'placa_transferencia_seguradora',
+      'placa_processos_cnj', 'placa_recall', 'placa_historico_proprietarios',
+      'placa_sinistro_plus', 'placa_frota_locadora', 'placa_frota_policial',
+      'placa_frota_taxi', 'placa_veiculo_crime', 'placa_transferencia_seguradora',
       'placa_chassi_decoder', 'placa_crlve', 'placa_atpve', 'placa_comunicado_venda',
     ],
   },
   {
-    titulo: 'CPF / Pessoa Física — Assertiva',
+    titulo: 'CPF / Pessoa Física',
     modulos: [
       'cpf_basico', 'cpf_contatos', 'cpf_enderecos', 'cpf_score',
       'cpf_processos', 'cpf_protestos', 'cpf_renda', 'cpf_pep',
       'cpf_societario', 'cpf_relacionamentos', 'cpf_veiculos',
+      'cpf_kyc', 'cpf_antecedentes', 'cpf_mandados', 'cpf_cnh',
     ],
   },
   {
-    titulo: 'CPF / Pessoa Física — FutureData (a contratar)',
-    modulos: ['cpf_kyc', 'cpf_antecedentes', 'cpf_mandados', 'cpf_cnh'],
-  },
-  {
-    titulo: 'CNPJ / Pessoa Jurídica — Assertiva',
+    titulo: 'CNPJ / Pessoa Jurídica',
     modulos: [
       'cnpj_basico', 'cnpj_qsa', 'cnpj_score', 'cnpj_processos',
       'cnpj_protestos', 'cnpj_relacionadas',
+      'cnpj_kyc', 'cnpj_divida_ativa', 'cnpj_grupo_empresarial', 'cnpj_sintegra',
     ],
-  },
-  {
-    titulo: 'CNPJ / Pessoa Jurídica — FutureData (a contratar)',
-    modulos: ['cnpj_kyc', 'cnpj_divida_ativa', 'cnpj_grupo_empresarial', 'cnpj_sintegra'],
   },
   {
     titulo: 'Geral',
@@ -56,156 +44,81 @@ const GRUPOS_MODULOS: { titulo: string; modulos: ModuloId[] }[] = [
   },
 ]
 
-const ORDEM_PLANOS: PlanoId[] = ['essencial', 'profissional', 'despachante', 'seguradora']
+function fmt(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
 
-export default function PlanosPage() {
-  const planos = ORDEM_PLANOS.map(id => PLANOS[id])
-
+export default function PlanosAdminPage() {
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-brand-dark">Catálogo de Planos e Produtos</h1>
-        <p className="text-brand-gray text-sm mt-1">
-          Todos os módulos disponíveis por plano. Módulos FutureData ativam automaticamente quando a chave API for configurada.
-        </p>
+    <div className="max-w-4xl mx-auto px-6 py-10">
+      <div className="mb-8">
+        <h1 className="text-2xl font-black text-gray-900">Assinatura B2B</h1>
+        <p className="text-sm text-gray-500 mt-1">Modelo comercial — um preco, todos os modulos.</p>
       </div>
 
-      {/* Cards dos planos */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-        {planos.map(p => (
-          <div key={p.id} className={`rounded-2xl p-5 text-white relative overflow-hidden ${p.destaque ? 'ring-4 ring-offset-2' : ''}`}
-               style={{ background: `linear-gradient(135deg, ${p.cor}, ${p.cor}CC)`, ...(p.destaque ? { ringColor: p.cor } : {}) }}>
-            {p.destaque && (
-              <div className="absolute top-3 right-3 bg-white/20 rounded-full px-2 py-0.5 text-[10px] font-bold">
-                POPULAR
-              </div>
-            )}
-            <p className="text-xs font-bold opacity-70 uppercase tracking-wider mb-1">{p.id}</p>
-            <h2 className="text-xl font-black mb-1">{p.nome}</h2>
-            <p className="text-3xl font-black mb-1">R$ {p.preco}<span className="text-sm font-normal opacity-70">/mês</span></p>
-            <p className="text-xs opacity-70 mb-3">{p.creditos} consultas incluídas</p>
-            <div className="text-xs opacity-80 space-y-0.5">
-              {p.publico.map(pub => (
-                <p key={pub} className="flex items-center gap-1">
-                  <Check className="w-3 h-3 shrink-0" /> {pub}
-                </p>
-              ))}
+      {/* Card da assinatura */}
+      <div className="bg-white rounded-2xl border-2 border-brand-green p-8 mb-10 shadow-sm">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <p className="text-sm font-semibold text-brand-green uppercase tracking-wide">Plano Unico</p>
+            <h2 className="text-2xl font-black text-gray-900 mt-1">Acesso Completo</h2>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-green-100 flex items-center justify-center">
+            <Shield className="w-6 h-6 text-brand-green" />
+          </div>
+        </div>
+
+        <div className="space-y-3 mb-8">
+          <div className="flex items-center gap-3">
+            <InfinityIcon className="w-4 h-4 text-brand-green flex-shrink-0" />
+            <span className="text-sm text-gray-700">Consultas ilimitadas em todos os modulos disponiveis</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="w-4 h-4 text-brand-green flex-shrink-0" />
+            <span className="text-sm text-gray-700">Validade de 30 dias apos o pagamento</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="w-4 h-4 text-brand-green flex-shrink-0" />
+            <span className="text-sm text-gray-700">Ativacao imediata via Pix</span>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-100 pt-6">
+          <p className="text-xs text-gray-400 mb-1">Valor mensal por empresa</p>
+          <p className="text-4xl font-black text-gray-900">{fmt(ASSINATURA_B2B.preco)}</p>
+        </div>
+      </div>
+
+      {/* Catalogo de modulos */}
+      <h2 className="text-lg font-black text-gray-900 mb-4">Catalogo de Modulos</h2>
+
+      <div className="space-y-6">
+        {GRUPOS_MODULOS.map(grupo => (
+          <div key={grupo.titulo}>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">{grupo.titulo}</h3>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {grupo.modulos.map(id => {
+                const m = MODULOS[id]
+                const badge = FONTE_BADGE[m.fonte]
+                return (
+                  <div
+                    key={id}
+                    className={`p-4 rounded-xl border ${m.disponivel ? 'bg-white border-gray-200' : 'bg-gray-50 border-dashed border-gray-200'}`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className={`text-sm font-semibold ${m.disponivel ? 'text-gray-900' : 'text-gray-400'}`}>{m.nome}</p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${badge.cor}`}>{badge.label}</span>
+                    </div>
+                    <p className="text-xs text-gray-500">{m.descricao}</p>
+                    {!m.disponivel && (
+                      <p className="text-[10px] text-purple-500 font-semibold mt-2">Em breve</p>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         ))}
-      </div>
-
-      {/* Tabela de módulos por plano */}
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-brand-gray-light border-b border-brand-border">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-brand-gray uppercase tracking-wider w-64">
-                  Módulo
-                </th>
-                <th className="text-center px-2 py-3 text-xs font-semibold text-brand-gray uppercase tracking-wider">
-                  Fonte
-                </th>
-                {planos.map(p => (
-                  <th key={p.id} className="text-center px-4 py-3 text-xs font-bold uppercase tracking-wider"
-                      style={{ color: p.cor }}>
-                    {p.nome}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {GRUPOS_MODULOS.map(grupo => (
-                <>
-                  {/* Linha de grupo */}
-                  <tr key={grupo.titulo} className="bg-gray-50 border-y border-brand-border">
-                    <td colSpan={2 + planos.length} className="px-4 py-2">
-                      <p className="text-xs font-bold text-brand-dark uppercase tracking-wide">{grupo.titulo}</p>
-                    </td>
-                  </tr>
-                  {/* Módulos do grupo */}
-                  {grupo.modulos.map(modId => {
-                    const mod = MODULOS[modId]
-                    const fonteCfg = FONTE_BADGE[mod.fonte]
-                    return (
-                      <tr key={modId} className="border-b border-brand-border hover:bg-brand-gray-light/30 transition-colors">
-                        <td className="px-4 py-2.5">
-                          <div className="flex items-start gap-2">
-                            {!mod.disponivel && <Lock className="w-3 h-3 text-purple-400 shrink-0 mt-0.5" />}
-                            <div>
-                              <p className="text-xs font-semibold text-brand-dark leading-tight">{mod.nome}</p>
-                              <p className="text-[10px] text-brand-gray leading-tight mt-0.5">{mod.descricao}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-2 py-2.5 text-center">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${fonteCfg.cor}`}>
-                            {fonteCfg.label}
-                          </span>
-                        </td>
-                        {planos.map(p => {
-                          const incluso = p.modulos.includes(modId)
-                          return (
-                            <td key={p.id} className="px-4 py-2.5 text-center">
-                              {incluso
-                                ? <Check className="w-4 h-4 mx-auto" style={{ color: p.cor }} />
-                                : <span className="text-brand-border">—</span>
-                              }
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    )
-                  })}
-                </>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Nota FutureData */}
-      <div className="mt-6 p-4 bg-purple-50 border border-purple-200 rounded-xl flex items-start gap-3">
-        <Lock className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-bold text-purple-800">Módulos FutureData aguardando contrato</p>
-          <p className="text-xs text-purple-700 mt-1">
-            Recall, histórico de proprietários, frota, crime, KYC, CNH e demais módulos marcados com cadeado
-            estão completamente estruturados no código. Assim que o contrato com a FutureData for firmado
-            e a chave API configurada no servidor, todos ativam automaticamente sem nenhuma alteração de código.
-          </p>
-          <div className="flex gap-3 mt-2">
-            <a href="https://futuredata.com.br/contato" target="_blank"
-               className="text-xs text-purple-700 font-semibold hover:underline flex items-center gap-1">
-              <ExternalLink className="w-3 h-3" /> futuredata.com.br/contato
-            </a>
-            <span className="text-xs text-purple-600">WhatsApp: (81) 98894-9075</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Status do ambiente */}
-      <div className="mt-4 p-4 bg-brand-gray-light rounded-xl">
-        <p className="text-xs font-bold text-brand-dark mb-2 flex items-center gap-2">
-          <Zap className="w-3.5 h-3.5 text-brand-green" /> Status das integrações
-        </p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          {[
-            { nome: 'Assertiva',  ativo: true,  detalhe: 'OAuth2 ativo' },
-            { nome: 'DataJud',    ativo: true,  detalhe: 'Chave pública ativa' },
-            { nome: 'BrasilAPI',  ativo: true,  detalhe: 'Gratuito — sem autenticação' },
-            { nome: 'FutureData', ativo: false, detalhe: 'Aguardando contrato' },
-          ].map(s => (
-            <div key={s.nome} className={`rounded-lg p-2.5 border ${s.ativo ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <div className={`w-2 h-2 rounded-full ${s.ativo ? 'bg-green-500' : 'bg-gray-300'}`} />
-                <p className="text-xs font-bold text-brand-dark">{s.nome}</p>
-              </div>
-              <p className="text-[10px] text-brand-gray">{s.detalhe}</p>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   )

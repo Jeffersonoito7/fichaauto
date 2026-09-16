@@ -166,138 +166,23 @@ export const MODULOS: Record<ModuloId, Modulo> = {
   lote:                          { id: 'lote',                          nome: 'Consulta em Lote',            descricao: 'Upload de CSV para consulta em massa de placas, CPFs ou CNPJs',        fonte: 'assertiva',   disponivel: true },
 }
 
-// ─── Planos ────────────────────────────────────────────────────────────────────
-export type PlanoId = 'essencial' | 'profissional' | 'seguradora' | 'despachante'
-
-export interface Plano {
-  id: PlanoId
-  nome: string
-  descricao: string
-  cor: string          // hex
-  corTexto: string     // hex
-  preco: number        // R$/mês sugerido
-  creditos: number     // consultas incluídas/mês
-  publico: string[]    // quem se beneficia
-  modulos: ModuloId[]
-  destaque: boolean
-}
-
-export const PLANOS: Record<PlanoId, Plano> = {
-  essencial: {
-    id: 'essencial',
-    nome: 'Essencial',
-    descricao: 'Consulta veicular completa com todas as fontes Assertiva e DataJud',
-    cor: '#00703C',
-    corTexto: '#FFFFFF',
-    preco: 149,
-    creditos: 50,
-    publico: ['Pessoa física', 'Revendas', 'Concessionárias'],
-    destaque: false,
-    modulos: [
-      'placa_identificacao', 'placa_bin_federal', 'placa_bin_estadual',
-      'placa_sinistro', 'placa_gravame', 'placa_leilao', 'placa_fipe',
-      'placa_processos_cnj',
-      'cpf_basico', 'cpf_contatos', 'cpf_enderecos', 'cpf_score',
-      'cpf_processos', 'cpf_protestos', 'cpf_renda', 'cpf_pep',
-      'cpf_societario', 'cpf_relacionamentos', 'cpf_veiculos',
-      'cnpj_basico', 'cnpj_qsa', 'cnpj_score', 'cnpj_processos',
-      'cnpj_protestos', 'cnpj_relacionadas',
-    ],
-  },
-
-  profissional: {
-    id: 'profissional',
-    nome: 'Profissional',
-    descricao: 'Essencial + recall, histórico de proprietários e decodificador de chassi',
-    cor: '#1D4ED8',
-    corTexto: '#FFFFFF',
-    preco: 299,
-    creditos: 150,
-    publico: ['Revendas', 'Concessionárias', 'Proteção Veicular', 'Seguros'],
-    destaque: true,
-    modulos: [
-      'placa_identificacao', 'placa_bin_federal', 'placa_bin_estadual',
-      'placa_sinistro', 'placa_gravame', 'placa_leilao', 'placa_fipe',
-      'placa_processos_cnj',
-      'placa_recall', 'placa_historico_proprietarios', 'placa_chassi_decoder',
-      'cpf_basico', 'cpf_contatos', 'cpf_enderecos', 'cpf_score',
-      'cpf_processos', 'cpf_protestos', 'cpf_renda', 'cpf_pep',
-      'cpf_societario', 'cpf_relacionamentos', 'cpf_veiculos',
-      'cnpj_basico', 'cnpj_qsa', 'cnpj_score', 'cnpj_processos',
-      'cnpj_protestos', 'cnpj_relacionadas',
-      'lote',
-    ],
-  },
-
-  seguradora: {
-    id: 'seguradora',
-    nome: 'Seguradora',
-    descricao: 'Máximo anti-fraude: frota, crime, KYC, CNH e transferência para seguradora',
-    cor: '#7C3AED',
-    corTexto: '#FFFFFF',
-    preco: 599,
-    creditos: 500,
-    publico: ['Seguradoras', 'Proteção Veicular', 'Associações', 'Fintechs'],
-    destaque: false,
-    modulos: [
-      // Tudo do Profissional
-      'placa_identificacao', 'placa_bin_federal', 'placa_bin_estadual',
-      'placa_sinistro', 'placa_gravame', 'placa_leilao', 'placa_fipe',
-      'placa_processos_cnj',
-      'placa_recall', 'placa_historico_proprietarios', 'placa_chassi_decoder',
-      // Anti-fraude avançado (FutureData)
-      'placa_sinistro_plus', 'placa_frota_locadora', 'placa_frota_policial',
-      'placa_frota_taxi', 'placa_veiculo_crime', 'placa_transferencia_seguradora',
-      // CPF avançado
-      'cpf_basico', 'cpf_contatos', 'cpf_enderecos', 'cpf_score',
-      'cpf_processos', 'cpf_protestos', 'cpf_renda', 'cpf_pep',
-      'cpf_societario', 'cpf_relacionamentos', 'cpf_veiculos',
-      'cpf_kyc', 'cpf_antecedentes', 'cpf_mandados', 'cpf_cnh',
-      // CNPJ avançado
-      'cnpj_basico', 'cnpj_qsa', 'cnpj_score', 'cnpj_processos',
-      'cnpj_protestos', 'cnpj_relacionadas',
-      'cnpj_kyc', 'cnpj_divida_ativa', 'cnpj_grupo_empresarial', 'cnpj_sintegra',
-      'lote',
-    ],
-  },
-
-  despachante: {
-    id: 'despachante',
-    nome: 'Despachante',
-    descricao: 'Foco em transferência: recall, CRLVe digital, ATPVE e comunicado de venda',
-    cor: '#D97706',
-    corTexto: '#FFFFFF',
-    preco: 199,
-    creditos: 100,
-    publico: ['Despachantes', 'Cartórios', 'Revendas c/ pós-venda', 'Concessionárias'],
-    destaque: false,
-    modulos: [
-      'placa_identificacao', 'placa_bin_federal', 'placa_bin_estadual',
-      'placa_sinistro', 'placa_gravame', 'placa_leilao', 'placa_fipe',
-      'placa_processos_cnj',
-      'placa_recall', 'placa_historico_proprietarios',
-      'placa_crlve', 'placa_atpve', 'placa_comunicado_venda',
-      'cpf_basico', 'cpf_contatos', 'cpf_enderecos', 'cpf_score',
-      'cpf_processos', 'cpf_protestos', 'cpf_renda', 'cpf_pep',
-      'cpf_societario', 'cpf_relacionamentos', 'cpf_veiculos',
-      'cnpj_basico', 'cnpj_qsa', 'cnpj_score', 'cnpj_processos',
-      'cnpj_protestos', 'cnpj_relacionadas',
-      'lote',
-    ],
-  },
-}
+// ─── Assinatura B2B ───────────────────────────────────────────────────────────
+// Modelo unico: R$ 1.500/mes por empresa, todos os modulos liberados, ilimitado.
+export const ASSINATURA_B2B = {
+  preco:    1500.00,
+  label:    'Assinatura Mensal',
+  descricao: 'Acesso completo a todos os módulos — consultas ilimitadas',
+} as const
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-export function temModulo(planoId: PlanoId | null | undefined, moduloId: ModuloId): boolean {
-  if (!planoId) return false
-  return PLANOS[planoId]?.modulos.includes(moduloId) ?? false
+// Com assinatura B2B todos os modulos estao liberados.
+// Mantidos para compatibilidade com paginas existentes.
+export function temModulo(_assinaturaAtiva: boolean, moduloId: ModuloId): boolean {
+  // Modulos que dependem de FutureData (ainda nao contratado) ficam bloqueados
+  // independente da assinatura.
+  return MODULOS[moduloId]?.disponivel ?? false
 }
 
-export function planoQueTemModulo(moduloId: ModuloId): PlanoId | null {
-  const ordem: PlanoId[] = ['essencial', 'profissional', 'despachante', 'seguradora']
-  return ordem.find(p => PLANOS[p].modulos.includes(moduloId)) ?? null
-}
-
-export function todosOsPlanos(): Plano[] {
-  return Object.values(PLANOS)
+export function planoQueTemModulo(_moduloId: ModuloId): null {
+  return null
 }
