@@ -47,6 +47,7 @@ async function testar(token: string, path: string): Promise<{ status: number; ok
 }
 
 export async function GET(req: NextRequest) {
+  if (process.env.NODE_ENV !== 'development') return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (!await assertSuperAdmin()) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
 
   const placa = (req.nextUrl.searchParams.get('placa') ?? 'BRA2E19').replace(/[^A-Z0-9]/gi, '').toUpperCase()

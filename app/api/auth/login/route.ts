@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { assinarJwt }   from '@/lib/jwt'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { hashSenha, verificarSenha } from '@/lib/hash-senha'
+import bcrypt from 'bcryptjs'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? ''
 const ADMIN_SENHA = process.env.ADMIN_SENHA ?? ''
@@ -18,11 +19,15 @@ export async function POST(req: Request) {
   const emailNorm = email.toLowerCase().trim()
 
   // 1. Super admin via variavel de ambiente
+  // ADMIN_SENHA deve ser um hash bcrypt gerado com: node -e "require('bcryptjs').hash('SUA_SENHA',12).then(console.log)"
+  const adminSenhaOk = ADMIN_SENHA.startsWith('$2')
+    ? await bcrypt.compare(senha, ADMIN_SENHA)
+    : senha === ADMIN_SENHA // fallback para compatibilidade enquanto ADMIN_SENHA nao for migrado para hash
   if (
     ADMIN_EMAIL &&
     ADMIN_SENHA &&
     emailNorm === ADMIN_EMAIL.toLowerCase() &&
-    senha === ADMIN_SENHA
+    adminSenhaOk
   ) {
     const token = await assinarJwt({ email: ADMIN_EMAIL, nome: ADMIN_NOME, role: 'super_admin' })
     const res = NextResponse.json({ ok: true, role: 'super_admin' })

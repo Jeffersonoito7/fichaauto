@@ -12,6 +12,7 @@ async function assertSuperAdmin(): Promise<boolean> {
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ placa: string }> }) {
+  if (process.env.NODE_ENV !== 'development') return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (!await assertSuperAdmin()) return NextResponse.json({ erro: 'Acesso negado' }, { status: 403 })
 
   const { placa: placaParam } = await params
