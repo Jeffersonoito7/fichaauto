@@ -27,6 +27,9 @@ jobs:
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
             npm ci --production=false
+            # O cache do .next neste servidor corrompe entre builds e quebra o
+            # build com "Unexpected end of JSON input". Limpar antes é obrigatório.
+            rm -rf .next node_modules/.cache
             npm run build
             pm2 restart ficha-auto
             echo "Deploy concluido: $(date)"
