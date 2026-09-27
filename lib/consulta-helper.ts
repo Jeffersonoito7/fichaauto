@@ -87,7 +87,9 @@ export async function salvarConsulta(opts: {
       descricao:   opts.descricao ?? null,
       status:      'realizada',
       token,
-      resultado:   opts.resultado ? JSON.stringify(opts.resultado) : null,
+      // A coluna é jsonb: gravar o objeto direto. Com JSON.stringify o Postgres
+      // guardava uma STRING escapada, e quem lia recebia texto em vez de objeto.
+      resultado:   opts.resultado ?? null,
       expires_at,
     }).select('id, token').single()
 

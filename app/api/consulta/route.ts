@@ -4,10 +4,12 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getAuthEmail, salvarConsulta, registrarAuditoria, tenantComAssinaturaAtiva } from '@/lib/consulta-helper'
 import { PRECO } from '@/lib/products'
 import { salvarCacheDeResultado } from '@/lib/cache-placas'
+import { buscarConsultaAnterior, textoIdade } from '@/lib/reaproveitar-consulta'
 
 export async function POST(req: NextRequest) {
   try {
-    const { placa, chassi } = await req.json()
+    // forcarAtualizacao: o usuario pediu explicitamente dado novo, pagando por isso
+    const { placa, chassi, forcarAtualizacao } = await req.json()
     const input = (placa ?? chassi ?? '').trim()
 
     if (!input) {
@@ -62,6 +64,40 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // ── Reaproveitamento: a empresa já consultou este documento? ──
+    // Evita pagar de novo quando outro operador da mesma associação já
+    // consultou a mesma placa. Só vale quando o usuário NÃO pediu atualização.
+    const doc = input.toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (!forcarAtualizacao && perfil?.tenant_id) {
+      const anterior = await buscarConsultaAnterior(perfil.tenant_id, doc, 'veiculo')
+      if (anterior) {
+        await service.from('consultas').insert({
+          email,
+          tenant_id:     perfil.tenant_id,
+          tipo:          'veiculo',
+          documento:     doc,
+          descricao:     'reaproveitada',
+          resultado:     anterior.resultado,
+          custo:         0,
+          reaproveitada: true,
+          origem_id:     anterior.id,
+        })
+        registrarAuditoria({ email, acao: 'consulta_placa_reaproveitada', documento: doc, custo: 0 })
+
+        return NextResponse.json({
+          success: true,
+          ...anterior.resultado,
+          _reaproveitada:  true,
+          _consultadaEm:   anterior.consultadaEm,
+          _diasAtras:      anterior.diasAtras,
+          _envelhecida:    anterior.envelhecida,
+          _idadeTexto:     textoIdade(anterior),
+          _consultadaPor:  anterior.consultadaPor,
+          _custoEvitado:   custo,
+        })
+      }
+    }
+
     const resultado = await consultarVeiculo(
       placa  ? input : '',
       chassi ? input : undefined,
@@ -85,10 +121,22 @@ export async function POST(req: NextRequest) {
     const saved = await salvarConsulta({
       email,
       tipo:      'veiculo',
-      documento: input.toUpperCase(),
+      documento: doc,
       descricao,
       resultado,
     })
+
+    // Marca a empresa e o custo real. Sem isso a próxima consulta da mesma
+    // placa não encontra esta e paga a API de novo.
+    if (saved?.id) {
+      await service
+        .from('consultas')
+        .update({
+          tenant_id: perfil?.tenant_id ?? null,
+          custo:     isAdmin ? 0 : (resultado as any)._custoTotal ?? custo,
+        })
+        .eq('id', saved.id)
+    }
 
     // Fire-and-forget: cache e audit log não bloqueiam a resposta
     if (placa) salvarCacheDeResultado(input.toUpperCase(), resultado)

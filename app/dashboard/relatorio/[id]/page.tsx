@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowLeft, Download, ChevronDown, Loader2, XCircle, Lock, Share2, Check } from 'lucide-react'
+import { History, ArrowLeft, Download, ChevronDown, Loader2, XCircle, Lock, Share2, Check } from 'lucide-react'
 import { temModulo, planoQueTemModulo } from '@/lib/products'
 
 const BRAND_LOGO: Record<string, string> = {
@@ -222,10 +222,13 @@ export default function RelatorioPage() {
   useEffect(() => {
     async function buscar() {
       try {
+        // ?atualizar=1 vem da tela de consulta quando a pessoa escolheu
+        // pagar por dado novo mesmo existindo consulta anterior da empresa.
+        const forcar = new URLSearchParams(window.location.search).get('atualizar') === '1'
         const res = await fetch('/api/consulta', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ placa: id }),
+          body: JSON.stringify({ placa: id, forcarAtualizacao: forcar }),
         })
         const json = await res.json()
         if (res.status === 402) { setSemSaldo(true); setErro(json.error); return }
@@ -495,6 +498,34 @@ export default function RelatorioPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
+
+      {/* Aviso de dado reaproveitado. Nunca servir consulta antiga em silêncio:
+          quem decide com base nela precisa saber de quando ela é. */}
+      {(data as any)._reaproveitada && (
+        <div className={`flex gap-3 p-3.5 mb-4 rounded-xl border ${
+          (data as any)._envelhecida
+            ? 'bg-amber-50 border-amber-200'
+            : 'bg-brand-green-light/50 border-brand-green/25'
+        }`}>
+          <History className={`w-4 h-4 shrink-0 mt-0.5 ${
+            (data as any)._envelhecida ? 'text-amber-700' : 'text-brand-green'
+          }`} />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs leading-snug text-brand-dark">
+              <strong>Relatório já existente, sem custo.</strong>{' '}
+              Consulta {(data as any)._idadeTexto}
+              {(data as any)._consultadaPor ? ` por ${(data as any)._consultadaPor}` : ''}.
+              {(data as any)._envelhecida && ' Gravame e restrições podem ter mudado desde então.'}
+            </p>
+            <Link
+              href={`/dashboard/relatorio/${id}?atualizar=1`}
+              className="inline-block mt-1.5 text-xs font-bold text-brand-green hover:underline"
+            >
+              Consultar de novo com dado atual
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Topbar */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">

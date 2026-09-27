@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Car, User, BarChart3, Search, Hash, Loader2, CheckCircle2, Building2, CreditCard,
+  History, AlertTriangle, ArrowLeft,
 } from 'lucide-react'
 import { PRECO, CREDITO } from '@/lib/products'
 
@@ -162,6 +163,10 @@ export default function ConsultarPage() {
   const [loading, setLoading]     = useState(false)
   const [saldo, setSaldo]         = useState<number | null>(null)
   const [assinante, setAssinante] = useState(false)
+  const [anterior, setAnterior]   = useState<{
+    documento: string; idadeTexto: string; diasAtras: number
+    envelhecida: boolean; consultadaPor: string | null
+  } | null>(null)
 
   const p = PRODUTOS.find(x => x.id === produto)!
   const usaPlaca = produto === 'veiculo' && subVeic === 'placa'
@@ -178,7 +183,7 @@ export default function ConsultarPage() {
   }, [])
 
   // limpa os campos ao trocar de produto ou de sub-tipo
-  useEffect(() => { setPlaca(''); setTexto('') }, [produto, subVeic, subCred])
+  useEffect(() => { setPlaca(''); setTexto(''); setAnterior(null) }, [produto, subVeic, subCred])
 
   function handleTexto(v: string) {
     if (produto === 'veiculo') return setTexto(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 17))
@@ -192,20 +197,37 @@ export default function ConsultarPage() {
     return soDig(texto).length === (subCred === 'cpf' ? 11 : 14)
   }
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!valido()) return
-    setLoading(true)
+
     const doc = soDig(texto)
     if (produto === 'credito') {
+      setLoading(true)
       router.push(subCred === 'cpf' ? `/dashboard/credito/cpf/${doc}` : `/dashboard/credito/cnpj/${doc}`)
       return
     }
     if (produto === 'cpf') {
+      setLoading(true)
       router.push(`/dashboard/relatorio/cpf/${doc}`)
       return
     }
-    router.push(`/dashboard/relatorio/${usaPlaca ? placa : texto}`)
+
+    // Veículo: antes de gastar API, verifica se a empresa já consultou.
+    const alvo = usaPlaca ? placa : texto
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/consulta/anterior?documento=${encodeURIComponent(alvo)}&tipo=veiculo`)
+      const d = await res.json()
+      if (d?.existe) {
+        setAnterior({ ...d, documento: alvo })
+        setLoading(false)
+        return
+      }
+    } catch {
+      // Falha na checagem não pode travar a consulta.
+    }
+    router.push(`/dashboard/relatorio/${alvo}`)
   }
 
   const rotuloTexto =
@@ -218,6 +240,79 @@ export default function ConsultarPage() {
     produto === 'veiculo' ? '93HFC2630HZ104454'
     : subCred === 'cnpj' && produto === 'credito' ? '00.000.000/0001-00'
     : '000.000.000-00'
+
+  // ── Aviso de consulta já existente ──
+  // Aparece antes de gastar API. A empresa decide: abre o que já tem, de
+  // graça, ou paga por dado novo. Dado veicular envelhece, então a idade
+  // fica em destaque e acima de 30 dias vira alerta.
+  if (anterior) {
+    return (
+      <div className="max-w-xl mx-auto">
+        <button
+          onClick={() => setAnterior(null)}
+          className="flex items-center gap-2 text-sm text-brand-gray hover:text-brand-dark mb-5 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+
+        <div className="card p-6">
+          <div className="flex gap-3 mb-5">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              anterior.envelhecida ? 'bg-amber-100' : 'bg-brand-green-light'
+            }`}>
+              <History className={`w-5 h-5 ${anterior.envelhecida ? 'text-amber-700' : 'text-brand-green'}`} />
+            </div>
+            <div>
+              <h2 className="font-bold text-brand-dark">Sua empresa já consultou esta placa</h2>
+              <p className="text-sm text-brand-gray mt-0.5">
+                <span className="font-mono font-bold text-brand-dark">{anterior.documento}</span>
+                {' foi '}{anterior.idadeTexto}
+                {anterior.consultadaPor ? ` por ${anterior.consultadaPor}` : ''}.
+              </p>
+            </div>
+          </div>
+
+          {anterior.envelhecida && (
+            <div className="flex gap-2.5 p-3 mb-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-px" />
+              <p className="text-xs text-amber-900 leading-snug">
+                Faz mais de 30 dias. Gravame, restrições e registro de furto podem ter mudado
+                desde então. Se a decisão depende desses dados, vale atualizar.
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-2.5">
+            <button
+              onClick={() => router.push(`/dashboard/relatorio/${anterior.documento}`)}
+              className="w-full flex items-center justify-between gap-3 p-4 rounded-xl border-[1.5px] border-brand-green bg-brand-green-light/40 hover:bg-brand-green-light transition-colors text-left"
+            >
+              <span>
+                <span className="block text-sm font-bold text-brand-dark">Abrir o relatório que já existe</span>
+                <span className="block text-xs text-brand-gray mt-0.5">Sem custo, resultado na hora</span>
+              </span>
+              <span className="text-sm font-extrabold text-brand-green tabular-nums shrink-0">R$ 0,00</span>
+            </button>
+
+            <button
+              onClick={() => router.push(`/dashboard/relatorio/${anterior.documento}?atualizar=1`)}
+              className="w-full flex items-center justify-between gap-3 p-4 rounded-xl border-[1.5px] border-brand-border hover:border-brand-green transition-colors text-left"
+            >
+              <span>
+                <span className="block text-sm font-bold text-brand-dark">Consultar de novo, com dado atual</span>
+                <span className="block text-xs text-brand-gray mt-0.5">
+                  {assinante ? 'Incluído na sua assinatura' : 'Consome uma consulta do saldo'}
+                </span>
+              </span>
+              <span className="text-sm font-extrabold text-brand-dark tabular-nums shrink-0">
+                {assinante ? 'R$ 0,00' : moeda(p.preco)}
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-5xl mx-auto">
