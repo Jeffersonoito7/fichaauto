@@ -39,9 +39,13 @@ export async function middleware(request: NextRequest) {
 
   // ── Redirecionamentos de autenticacao ─────────────────────────────────────
   if (isRoot) {
-    const url = request.nextUrl.clone()
-    url.pathname = auth ? '/dashboard/consultar' : '/login'
-    return withHeaders(NextResponse.redirect(url))
+    if (auth) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard/consultar'
+      return withHeaders(NextResponse.redirect(url))
+    }
+    // sem auth: exibe a landing page publica
+    return withHeaders(NextResponse.next())
   }
 
   if (isProtected && !auth) {

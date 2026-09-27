@@ -8,47 +8,51 @@ import {
   TrendingUp, ClipboardList, Lock,
 } from 'lucide-react'
 
+function logo_proxy(domain: string) {
+  return `/api/logo?domain=${domain}`
+}
+
 const BRAND_LOGO: Record<string, string> = {
-  TOYOTA:          'https://logo.clearbit.com/toyota.com',
-  HONDA:           'https://logo.clearbit.com/honda.com',
-  VOLKSWAGEN:      'https://logo.clearbit.com/vw.com',
-  VW:              'https://logo.clearbit.com/vw.com',
-  CHEVROLET:       'https://logo.clearbit.com/chevrolet.com',
-  GM:              'https://logo.clearbit.com/gm.com',
-  FORD:            'https://logo.clearbit.com/ford.com',
-  FIAT:            'https://logo.clearbit.com/fiat.com',
-  RENAULT:         'https://logo.clearbit.com/renault.com',
-  HYUNDAI:         'https://logo.clearbit.com/hyundai.com',
-  NISSAN:          'https://logo.clearbit.com/nissan.com',
-  MITSUBISHI:      'https://logo.clearbit.com/mitsubishi.com',
-  JEEP:            'https://logo.clearbit.com/jeep.com',
-  BMW:             'https://logo.clearbit.com/bmw.com',
-  MERCEDESBENZ:    'https://logo.clearbit.com/mercedes-benz.com',
-  MERCEDES:        'https://logo.clearbit.com/mercedes-benz.com',
-  AUDI:            'https://logo.clearbit.com/audi.com',
-  KIA:             'https://logo.clearbit.com/kia.com',
-  PEUGEOT:         'https://logo.clearbit.com/peugeot.com',
-  CITROEN:         'https://logo.clearbit.com/citroen.com',
-  VOLVO:           'https://logo.clearbit.com/volvocars.com',
-  SUBARU:          'https://logo.clearbit.com/subaru.com',
-  CHERY:           'https://logo.clearbit.com/chery.com',
-  JAC:             'https://logo.clearbit.com/jacmotors.com',
-  BYD:             'https://logo.clearbit.com/byd.com',
-  GWM:             'https://logo.clearbit.com/gwm.com',
-  HAVAL:           'https://logo.clearbit.com/haval.com',
-  DODGE:           'https://logo.clearbit.com/dodge.com',
-  RAM:             'https://logo.clearbit.com/ramtrucks.com',
-  PORSCHE:         'https://logo.clearbit.com/porsche.com',
-  LAND:            'https://logo.clearbit.com/landrover.com',
-  YAMAHA:          'https://logo.clearbit.com/yamaha-motor.com',
-  SUZUKI:          'https://logo.clearbit.com/suzuki.com',
-  KAWASAKI:        'https://logo.clearbit.com/kawasaki.com',
-  TRIUMPH:         'https://logo.clearbit.com/triumphmotorcycles.com',
-  HARLEYDAVIDSON:  'https://logo.clearbit.com/harley-davidson.com',
-  HARLEY:          'https://logo.clearbit.com/harley-davidson.com',
-  DUCATI:          'https://logo.clearbit.com/ducati.com',
-  DAFRA:           'https://logo.clearbit.com/dafra.com.br',
-  SHINERAY:        'https://logo.clearbit.com/shineray.com.br',
+  TOYOTA:          logo_proxy('toyota.com'),
+  HONDA:           logo_proxy('honda.com'),
+  VOLKSWAGEN:      logo_proxy('vw.com'),
+  VW:              logo_proxy('vw.com'),
+  CHEVROLET:       logo_proxy('chevrolet.com'),
+  GM:              logo_proxy('gm.com'),
+  FORD:            logo_proxy('ford.com'),
+  FIAT:            logo_proxy('fiat.com'),
+  RENAULT:         logo_proxy('renault.com'),
+  HYUNDAI:         logo_proxy('hyundai.com'),
+  NISSAN:          logo_proxy('nissan.com'),
+  MITSUBISHI:      logo_proxy('mitsubishi.com'),
+  JEEP:            logo_proxy('jeep.com'),
+  BMW:             logo_proxy('bmw.com'),
+  MERCEDESBENZ:    logo_proxy('mercedes-benz.com'),
+  MERCEDES:        logo_proxy('mercedes-benz.com'),
+  AUDI:            logo_proxy('audi.com'),
+  KIA:             logo_proxy('kia.com'),
+  PEUGEOT:         logo_proxy('peugeot.com'),
+  CITROEN:         logo_proxy('citroen.com'),
+  VOLVO:           logo_proxy('volvocars.com'),
+  SUBARU:          logo_proxy('subaru.com'),
+  CHERY:           logo_proxy('chery.com'),
+  JAC:             logo_proxy('jacmotors.com'),
+  BYD:             logo_proxy('byd.com'),
+  GWM:             logo_proxy('gwm.com'),
+  HAVAL:           logo_proxy('haval.com'),
+  DODGE:           logo_proxy('dodge.com'),
+  RAM:             logo_proxy('ramtrucks.com'),
+  PORSCHE:         logo_proxy('porsche.com'),
+  LAND:            logo_proxy('landrover.com'),
+  YAMAHA:          logo_proxy('yamaha-motor.com'),
+  SUZUKI:          logo_proxy('suzuki.com'),
+  KAWASAKI:        logo_proxy('kawasaki.com'),
+  TRIUMPH:         logo_proxy('triumphmotorcycles.com'),
+  HARLEYDAVIDSON:  logo_proxy('harley-davidson.com'),
+  HARLEY:          logo_proxy('harley-davidson.com'),
+  DUCATI:          logo_proxy('ducati.com'),
+  DAFRA:           logo_proxy('dafra.com.br'),
+  SHINERAY:        logo_proxy('shineray.com.br'),
 }
 
 function extrairMarca(marcaModelo: string): string {
@@ -130,10 +134,17 @@ export default function FipeResultadoPage() {
   const logo = dados ? logoUrl(dados.marca) : null
   const marcaNome = dados ? extrairMarca(dados.marca) : ''
 
-  // Nome limpo da montadora para exibicao
-  const nomeVeiculo = dados
-    ? dados.marca.replace(/^I\//, '').trim()
-    : ''
+  // Nome limpo: remove prefixo "I/" e deduplica marca repetida (ex: "HONDA HONDA/NXR160" -> "HONDA/NXR160")
+  const nomeVeiculo = (() => {
+    if (!dados) return ''
+    let s = dados.marca.replace(/^I\//, '').trim()
+    const primeiro = s.split(/[\s\/]/)[0]
+    if (primeiro) {
+      const re = new RegExp(`^${primeiro}\\s+${primeiro}`, 'i')
+      s = s.replace(re, primeiro)
+    }
+    return s
+  })()
 
   return (
     <div className="min-h-screen" style={{ background: '#f4f6f9' }}>
