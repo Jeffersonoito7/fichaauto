@@ -61,7 +61,20 @@ export async function getTenantByDominio(dominio: string): Promise<Tenant | null
       .eq('dominio', dominio)
       .eq('ativo', true)
       .maybeSingle()
-    return data ?? null
+    if (data) return data
+
+    // Subdomínio nosso: autovale.fichaauto.com.br resolve pelo slug, mesmo que
+    // ninguém tenha preenchido a coluna dominio na hora de cadastrar a empresa.
+    const slug = slugDoSubdominio(dominio)
+    if (!slug) return null
+
+    const { data: porSlug } = await getServiceClient()
+      .from('tenants')
+      .select('*')
+      .eq('slug', slug)
+      .eq('ativo', true)
+      .maybeSingle()
+    return porSlug ?? null
   } catch {
     return null
   }
@@ -119,5 +132,20 @@ const DOMINIOS_PROPRIOS = [
 
 export function isDominioProprio(host: string): boolean {
   const base = host.split(':')[0].toLowerCase()
-  return DOMINIOS_PROPRIOS.some(d => base === d || base.endsWith('.fichaauto.com.br'))
+  // Só a lista acima é do próprio Ficha Auto. O `endsWith('.fichaauto.com.br')`
+  // que existia aqui engolia TODO subdomínio, então autovale.fichaauto.com.br
+  // nunca era reconhecido como empresa e caía na marca padrão.
+  return DOMINIOS_PROPRIOS.includes(base)
+}
+
+/**
+ * Extrai o slug da empresa de um subdomínio nosso.
+ * autovale.fichaauto.com.br -> 'autovale'   |   fichaauto.com.br -> null
+ */
+export function slugDoSubdominio(host: string): string | null {
+  const base = host.split(':')[0].toLowerCase()
+  if (isDominioProprio(base)) return null
+  if (!base.endsWith('.fichaauto.com.br')) return null
+  const slug = base.slice(0, -'.fichaauto.com.br'.length)
+  return slug && slug !== 'www' ? slug : null
 }

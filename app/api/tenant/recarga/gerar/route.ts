@@ -1,54 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { criarCobranca, obterQrCode } from '@/lib/providers/efi'
-import { createClient, createServiceRoleClient } from '@/lib/supabase-server'
-import { ASSINATURA_B2B } from '@/lib/products'
+import { createServiceRoleClient } from '@/lib/supabase-server'
+import { getAuthEmail } from '@/lib/consulta-helper'
+import { RECARGA_MINIMA } from '@/lib/saldo'
 
-export async function POST(_req: NextRequest) {
+/**
+ * Recarga de saldo da EMPRESA, com valor escolhido pelo cliente.
+ *
+ * Antes esta rota só gerava o valor fixo da assinatura de R$ 1.500 e
+ * autenticava por Supabase Auth, que o sistema abandonou em favor do JWT
+ * próprio: ela não funcionava para quem entra pelo login atual.
+ */
+export async function POST(req: NextRequest) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 })
+    const email = await getAuthEmail()
+    if (!email) return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 })
+
+    const body = await req.json().catch(() => ({}))
+    const valor = Number(body?.valor)
+
+    if (!Number.isFinite(valor) || valor < RECARGA_MINIMA) {
+      return NextResponse.json({
+        erro: `A recarga mínima é de R$ ${RECARGA_MINIMA.toLocaleString('pt-BR')},00.`,
+        minimo: RECARGA_MINIMA,
+      }, { status: 400 })
+    }
 
     const svc = createServiceRoleClient() as any
-
     const { data: perfil } = await svc
       .from('perfis')
       .select('tenant_id, tenant_role')
-      .eq('user_id', user.id)
-      .single()
+      .eq('email', email)
+      .maybeSingle()
 
     if (!perfil?.tenant_id || perfil.tenant_role !== 'admin') {
-      return NextResponse.json({ erro: 'Acesso restrito ao administrador da revenda.' }, { status: 403 })
+      return NextResponse.json({ erro: 'Apenas o administrador da empresa pode recarregar.' }, { status: 403 })
     }
 
+    const { data: tenant } = await svc
+      .from('tenants').select('nome').eq('id', perfil.tenant_id).maybeSingle()
+
+    const valorFinal = parseFloat(valor.toFixed(2))
+
     const cob = await criarCobranca({
-      valor:     ASSINATURA_B2B.preco,
-      descricao: `${ASSINATURA_B2B.label} — Ficha Auto`,
+      valor:     valorFinal,
+      descricao: `Recarga de saldo — ${tenant?.nome ?? 'Ficha Auto'}`,
       expiracao: 3600,
     })
-
     const qr = await obterQrCode(cob.loc.id)
 
     await svc.from('transacoes_pix').insert({
       txid:            cob.txid,
-      user_id:         user.id,
       tenant_id:       perfil.tenant_id,
-      valor:           ASSINATURA_B2B.preco,
-      saldo_creditado: ASSINATURA_B2B.preco,
-      produto:         'assinatura',
+      valor:           valorFinal,
+      saldo_creditado: valorFinal,
+      produto:         'recarga_tenant',
       status:          'pendente',
+      descricao:       `Recarga de saldo — ${tenant?.nome ?? ''}`,
     })
 
     return NextResponse.json({
       txid:       cob.txid,
-      valorPago:  ASSINATURA_B2B.preco,
-      descricao:  ASSINATURA_B2B.descricao,
+      valorPago:  valorFinal,
       qrCode:     qr.imagemQrcode,
       copiaECola: qr.qrcode,
       expira:     '60 minutos',
     })
   } catch (err: any) {
-    console.error('[PIX tenant/recarga]', err?.response?.data ?? err.message)
-    return NextResponse.json({ erro: 'Falha ao gerar PIX. Tente novamente.' }, { status: 500 })
+    console.error('[recarga/gerar]', err?.message ?? err)
+    return NextResponse.json({ erro: 'Erro ao gerar a cobrança.' }, { status: 500 })
   }
 }

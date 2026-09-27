@@ -5,6 +5,7 @@ import { getAuthEmail, salvarConsulta, registrarAuditoria, tenantComAssinaturaAt
 import { PRECO } from '@/lib/products'
 import { salvarCacheDeResultado } from '@/lib/cache-placas'
 import { buscarConsultaAnterior, textoIdade } from '@/lib/reaproveitar-consulta'
+import { lerSaldo, debitarSaldo, mensagemSemSaldo, saldoAcabando } from '@/lib/saldo'
 
 export async function POST(req: NextRequest) {
   try {
@@ -50,8 +51,13 @@ export async function POST(req: NextRequest) {
 
     const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
     const isAssinante = !isAdmin && await tenantComAssinaturaAtiva(email)
-    const saldo = parseFloat(perfil?.saldo_veiculo ?? '0')
-    const custo = PRECO.placa
+
+    // O caixa é da EMPRESA, não de cada operador. Sem empresa, cai no perfil.
+    const { saldo, precoTenant } = await lerSaldo(service, {
+      email, tenantId: perfil?.tenant_id ?? null,
+    })
+    // Estimativa para barrar antes de gastar API. O débito usa o custo real.
+    const custo = precoTenant ?? PRECO.placa
 
     if (!isAdmin && !isAssinante && !perfil?.pode_placa) {
       return NextResponse.json({ error: 'Sem permissão para consulta veicular.' }, { status: 403 })
@@ -59,7 +65,7 @@ export async function POST(req: NextRequest) {
 
     if (!isAdmin && !isAssinante && saldo < custo) {
       return NextResponse.json(
-        { error: `Saldo insuficiente. Esta consulta custa R$ ${custo.toFixed(2).replace('.', ',')}. Recarregue sua carteira.` },
+        { error: mensagemSemSaldo(saldo, custo), recarregar: true, saldo },
         { status: 402 }
       )
     }
@@ -104,13 +110,18 @@ export async function POST(req: NextRequest) {
       modulos,
     )
 
-    // Debitar somente após retorno da API (evita perda de saldo em falha externa)
-    // Assinantes de tenant nao debitam saldo individual
+    // Debitar somente após retorno da API (evita perda de saldo em falha externa).
+    // Empresa sem preço de tabela consome o CUSTO REAL da consulta, calculado
+    // pelos módulos que rodaram e pelo fornecedor de leilão que respondeu.
+    // Sem isso o sistema cobraria o padrão do código e daria prejuízo em toda
+    // consulta, porque o custo real é maior que esse padrão.
+    const custoReal = Number((resultado as any)._custoTotal) || custo
+    const aDebitar  = precoTenant ?? custoReal
+
+    let restante = saldo
     if (!isAdmin && !isAssinante) {
-      await service
-        .from('perfis')
-        .update({ saldo_veiculo: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() })
-        .eq('email', email)
+      const d = await debitarSaldo(service, { email, tenantId: perfil?.tenant_id ?? null, valor: aDebitar })
+      restante = d.restante
     }
 
     // Extrair descrição do veículo para o histórico
@@ -142,7 +153,15 @@ export async function POST(req: NextRequest) {
     if (placa) salvarCacheDeResultado(input.toUpperCase(), resultado)
     registrarAuditoria({ email, acao: 'consulta_placa', documento: input.toUpperCase(), custo: isAdmin ? 0 : custo })
 
-    return NextResponse.json({ success: true, token: saved?.token ?? null, ...resultado })
+    return NextResponse.json({
+      success: true,
+      token: saved?.token ?? null,
+      ...resultado,
+      _debitado:       isAdmin || isAssinante ? 0 : aDebitar,
+      _saldoRestante:  restante,
+      // Avisa antes de travar no meio de um atendimento.
+      _saldoAcabando:  !isAdmin && !isAssinante && saldoAcabando(restante, aDebitar),
+    })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

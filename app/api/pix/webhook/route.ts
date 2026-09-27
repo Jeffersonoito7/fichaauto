@@ -84,7 +84,23 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // 4. Recarga de tenant (B2B) — ativa assinatura por 30 dias
+      // 4a. Recarga de saldo da empresa (modelo pré-pago por consumo).
+      // Soma no caixa da empresa, de onde todos os operadores consomem.
+      if (transacao.tenant_id && transacao.produto === 'recarga_tenant') {
+        const { error: errRec } = await supabase.rpc('creditar_saldo_tenant', {
+          p_tenant_id: transacao.tenant_id,
+          p_valor:     Number(transacao.saldo_creditado ?? transacao.valor),
+        })
+        if (errRec) {
+          console.error(`[PIX webhook] falha ao creditar empresa txid=${txid}`, errRec)
+          await supabase.from('transacoes_pix').update({ status: 'pendente', pago_em: null }).eq('txid', txid)
+          continue
+        }
+        console.log(`[PIX webhook] txid=${txid} empresa=${transacao.tenant_id} recarregada`)
+        continue
+      }
+
+      // 4b. Recarga de tenant (B2B) — ativa assinatura por 30 dias
       if (transacao.tenant_id && transacao.produto === 'assinatura') {
         const vence = new Date()
         vence.setDate(vence.getDate() + 30)
