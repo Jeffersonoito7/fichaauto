@@ -173,7 +173,10 @@ function pag1(cpf: string, data: any, agora: string, proto: string, qr: string):
   const stScore:  Status = scoreVal >= 700 ? 'ok' : scoreVal >= 400 ? 'warn' : 'error'
   const stProc:   Status = temProc  ? 'error' : 'ok'
   const stProt:   Status = temProt  ? 'error' : 'ok'
-  const stPep:    Status = isPep    ? 'error' : 'ok'
+  // Sem PEP contratado, o campo vira 'atencao' com 'nao consultado',
+  // nunca um 'ok' que o leitor interpreta como verificado.
+  const pepConsultado = pp != null && ('pep' in pp || 'isPep' in pp || 'politicamenteExposta' in pp)
+  const stPep:    Status = !pepConsultado ? 'warn' : isPep ? 'error' : 'ok'
   const stCpf:    Status = cpfOk    ? 'ok'    : 'error'
   const stRenda:  Status = 'ok'
 

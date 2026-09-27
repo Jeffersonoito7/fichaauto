@@ -48,7 +48,9 @@ const PRODUTOS: {
       'Processos judiciais',
       'Protestos em cartório',
       'Renda presumida',
-      'PEP (pessoa politicamente exposta)',
+      // PEP fora da lista de propósito: consultarPepCpf é um stub que devolve
+      // null, o produto não está contratado na Assertiva. Anunciar aqui era
+      // vender algo que nunca chega. Voltar quando for contratado.
       'Participação societária',
       'Veículos vinculados ao CPF',
     ],

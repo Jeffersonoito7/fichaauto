@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthEmail, salvarConsulta } from '@/lib/consulta-helper'
+import { getAuthEmail, salvarConsulta, registrarAuditoria } from '@/lib/consulta-helper'
+import { buscarConsultaAnterior, textoIdade } from '@/lib/reaproveitar-consulta'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { CREDITO } from '@/lib/products'
 
@@ -41,7 +42,7 @@ async function assertivaGet(path: string) {
 function limpaCnpj(c: string) { return c.replace(/\D/g, '') }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ cnpj: string }> }
 ) {
   const { cnpj: cnpjParam } = await context.params
@@ -56,7 +57,7 @@ export async function GET(
 
   const svc = createServiceRoleClient() as any
   const { data: perfil } = await svc.from('perfis')
-    .select('creditos_credito, role, pode_credito')
+    .select('creditos_credito, role, pode_credito, tenant_id')
     .eq('email', email)
     .maybeSingle()
 
@@ -76,6 +77,29 @@ export async function GET(
     await svc.from('perfis')
       .update({ creditos_credito: creditos - 1, atualizado_em: new Date().toISOString() })
       .eq('email', email)
+  }
+
+  // ── Reaproveitamento dentro da mesma empresa ──
+  const forcar = req.nextUrl.searchParams.get('atualizar') === '1'
+  if (!forcar && perfil?.tenant_id) {
+    const anterior = await buscarConsultaAnterior(perfil.tenant_id, cnpj, 'credito_cnpj')
+    if (anterior) {
+      await svc.from('consultas').insert({
+        email, tenant_id: perfil.tenant_id, tipo: 'credito_cnpj', documento: cnpj,
+        descricao: 'reaproveitada', resultado: anterior.resultado,
+        custo: 0, reaproveitada: true, origem_id: anterior.id,
+      })
+      registrarAuditoria({ email, acao: 'credito_cnpj_reaproveitada', documento: cnpj, custo: 0 })
+      return NextResponse.json({
+        ...anterior.resultado,
+        _reaproveitada: true,
+        _consultadaEm:  anterior.consultadaEm,
+        _diasAtras:     anterior.diasAtras,
+        _envelhecida:   anterior.envelhecida,
+        _idadeTexto:    textoIdade(anterior),
+        _consultadaPor: anterior.consultadaPor,
+      })
+    }
   }
 
   const erros: string[] = []
@@ -119,7 +143,7 @@ export async function GET(
   }
 
   const resultado = { cnpj, score, protestos, processos, erros }
-  await salvarConsulta({ email, tipo: 'cnpj', documento: cnpj, descricao: `Crédito CNPJ ${cnpj}`, resultado }).catch(() => null)
+  await salvarConsulta({ email, tipo: 'credito_cnpj', documento: cnpj, descricao: `Crédito CNPJ ${cnpj}`, resultado }).catch(() => null)
 
   return NextResponse.json({ ...resultado })
 }

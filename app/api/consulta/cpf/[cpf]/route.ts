@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthEmail, salvarConsulta, registrarAuditoria, tenantComAssinaturaAtiva } from '@/lib/consulta-helper'
+import { buscarConsultaAnterior, textoIdade } from '@/lib/reaproveitar-consulta'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { buscarProcessosProprietario } from '@/lib/providers/datajud'
 import { consultarSancoesCpf } from '@/lib/providers/sancoes-gov'
@@ -43,7 +44,7 @@ async function assertivaGet(path: string) {
 function limpa(c: string) { return c.replace(/\D/g, '') }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ cpf: string }> }
 ) {
   const { cpf: cpfParam } = await context.params
@@ -58,13 +59,37 @@ export async function GET(
 
   // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
   const svc = createServiceRoleClient() as any
-  const { data: perfil } = await svc.from('perfis').select('saldo_cpf, role, pode_cpf').eq('email', email).maybeSingle()
+  const { data: perfil } = await svc.from('perfis').select('saldo_cpf, role, pode_cpf, tenant_id').eq('email', email).maybeSingle()
   const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
   const isAssinante = !isAdmin && await tenantComAssinaturaAtiva(email)
   if (!isAdmin && !isAssinante && !perfil?.pode_cpf) return NextResponse.json({ error: 'Sem permissão para consulta de CPF.' }, { status: 403 })
   const saldo = parseFloat(perfil?.saldo_cpf ?? '0')
   const custo = PRECO.cpf
   if (!isAdmin && !isAssinante && saldo < custo) return NextResponse.json({ error: `Saldo insuficiente. Esta consulta custa R$ ${custo.toFixed(2).replace('.', ',')}. Recarregue sua carteira.` }, { status: 402 })
+
+  // ── Reaproveitamento dentro da mesma empresa ──
+  const forcar = req.nextUrl.searchParams.get('atualizar') === '1'
+  if (!forcar && perfil?.tenant_id) {
+    const anterior = await buscarConsultaAnterior(perfil.tenant_id, cpf, 'cpf')
+    if (anterior) {
+      await svc.from('consultas').insert({
+        email, tenant_id: perfil.tenant_id, tipo: 'cpf', documento: cpf,
+        descricao: 'reaproveitada', resultado: anterior.resultado,
+        custo: 0, reaproveitada: true, origem_id: anterior.id,
+      })
+      registrarAuditoria({ email, acao: 'consulta_cpf_reaproveitada', documento: cpf, custo: 0 })
+      return NextResponse.json({
+        ...anterior.resultado,
+        _reaproveitada: true,
+        _consultadaEm:  anterior.consultadaEm,
+        _diasAtras:     anterior.diasAtras,
+        _envelhecida:   anterior.envelhecida,
+        _idadeTexto:    textoIdade(anterior),
+        _consultadaPor: anterior.consultadaPor,
+        _custoEvitado:  custo,
+      })
+    }
+  }
 
   const erros: string[] = []
   const safe = async (path: string, nome: string) => {
@@ -165,6 +190,12 @@ export async function GET(
   if (!isAdmin && !isAssinante) await svc.from('perfis').update({ saldo_cpf: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() }).eq('email', email)
 
   const saved = await salvarConsulta({ email, tipo: 'cpf', documento: cpf, descricao, resultado })
+  if (saved?.id) {
+    await svc.from('consultas').update({
+      tenant_id: perfil?.tenant_id ?? null,
+      custo:     isAdmin ? 0 : custo,
+    }).eq('id', saved.id)
+  }
   registrarAuditoria({ email, acao: 'consulta_cpf', documento: cpf, custo: isAdmin ? 0 : custo })
 
   return NextResponse.json({ ...resultado, token: saved?.token ?? null })

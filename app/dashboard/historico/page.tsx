@@ -8,7 +8,7 @@ import {
 
 interface Consulta {
   id: string
-  tipo: 'veiculo' | 'cpf' | 'cnpj'
+  tipo: 'veiculo' | 'cpf' | 'cnpj' | 'credito_cpf' | 'credito_cnpj'
   documento: string
   descricao: string
   data: string
@@ -28,6 +28,8 @@ const TIPO_CONFIG = {
   veiculo: { icon: Car,       label: 'Veículo',  cor: 'bg-brand-green-light text-brand-green' },
   cpf:     { icon: User,      label: 'CPF',      cor: 'bg-blue-50 text-blue-600'              },
   cnpj:    { icon: Building2, label: 'CNPJ',     cor: 'bg-purple-50 text-purple-600'          },
+  credito_cpf:  { icon: User,      label: 'Crédito CPF',  cor: 'bg-brand-green-light text-brand-green' },
+  credito_cnpj: { icon: Building2, label: 'Crédito CNPJ', cor: 'bg-brand-green-light text-brand-green' },
 }
 
 function fmtData(iso: string) {
@@ -62,6 +64,8 @@ export default function HistoricoPage() {
   useEffect(() => { carregar(1) }, [carregar])
 
   function abrirRelatorio(c: Consulta) {
+    if (c.tipo === 'credito_cpf')  { router.push(`/dashboard/credito/cpf/${c.documento.replace(/\D/g, '')}`);   return }
+    if (c.tipo === 'credito_cnpj') { router.push(`/dashboard/credito/cnpj/${c.documento.replace(/\D/g, '')}`);  return }
     if (c.tipo === 'cpf')  { router.push(`/dashboard/relatorio/cpf/${c.documento.replace(/\D/g, '')}`);  return }
     if (c.tipo === 'cnpj') { router.push(`/dashboard/relatorio/cnpj/${c.documento.replace(/\D/g, '')}`); return }
     router.push(`/dashboard/relatorio/${c.documento}`)

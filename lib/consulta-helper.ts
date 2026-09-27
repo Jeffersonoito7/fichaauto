@@ -69,7 +69,7 @@ export async function registrarAuditoria(opts: {
 
 export async function salvarConsulta(opts: {
   email: string
-  tipo: 'veiculo' | 'cpf' | 'cnpj'
+  tipo: 'veiculo' | 'cpf' | 'cnpj' | 'credito_cpf' | 'credito_cnpj'
   documento: string
   descricao?: string
   resultado?: any

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthEmail, salvarConsulta } from '@/lib/consulta-helper'
+import { getAuthEmail, salvarConsulta, registrarAuditoria } from '@/lib/consulta-helper'
+import { buscarConsultaAnterior, textoIdade } from '@/lib/reaproveitar-consulta'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getToken } from '@/lib/providers/assertiva'
 import { CREDITO } from '@/lib/products'
@@ -20,7 +21,7 @@ async function assertivaGet(path: string) {
 function limpaCpf(c: string) { return c.replace(/\D/g, '') }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ cpf: string }> }
 ) {
   const { cpf: cpfParam } = await context.params
@@ -35,7 +36,7 @@ export async function GET(
 
   const svc = createServiceRoleClient() as any
   const { data: perfil } = await svc.from('perfis')
-    .select('creditos_credito, role, pode_credito')
+    .select('creditos_credito, role, pode_credito, tenant_id')
     .eq('email', email)
     .maybeSingle()
 
@@ -49,6 +50,29 @@ export async function GET(
     return NextResponse.json({
       error: `Sem créditos disponíveis. Adquira o pack de R$ ${CREDITO.packValor.toFixed(2).replace('.', ',')} (${CREDITO.packQtd} consultas) ou avulso por R$ ${CREDITO.avulsoCpf.toFixed(2).replace('.', ',')}.`
     }, { status: 402 })
+  }
+
+  // ── Reaproveitamento dentro da mesma empresa ──
+  const forcar = req.nextUrl.searchParams.get('atualizar') === '1'
+  if (!forcar && perfil?.tenant_id) {
+    const anterior = await buscarConsultaAnterior(perfil.tenant_id, cpf, 'credito_cpf')
+    if (anterior) {
+      await svc.from('consultas').insert({
+        email, tenant_id: perfil.tenant_id, tipo: 'credito_cpf', documento: cpf,
+        descricao: 'reaproveitada', resultado: anterior.resultado,
+        custo: 0, reaproveitada: true, origem_id: anterior.id,
+      })
+      registrarAuditoria({ email, acao: 'credito_cpf_reaproveitada', documento: cpf, custo: 0 })
+      return NextResponse.json({
+        ...anterior.resultado,
+        _reaproveitada: true,
+        _consultadaEm:  anterior.consultadaEm,
+        _diasAtras:     anterior.diasAtras,
+        _envelhecida:   anterior.envelhecida,
+        _idadeTexto:    textoIdade(anterior),
+        _consultadaPor: anterior.consultadaPor,
+      })
+    }
   }
 
   const erros: string[] = []
@@ -103,7 +127,7 @@ export async function GET(
   }
 
   const resultado = { cpf, score, protestos, processos, erros }
-  await salvarConsulta({ email, tipo: 'cpf', documento: cpf, descricao: `Crédito CPF ${cpf}`, resultado }).catch(() => null)
+  await salvarConsulta({ email, tipo: 'credito_cpf', documento: cpf, descricao: `Crédito CPF ${cpf}`, resultado }).catch(() => null)
 
   return NextResponse.json({ ...resultado })
 }

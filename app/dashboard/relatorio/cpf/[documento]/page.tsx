@@ -128,6 +128,10 @@ export default function RelatorioCpfPage() {
   const pp  = data?.pep        ?? {}
 
   const nome   = v(b.nome ?? b.nomeCompleto, 'Nome não informado')
+  // PEP nao esta contratado na Assertiva: consultarPepCpf devolve null.
+  // Sem dado, NAO afirmar que a pessoa nao e PEP. Um check verde num campo
+  // nunca consultado vira prova falsa na mao de quem decide.
+  const pepConsultado = pp != null && ('pep' in (pp ?? {}) || 'isPep' in (pp ?? {}))
   const isPep  = !!(pp?.pep ?? pp?.isPep)
   const sit    = v(b.situacaoCpf ?? b.situacao, 'REGULAR').toUpperCase()
   const cpfOk  = sit.includes('REGULAR') || sit.includes('ATIVO')
@@ -193,7 +197,7 @@ export default function RelatorioCpfPage() {
     { label: 'Situação CPF',        status: isFalecido ? 'error' : cpfOk ? 'ok' : 'error', detalhe: sit },
     { label: 'Sanções Gov. Federal', status: temSancao ? 'error' : 'ok', detalhe: temSancao ? `${totalSanc} sanção(ões) — TCU/CEIS/CNEP` : 'Nada consta' },
     { label: 'Processos Judiciais', status: djTotal > 0 ? 'error' : 'ok', detalhe: djTotal > 0 ? `${djTotal} processo(s) — DataJud CNJ` : 'Nada consta' },
-    { label: 'PEP',                 status: isPep ? 'error' : 'ok', detalhe: isPep ? 'Pessoa Politicamente Exposta' : 'Não identificado' },
+    { label: 'PEP',                 status: !pepConsultado ? 'warn' : isPep ? 'error' : 'ok', detalhe: !pepConsultado ? 'Não consultado' : isPep ? 'Pessoa Politicamente Exposta' : 'Nada consta' },
     { label: 'Participação Soc.',   status: empresas.length > 0 ? 'warn' : 'ok', detalhe: empresas.length > 0 ? `${empresas.length} empresa(s)` : 'Nenhuma' },
   ]
 
