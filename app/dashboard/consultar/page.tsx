@@ -172,7 +172,7 @@ export default function ConsultarPage() {
       .then(d => {
         const sv = Number(d?.saldo_veiculo ?? 0)
         if (!Number.isNaN(sv)) setSaldo(sv)
-        if (d?.tenant_id && d?.plano) setAssinante(true)
+        setAssinante(!!d?.assinatura_ativa)
       })
       .catch(() => {})
   }, [])

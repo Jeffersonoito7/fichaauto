@@ -35,6 +35,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [nomeUsuario, setNome]  = useState('')
   const [saldoNav, setSaldoNav] = useState<number | null>(null)
   const [isTenantAdmin, setIsTenantAdmin] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin]   = useState(false)
+  const [assinante, setAssinante]         = useState(false)
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -43,6 +45,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         if (d?.nome) setNome(d.nome.split(' ')[0])
         if (d?.saldo_veiculo !== undefined) setSaldoNav(Number(d.saldo_veiculo))
         if (d?.tenant_id && d?.tenant_role === 'admin') setIsTenantAdmin(true)
+        if (d?.role === 'super_admin') setIsSuperAdmin(true)
+        setAssinante(!!d?.assinatura_ativa)
       })
       .catch(() => {})
   }, [])
@@ -78,13 +82,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Saldo rápido */}
       <div className="mx-4 mt-4 p-3 bg-brand-green-light rounded-xl border border-brand-green/20">
-        <p className="text-xs text-brand-gray mb-0.5">Saldo disponível</p>
-        <div className="flex items-center justify-between">
-          <span className="text-xl font-bold text-brand-green">{saldoNav === null ? '—' : saldoNav.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-          <Link href="/dashboard/carteira" className="text-xs text-brand-blue font-medium hover:underline">
-            Recarregar
-          </Link>
-        </div>
+        {assinante ? (
+          <>
+            <p className="text-xs text-brand-gray mb-0.5">Seu plano</p>
+            <span className="text-base font-bold text-brand-green">Assinatura ativa</span>
+            <p className="text-xs text-brand-gray mt-0.5">Consultas ilimitadas</p>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-brand-gray mb-0.5">Saldo disponível</p>
+            <div className="flex items-center justify-between">
+              <span className="text-xl font-bold text-brand-green">{saldoNav === null ? '—' : saldoNav.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+              <Link href="/dashboard/carteira" className="text-xs text-brand-green font-medium hover:underline">
+                Recarregar
+              </Link>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Nav */}
@@ -98,10 +112,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         )}
 
-        <div className="pt-4 pb-1">
-          <p className="text-xs font-semibold text-brand-gray px-3 mb-2 uppercase tracking-wider">Admin</p>
-          {adminItems.map(item => <NavLink key={item.href} {...item} />)}
-        </div>
+        {isSuperAdmin && (
+          <div className="pt-4 pb-1">
+            <p className="text-xs font-semibold text-brand-gray px-3 mb-2 uppercase tracking-wider">Admin</p>
+            {adminItems.map(item => <NavLink key={item.href} {...item} />)}
+          </div>
+        )}
       </nav>
 
       {/* User */}

@@ -28,6 +28,8 @@ export async function GET(_req: NextRequest) {
     let pode_credito = false
     let tenant_id:   string | null = null
     let tenant_role: string | null = null
+    let assinatura_ativa = false
+    let tenant_nome: string | null = null
     try {
       // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
       const service = createServiceRoleClient() as any
@@ -47,11 +49,25 @@ export async function GET(_req: NextRequest) {
       pode_credito     = data?.pode_credito   ?? false
       tenant_id        = data?.tenant_id      ?? null
       tenant_role      = data?.tenant_role    ?? null
+
+      // Assinatura vive no tenant, nao no perfil. Sem isso o usuario de uma
+      // associacao assinante aparece com saldo zero e consulta bloqueada.
+      if (tenant_id) {
+        const { data: tenant } = await service
+          .from('tenants')
+          .select('nome, assinatura_ativa, assinatura_vence_em')
+          .eq('id', tenant_id)
+          .maybeSingle()
+        tenant_nome = tenant?.nome ?? null
+        assinatura_ativa = !!tenant?.assinatura_ativa
+          && !!tenant?.assinatura_vence_em
+          && new Date(tenant.assinatura_vence_em) > new Date()
+      }
     } catch (e: any) {
       console.error('[/api/auth/me] falha ao buscar perfil no banco:', e?.message ?? e)
     }
 
-    return NextResponse.json({ nome, email, role, saldo_veiculo, saldo_cpf, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, tenant_id, tenant_role })
+    return NextResponse.json({ nome, email, role, saldo_veiculo, saldo_cpf, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, tenant_id, tenant_role, tenant_nome, assinatura_ativa })
   } catch {
     return NextResponse.json({ erro: 'Token inválido' }, { status: 401 })
   }
