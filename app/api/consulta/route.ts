@@ -25,9 +25,26 @@ export async function POST(req: NextRequest) {
     const service = createServiceRoleClient() as any
     const { data: perfil } = await service
       .from('perfis')
-      .select('saldo_veiculo, role, pode_placa, ativo')
+      .select('saldo_veiculo, role, pode_placa, ativo, modulos_liberados, tenant_id')
       .eq('email', email)
       .maybeSingle()
+
+    // Módulos contratados: o do usuário vale; sem ele, herda os da empresa.
+    // Nada configurado em nenhum dos dois significa pacote completo.
+    let modulos: string[] | null = Array.isArray(perfil?.modulos_liberados) && perfil.modulos_liberados.length > 0
+      ? perfil.modulos_liberados
+      : null
+
+    if (!modulos && perfil?.tenant_id) {
+      const { data: tenant } = await service
+        .from('tenants')
+        .select('modulos_liberados')
+        .eq('id', perfil.tenant_id)
+        .maybeSingle()
+      if (Array.isArray(tenant?.modulos_liberados) && tenant.modulos_liberados.length > 0) {
+        modulos = tenant.modulos_liberados
+      }
+    }
 
     const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
     const isAssinante = !isAdmin && await tenantComAssinaturaAtiva(email)
@@ -48,6 +65,7 @@ export async function POST(req: NextRequest) {
     const resultado = await consultarVeiculo(
       placa  ? input : '',
       chassi ? input : undefined,
+      modulos,
     )
 
     // Debitar somente após retorno da API (evita perda de saldo em falha externa)

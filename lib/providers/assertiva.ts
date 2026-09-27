@@ -517,6 +517,13 @@ export async function consultarCompleto(
      * lib/providers/leilao.ts.
      */
     buscarLeilao?: (placa: string, protocolo?: string) => Promise<any>
+    /**
+     * Módulos contratados pelo cliente, no vocabulário do catálogo
+     * (lib/modulos-veiculo.ts). Módulo fora da lista NÃO é consultado, e é
+     * isso que evita pagar por dado que ninguém pediu. Omitir a lista mantém
+     * o pacote completo.
+     */
+    modulos?: string[]
   },
 ): Promise<ConsultaVeiculoResult> {
   const placaLimpa = limpaPlaca(placa)
@@ -527,19 +534,25 @@ export async function consultarCompleto(
     catch (e: any) { erros.push(`${nome}: ${e.message}`); return null }
   }
 
-  // Chama consulta-base primeiro para obter o protocolo
+  // Sem lista, roda tudo: preserva o comportamento anterior ao motor de módulos.
+  const mods = opcoes?.modulos
+  const quer = (id: string) => !mods || mods.includes(id)
+
+  // Chama consulta-base primeiro para obter o protocolo. Nunca é pulada:
+  // dela saem os dados do veículo e o protocolo exigido pelos demais módulos.
   const placaData = await safe(() => consultarPlaca(placaLimpa), 'placa')
   const protocolo = placaData?.cabecalho?.protocolo as string | undefined
 
   const fonteLeilao = opcoes?.buscarLeilao ?? consultarLeilao
+  const pular = Promise.resolve(null)
 
   const [binFederal, sinistro, gravame, leilao, binEstadual, chassiData] = await Promise.all([
-    safe(() => consultarBinFederal(placaLimpa, protocolo),    'binFederal'),
-    safe(() => consultarSinistro(placaLimpa, protocolo),      'sinistro'),
-    safe(() => consultarGravame(placaLimpa, protocolo),       'gravame'),
-    safe(() => fonteLeilao(placaLimpa, protocolo),            'leilao'),
-    safe(() => consultarBinEstadual(placaLimpa, protocolo),   'binEstadual'),
-    chassi ? safe(() => consultarChassi(chassi), 'chassi') : Promise.resolve(null),
+    quer('placa_bin_federal')  ? safe(() => consultarBinFederal(placaLimpa, protocolo),  'binFederal')  : pular,
+    quer('placa_sinistro')     ? safe(() => consultarSinistro(placaLimpa, protocolo),    'sinistro')    : pular,
+    quer('placa_gravame')      ? safe(() => consultarGravame(placaLimpa, protocolo),     'gravame')     : pular,
+    quer('placa_leilao')       ? safe(() => fonteLeilao(placaLimpa, protocolo),          'leilao')      : pular,
+    quer('placa_bin_estadual') ? safe(() => consultarBinEstadual(placaLimpa, protocolo), 'binEstadual') : pular,
+    chassi ? safe(() => consultarChassi(chassi), 'chassi') : pular,
   ])
 
   return { placa: placaData, binFederal, sinistro, gravame, leilao, binEstadual, chassi: chassiData, erros }
