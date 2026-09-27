@@ -10,8 +10,24 @@ function b64url(str: string) {
   return Buffer.from(str).toString('base64url')
 }
 
+/**
+ * Segredo de assinatura da sessão.
+ *
+ * Isto existia como `process.env.JWT_SECRET ?? 'fallback-secret'` e a variável
+ * nunca foi configurada em produção, então todo token estava assinado com uma
+ * string pública: qualquer um podia forjar sessão de super admin. Falhar aqui é
+ * obrigatório, porque um segredo previsível é pior que o sistema não subir.
+ */
+function segredo(): string {
+  const s = process.env.JWT_SECRET
+  if (!s || s.length < 32) {
+    throw new Error('JWT_SECRET ausente ou curto demais. Configure com pelo menos 32 caracteres.')
+  }
+  return s
+}
+
 export async function assinarJwt(payload: JwtPayload): Promise<string> {
-  const secret = process.env.JWT_SECRET ?? 'fallback-secret'
+  const secret = segredo()
   const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const body   = b64url(JSON.stringify({
     ...payload,
@@ -26,7 +42,7 @@ export async function verificarJwt(token: string): Promise<JwtPayload | null> {
   try {
     // Formato JWT (3 partes separadas por ponto)
     if (token.includes('.') && token.split('.').length === 3) {
-      const secret = process.env.JWT_SECRET ?? 'fallback-secret'
+      const secret = segredo()
       const [header, body, sig] = token.split('.')
       const expected = createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url')
       if (sig !== expected) return null

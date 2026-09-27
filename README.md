@@ -60,27 +60,41 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 
 # Auth
-JWT_SECRET=
+JWT_SECRET=            # obrigatório, mínimo 32 caracteres. A aplicação não sobe sem.
+                       # gerar: node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ADMIN_EMAIL=
 ADMIN_SENHA=           # hash bcrypt: node -e "require('bcryptjs').hash('senha',12).then(console.log)"
 ADMIN_NOME=
 
-# Assertiva
-ASSERTIVA_CLIENT_ID=
-ASSERTIVA_CLIENT_SECRET=
+# Assertiva (login e senha, não ClientID/Secret)
+ASSERTIVA_LOGIN=
+ASSERTIVA_PASSWORD=
 
 # Efí (PIX)
 EFI_CLIENT_ID=
 EFI_CLIENT_SECRET=
-EFI_PIX_CHAVE=
+EFI_PIX_KEY=
 EFI_SANDBOX=false
+EFI_CERT_BASE64=
+PIX_WEBHOOK_SECRET=
 
-# PlacaFIPE (opcional, reduz custo)
-PLACAFIPE_TOKEN=
+# Infocar (leilão, R$ 5,56 contra R$ 13,79 da Assertiva)
+INFOCAR_API_KEY=       # sem ela o leilão cai na Assertiva automaticamente
+INFOCAR_IA_DANOS=false
+
+# Cron
+CRON_SECRET=
+
+# PDF
+CHROMIUM_PATH=
 
 # App
 NEXT_PUBLIC_APP_URL=https://fichaauto.com.br
+PORT=4000
 ```
+
+Trocar o `JWT_SECRET` invalida todas as sessões ativas: os usuários precisam
+entrar de novo.
 
 ## Deploy
 
