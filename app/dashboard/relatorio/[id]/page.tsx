@@ -278,7 +278,14 @@ export default function RelatorioPage() {
   const pIdent = raw.resposta?.identificadores ?? raw
   const pMov   = raw.resposta?.movimentacao    ?? raw
   const pRestr = raw.resposta?.restricoes      ?? raw
-  const pFicha = raw.resposta?.fichaTecnica    ?? raw
+  // A consulta-base traz pouca ficha técnica; a completa (eixos, PBT, CMT,
+  // carroceria) vem no BIN Estadual, que já foi pago na mesma consulta e
+  // estava sendo descartado aqui.
+  const fichaBinEst = data.binEstadual?.resposta?.fichaTecnica ?? {}
+  const pFicha = { ...fichaBinEst, ...(raw.resposta?.fichaTecnica ?? raw) }
+  // Mesmo caso: o número do motor só vem nos identificadores do BIN.
+  const identBinEst = data.binEstadual?.resposta?.identificadores
+                   ?? data.binFederal?.resposta?.identificadores ?? {}
 
   const mm      = val(pDesc.marcaModelo ?? pDesc.marca, 'VEÍCULO')
   const cor     = val(pDesc.cor, '')
@@ -447,8 +454,13 @@ export default function RelatorioPage() {
   // Identificação
   const renavam    = val(pIdent.renavam ?? pDesc.renavam ?? binFedResp?.identificadores?.renavam ?? binEstResp?.identificadores?.renavam, '')
   const chassiNum  = val(pIdent.chassi     ?? pDesc.chassi,     '')
-  const motorNum   = val(pIdent.motor      ?? pDesc.motor       ?? pFicha.motor,      '')
-  const carroceria = val(pFicha.carroceria ?? pDesc.carroceria  ?? pIdent.carroceria, '')
+  const motorNum   = val(pIdent.motor ?? identBinEst.numeroMotor ?? pDesc.motor ?? pFicha.motor, '')
+  const carroceria = val(pFicha.carroceria ?? pFicha.tipoCarroceria ?? pDesc.carroceria ?? pIdent.carroceria, '')
+  // Campos que só o BIN Estadual traz e que o relatório ignorava, embora
+  // já estivessem pagos na mesma consulta. O MTix mostra todos eles.
+  const numeroEixos = val(pFicha.numeroEixos    ?? pFicha.eixos,          '')
+  const pesoBruto   = val(pFicha.pesoBrutoTotal ?? pFicha.pbt,            '')
+  const maxTracao   = val(pFicha.maximaTracao   ?? pFicha.cmt,            '')
   const municipio  = val(binEstMov.municipio ?? binEstMov.cidade ?? pDesc.municipio ?? pIdent.municipio, '')
   const uf         = val(binEstMov.uf ?? pDesc.uf ?? pIdent.uf, '')
   const nrProp     = parseInt(String(
@@ -716,7 +728,7 @@ export default function RelatorioPage() {
       {temFicha && (
         <SecaoAcordion
           titulo="CARACTERÍSTICAS TÉCNICAS"
-          normal={[combustivel, tipoVeic, especie, cilindradas, potencia, categoria, procedencia, passageiros, cambio].filter(v => v && v !== 'Não informado').length}
+          normal={[combustivel, tipoVeic, especie, cilindradas, potencia, categoria, procedencia, passageiros, cambio, numeroEixos, pesoBruto, maxTracao].filter(v => v && v !== 'Não informado').length}
           alerta={0}
           atencao={0}
           defaultAberto
@@ -730,6 +742,9 @@ export default function RelatorioPage() {
           {potencia    && <CardStatus titulo="POTÊNCIA"    valor={potencia.toUpperCase()}     tipo="normal" />}
           {categoria   && <CardStatus titulo="CATEGORIA"   valor={categoria.toUpperCase()}    tipo="normal" />}
           {procedencia && <CardStatus titulo="PROCEDÊNCIA" valor={procedencia.toUpperCase()}  tipo="normal" />}
+          {numeroEixos && <CardStatus titulo="EIXOS"       valor={numeroEixos.toUpperCase()}  tipo="normal" />}
+          {pesoBruto   && <CardStatus titulo="PESO BRUTO TOTAL (PBT)" valor={pesoBruto.toUpperCase()} tipo="normal" />}
+          {maxTracao   && <CardStatus titulo="CAPACIDADE MÁXIMA DE TRAÇÃO (CMT)" valor={maxTracao.toUpperCase()} tipo="normal" />}
         </SecaoAcordion>
       )}
 
