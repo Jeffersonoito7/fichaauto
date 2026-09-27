@@ -1,10 +1,24 @@
 import { consultarCompleto } from './assertiva'
 import { getFipePorCodigo }  from './brasilapi'
 import { buscarProcessosProprietario } from './datajud'
+import { buscarLeilao, type FonteLeilao } from './leilao'
 import { getCachePlaca } from '@/lib/cache-placas'
 
 export async function consultarVeiculo(placa: string, chassi?: string) {
-  const resultado = await consultarCompleto(placa, chassi)
+  // Leilão é o módulo mais caro da consulta, então vai pelo roteador de
+  // fornecedor (Infocar quando houver chave, senão Assertiva).
+  let fonteLeilao: FonteLeilao = 'assertiva'
+  let custoLeilao = 0
+
+  const resultado = await consultarCompleto(placa, chassi, {
+    buscarLeilao: async (p, protocolo) => {
+      const r = await buscarLeilao(p, protocolo)
+      fonteLeilao = r.fonte
+      custoLeilao = r.custo
+      if (r.erro) throw new Error(r.erro)
+      return r.dados
+    },
+  })
 
   const placaResp  = resultado.placa ?? {}
   const pDesc      = placaResp.resposta?.descricao      ?? placaResp
@@ -40,5 +54,12 @@ export async function consultarVeiculo(placa: string, chassi?: string) {
       : Promise.resolve(null),
   ])
 
-  return { provider: 'assertiva', ...resultado, fipe, datajud }
+  return {
+    provider: 'assertiva',
+    ...resultado,
+    fipe,
+    datajud,
+    _fonteLeilao: fonteLeilao,
+    _custoLeilao: custoLeilao,
+  }
 }

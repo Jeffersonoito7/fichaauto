@@ -506,7 +506,19 @@ export interface ConsultaVeiculoResult {
   erros:         string[]
 }
 
-export async function consultarCompleto(placa: string, chassi?: string): Promise<ConsultaVeiculoResult> {
+export async function consultarCompleto(
+  placa: string,
+  chassi?: string,
+  opcoes?: {
+    /**
+     * Fonte alternativa de leilão. Quando informada, a Assertiva NÃO é chamada
+     * para esse módulo, o que evita pagar R$ 13,79 quando existe fornecedor
+     * mais barato. Recebida por injeção para não criar import circular com
+     * lib/providers/leilao.ts.
+     */
+    buscarLeilao?: (placa: string, protocolo?: string) => Promise<any>
+  },
+): Promise<ConsultaVeiculoResult> {
   const placaLimpa = limpaPlaca(placa)
   const erros: string[] = []
 
@@ -519,11 +531,13 @@ export async function consultarCompleto(placa: string, chassi?: string): Promise
   const placaData = await safe(() => consultarPlaca(placaLimpa), 'placa')
   const protocolo = placaData?.cabecalho?.protocolo as string | undefined
 
+  const fonteLeilao = opcoes?.buscarLeilao ?? consultarLeilao
+
   const [binFederal, sinistro, gravame, leilao, binEstadual, chassiData] = await Promise.all([
     safe(() => consultarBinFederal(placaLimpa, protocolo),    'binFederal'),
     safe(() => consultarSinistro(placaLimpa, protocolo),      'sinistro'),
     safe(() => consultarGravame(placaLimpa, protocolo),       'gravame'),
-    safe(() => consultarLeilao(placaLimpa, protocolo),        'leilao'),
+    safe(() => fonteLeilao(placaLimpa, protocolo),            'leilao'),
     safe(() => consultarBinEstadual(placaLimpa, protocolo),   'binEstadual'),
     chassi ? safe(() => consultarChassi(chassi), 'chassi') : Promise.resolve(null),
   ])
