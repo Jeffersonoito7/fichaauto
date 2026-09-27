@@ -4,6 +4,11 @@ import {
   Building2, Plus, XCircle, Pencil, Wallet,
   Globe, Mail, ChevronDown, ChevronUp, Loader2, X, Check
 } from 'lucide-react'
+import {
+  CUSTO_MODULO, MODULOS_PADRAO, MODULO_OBRIGATORIO, CUSTO_REFERENCIA,
+  type ModuloVeiculo,
+} from '@/lib/modulos-veiculo'
+import { MODULOS, type ModuloId } from '@/lib/products'
 
 interface Tenant {
   id: string; slug: string; nome: string; nome_fantasia: string | null
@@ -12,6 +17,7 @@ interface Tenant {
   telefone: string | null; email_contato: string | null
   ativo: boolean; saldo_veiculo: number; saldo_cpf: number
   preco_veiculo: number | null; preco_cpf: number | null
+  modulos_liberados: string[]
   criado_em: string
 }
 
@@ -20,6 +26,7 @@ const VAZIO: Omit<Tenant, 'id' | 'criado_em'> = {
   cor_primaria: '#00A651', cor_secundaria: '#0055A4', cor_texto: '#FFFFFF',
   telefone: '', email_contato: '', ativo: true,
   saldo_veiculo: 0, saldo_cpf: 0, preco_veiculo: null, preco_cpf: null,
+  modulos_liberados: [],
 }
 
 function moeda(v: number) {
@@ -28,6 +35,93 @@ function moeda(v: number) {
 
 function fmtData(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR')
+}
+
+// ── Seletor de modulos contratados ─────────────────────────────────────────────
+// Mostra o custo de cada modulo para a escolha ser economica, nao so tecnica.
+function SeletorModulos({
+  selecionados, onChange,
+}: {
+  selecionados: string[]
+  onChange: (v: string[]) => void
+}) {
+  const ativos = selecionados.length === 0 ? [...MODULOS_PADRAO] : (selecionados as ModuloVeiculo[])
+
+  // Leilao usa o fornecedor configurado; os demais tem custo fixo da Assertiva.
+  const custo = ativos.reduce((s, m) => s + (CUSTO_MODULO[m]?.custo ?? 0), 0)
+  const economia = CUSTO_REFERENCIA - custo
+
+  function alternar(id: ModuloVeiculo) {
+    if (id === MODULO_OBRIGATORIO) return // identificacao e a base, nao sai
+    const base = selecionados.length === 0 ? [...MODULOS_PADRAO] : [...selecionados]
+    const novo = base.includes(id) ? base.filter(m => m !== id) : [...base, id]
+    // Mantem a ordem do catalogo, para a lista nao dancar na tela
+    onChange(MODULOS_PADRAO.filter(m => novo.includes(m)))
+  }
+
+  return (
+    <div>
+      <div className="space-y-1.5">
+        {MODULOS_PADRAO.map(id => {
+          const info  = CUSTO_MODULO[id]
+          const marcado = ativos.includes(id)
+          const fixo  = id === MODULO_OBRIGATORIO
+          return (
+            <label
+              key={id}
+              className={`flex items-center gap-3 p-2.5 rounded-xl border transition-colors ${
+                fixo ? 'border-gray-200 bg-gray-50 cursor-default'
+                     : marcado ? 'border-brand-green bg-brand-green-light/40 cursor-pointer'
+                               : 'border-gray-200 hover:border-brand-green cursor-pointer'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={marcado}
+                disabled={fixo}
+                onChange={() => alternar(id)}
+                className="w-4 h-4 accent-brand-green shrink-0 disabled:opacity-50"
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-medium text-gray-800">
+                  {MODULOS[id as ModuloId]?.nome ?? id}
+                  {fixo && <span className="ml-2 text-[10px] font-bold text-gray-400 uppercase">obrigatório</span>}
+                </span>
+                <span className="block text-xs text-gray-500">{info.fornecedor}</span>
+              </span>
+              <span className={`text-sm font-semibold tabular-nums shrink-0 ${
+                info.custo === 0 ? 'text-gray-400' : marcado ? 'text-brand-dark' : 'text-gray-400'
+              }`}>
+                {info.custo === 0 ? 'grátis' : moeda(info.custo)}
+              </span>
+            </label>
+          )
+        })}
+      </div>
+
+      <div className="mt-3 p-3 rounded-xl bg-gray-50 border border-gray-200 space-y-1.5">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-600">Custo por consulta</span>
+          <strong className="text-gray-900 tabular-nums">{moeda(custo)}</strong>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-gray-500">Antes (pacote completo na Assertiva)</span>
+          <span className="text-gray-400 line-through tabular-nums">{moeda(CUSTO_REFERENCIA)}</span>
+        </div>
+        {economia > 0 && (
+          <div className="flex items-center justify-between text-sm pt-1.5 border-t border-gray-200">
+            <span className="font-medium text-brand-green">Economia por consulta</span>
+            <strong className="text-brand-green tabular-nums">{moeda(economia)}</strong>
+          </div>
+        )}
+        {selecionados.length === 0 && (
+          <p className="text-xs text-amber-700 pt-1.5 border-t border-gray-200">
+            Nada marcado: a empresa recebe o pacote completo.
+          </p>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ── Modal de cadastro / edicao ─────────────────────────────────────────────────
@@ -192,6 +286,21 @@ function ModalTenant({
                   placeholder="Ex: 39,90" />
               </div>
             </div>
+          </div>
+
+          {/* Módulos contratados */}
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">
+              Módulos contratados
+            </p>
+            <p className="text-xs text-gray-500 mb-3">
+              Só os módulos marcados são consultados, e você paga apenas por eles.
+              Nada marcado significa pacote completo.
+            </p>
+            <SeletorModulos
+              selecionados={form.modulos_liberados ?? []}
+              onChange={v => campo('modulos_liberados', v)}
+            />
           </div>
 
           <div className="flex items-center gap-2">

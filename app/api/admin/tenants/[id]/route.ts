@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthEmail } from '@/lib/consulta-helper'
+import { ehModuloVeiculo } from '@/lib/modulos-veiculo'
 
 function service() {
   return createClient(
@@ -39,6 +40,19 @@ export async function PATCH(
     'saldo_veiculo', 'saldo_cpf', 'preco_veiculo', 'preco_cpf',
   ]
   permitidos.forEach(k => { if (k in body) campos[k] = body[k] })
+
+  // Módulos contratados: só aceita id que o motor sabe executar, senão o
+  // cliente ficaria com módulo que nunca roda e ninguém perceberia.
+  if ('modulos_liberados' in body) {
+    if (!Array.isArray(body.modulos_liberados)) {
+      return NextResponse.json({ erro: 'modulos_liberados deve ser uma lista' }, { status: 400 })
+    }
+    const invalidos = body.modulos_liberados.filter((m: unknown) => typeof m !== 'string' || !ehModuloVeiculo(m))
+    if (invalidos.length > 0) {
+      return NextResponse.json({ erro: `Módulo desconhecido: ${invalidos.join(', ')}` }, { status: 400 })
+    }
+    campos.modulos_liberados = body.modulos_liberados
+  }
 
   const { data, error } = await service()
     .from('tenants')
