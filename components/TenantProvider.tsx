@@ -39,7 +39,30 @@ export function TenantLogo({ height = 36, className = '' }: { height?: number; c
     )
   }
 
-  // Fallback: componente padrao do Ficha Auto
+  // Empresa sem logo cadastrada: desenha o nome dela com a cor da marca.
+  // Antes caia na logo do Ficha Auto, e o cliente via a marca do fornecedor
+  // no proprio endereco. Nome improvisado e melhor que marca errada.
+  if (tenant.slug !== 'ficha-auto') {
+    const nome = tenant.nome_fantasia ?? tenant.nome
+    const iniciais = nome.split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase()
+    return (
+      <span className={`inline-flex items-center gap-2.5 ${className}`} style={{ height }}>
+        <span
+          className="grid place-items-center rounded-lg font-extrabold text-white shrink-0"
+          style={{ width: height, height, backgroundColor: tenant.cor_primaria, fontSize: height * 0.4 }}
+        >
+          {iniciais}
+        </span>
+        <span
+          className="font-extrabold tracking-tight leading-none"
+          style={{ color: tenant.cor_primaria, fontSize: height * 0.46 }}
+        >
+          {nome}
+        </span>
+      </span>
+    )
+  }
+
   const { LogoHorizontal } = require('@/components/LogoFichaAuto')
   return <LogoHorizontal height={height} theme="light" />
 }

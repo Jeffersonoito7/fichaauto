@@ -6,17 +6,26 @@ import InstallPWA from '@/components/InstallPWA'
 import { TenantProvider } from '@/components/TenantProvider'
 import { TENANT_FICHA_AUTO, type Tenant } from '@/lib/tenant'
 
-export const metadata: Metadata = {
-  title: 'Ficha Auto — Consulta Veicular Completa',
-  description: 'Plataforma profissional de consulta veicular. Placa, RENAJUD, Gravame, Leilão, Sinistro, FIPE e muito mais.',
-  keywords: 'consulta veicular, placa, RENAJUD, gravame, leilão, sinistro, FIPE, DETRAN',
-  openGraph: {
-    title: 'Ficha Auto — Consulta Veicular Completa',
-    description: 'Plataforma profissional de consulta veicular para despachantes, lojistas e compradores.',
-    type: 'website',
-    url: 'https://fichaauto.com.br',
-  },
-  metadataBase: new URL('https://fichaauto.com.br'),
+// O titulo da aba tambem e white-label: no subdominio de um cliente ele
+// mostra o nome DA EMPRESA, senao o cliente ve a marca do fornecedor na aba
+// do navegador e nos favoritos.
+export async function generateMetadata(): Promise<Metadata> {
+  const hdrs = await headers()
+  const nomeTenant = hdrs.get('x-tenant-nome')
+  const nome = nomeTenant || 'Ficha Auto'
+  const titulo = `${nome} — Consulta Veicular`
+
+  return {
+    title: titulo,
+    description: 'Plataforma profissional de consulta veicular. Placa, RENAJUD, Gravame, Leilão, Sinistro, FIPE e muito mais.',
+    keywords: 'consulta veicular, placa, RENAJUD, gravame, leilão, sinistro, FIPE, DETRAN',
+    openGraph: {
+      title: titulo,
+      description: 'Plataforma profissional de consulta veicular para despachantes, lojistas e compradores.',
+      type: 'website',
+    },
+    metadataBase: new URL('https://fichaauto.com.br'),
+  }
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
