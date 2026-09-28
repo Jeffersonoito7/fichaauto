@@ -57,6 +57,18 @@ export async function middleware(request: NextRequest) {
     return withHeaders(NextResponse.next())
   }
 
+  // O funil de venda ao consumidor final e do Ficha Auto, nao do cliente.
+  // No endereco da empresa ele nao pode existir: o funcionario cairia num
+  // pagamento avulso por PIX mesmo com a empresa tendo saldo, e a associacao
+  // veria o fornecedor vendendo direto ao consumidor na propria casa.
+  const ROTAS_B2C = ['/fipe', '/planos', '/lojista', '/consulta', '/cadastro']
+  if (ehDominioDeCliente && ROTAS_B2C.some(r => path === r || path.startsWith(r + '/'))) {
+    const url = request.nextUrl.clone()
+    url.pathname = auth ? '/dashboard' : '/login'
+    url.search = ''
+    return withHeaders(NextResponse.redirect(url))
+  }
+
   if (isProtected && !auth) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
