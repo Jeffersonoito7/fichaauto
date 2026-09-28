@@ -12,11 +12,13 @@ export async function middleware(request: NextRequest) {
 
   // ── Deteccao de tenant por dominio ────────────────────────────────────────
   let tenantHeaders: Record<string, string> = {}
+  let ehDominioDeCliente = false
 
   if (!isDominioProprio(host) && !path.startsWith('/api/') && !path.startsWith('/_next/')) {
     try {
       const tenant = await getTenantByDominio(host.split(':')[0].toLowerCase())
       if (tenant) {
+        ehDominioDeCliente = true
         tenantHeaders = {
           'x-tenant-id':             tenant.id,
           'x-tenant-slug':           tenant.slug,
@@ -41,10 +43,17 @@ export async function middleware(request: NextRequest) {
   if (isRoot) {
     if (auth) {
       const url = request.nextUrl.clone()
-      url.pathname = '/dashboard/consultar'
+      url.pathname = '/dashboard'
       return withHeaders(NextResponse.redirect(url))
     }
-    // sem auth: exibe a landing page publica
+    // No subdominio de um cliente quem chega e funcionario dele, nao
+    // consumidor: vai direto para o login com a marca da empresa. A landing
+    // de venda B2C so faz sentido no dominio principal.
+    if (ehDominioDeCliente) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return withHeaders(NextResponse.redirect(url))
+    }
     return withHeaders(NextResponse.next())
   }
 
