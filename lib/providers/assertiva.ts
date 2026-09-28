@@ -517,6 +517,9 @@ export async function consultarCompleto(
      * lib/providers/leilao.ts.
      */
     buscarLeilao?: (placa: string, protocolo?: string) => Promise<any>
+    /** Fontes alternativas das bases, mesma ideia do leilão. */
+    buscarBaseNacional?: (placa: string, protocolo?: string) => Promise<any>
+    buscarBaseEstadual?: (placa: string, protocolo?: string) => Promise<any>
     /**
      * Módulos contratados pelo cliente, no vocabulário do catálogo
      * (lib/modulos-veiculo.ts). Módulo fora da lista NÃO é consultado, e é
@@ -543,15 +546,17 @@ export async function consultarCompleto(
   const placaData = await safe(() => consultarPlaca(placaLimpa), 'placa')
   const protocolo = placaData?.cabecalho?.protocolo as string | undefined
 
-  const fonteLeilao = opcoes?.buscarLeilao ?? consultarLeilao
+  const fonteLeilao   = opcoes?.buscarLeilao       ?? consultarLeilao
+  const fonteNacional = opcoes?.buscarBaseNacional ?? consultarBinFederal
+  const fonteEstadual = opcoes?.buscarBaseEstadual ?? consultarBinEstadual
   const pular = Promise.resolve(null)
 
   const [binFederal, sinistro, gravame, leilao, binEstadual, chassiData] = await Promise.all([
-    quer('placa_bin_federal')  ? safe(() => consultarBinFederal(placaLimpa, protocolo),  'binFederal')  : pular,
+    quer('placa_bin_federal')  ? safe(() => fonteNacional(placaLimpa, protocolo),        'binFederal')  : pular,
     quer('placa_sinistro')     ? safe(() => consultarSinistro(placaLimpa, protocolo),    'sinistro')    : pular,
     quer('placa_gravame')      ? safe(() => consultarGravame(placaLimpa, protocolo),     'gravame')     : pular,
     quer('placa_leilao')       ? safe(() => fonteLeilao(placaLimpa, protocolo),          'leilao')      : pular,
-    quer('placa_bin_estadual') ? safe(() => consultarBinEstadual(placaLimpa, protocolo), 'binEstadual') : pular,
+    quer('placa_bin_estadual') ? safe(() => fonteEstadual(placaLimpa, protocolo),        'binEstadual') : pular,
     chassi ? safe(() => consultarChassi(chassi), 'chassi') : pular,
   ])
 

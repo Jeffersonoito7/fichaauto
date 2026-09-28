@@ -2,7 +2,8 @@ import { consultarCompleto } from './assertiva'
 import { getFipePorCodigo }  from './brasilapi'
 import { buscarProcessosProprietario } from './datajud'
 import { buscarLeilao, type FonteLeilao } from './leilao'
-import { resolverModulos, custoDe, economiaDe } from '@/lib/modulos-veiculo'
+import { buscarBaseNacional, buscarBaseEstadual, type FonteBase } from './bases-veiculares'
+import { resolverModulos, custoDe, CUSTO_REFERENCIA } from '@/lib/modulos-veiculo'
 import { getCachePlaca } from '@/lib/cache-placas'
 
 export async function consultarVeiculo(
@@ -18,6 +19,11 @@ export async function consultarVeiculo(
   // fornecedor (Infocar quando houver chave, senão Assertiva).
   let fonteLeilao: FonteLeilao = 'assertiva'
   let custoLeilao = 0
+  // Bases nacional e estadual também trocam de fornecedor por preço.
+  let fonteNacional: FonteBase = 'assertiva'
+  let fonteEstadual: FonteBase = 'assertiva'
+  let custoNacional = 0
+  let custoEstadual = 0
 
   const resultado = await consultarCompleto(placa, chassi, {
     modulos,
@@ -25,6 +31,20 @@ export async function consultarVeiculo(
       const r = await buscarLeilao(p, protocolo)
       fonteLeilao = r.fonte
       custoLeilao = r.custo
+      if (r.erro) throw new Error(r.erro)
+      return r.dados
+    },
+    buscarBaseNacional: async (p, protocolo) => {
+      const r = await buscarBaseNacional(p, protocolo)
+      fonteNacional = r.fonte
+      custoNacional = r.custo
+      if (r.erro) throw new Error(r.erro)
+      return r.dados
+    },
+    buscarBaseEstadual: async (p, protocolo) => {
+      const r = await buscarBaseEstadual(p, protocolo)
+      fonteEstadual = r.fonte
+      custoEstadual = r.custo
       if (r.erro) throw new Error(r.erro)
       return r.dados
     },
@@ -65,8 +85,13 @@ export async function consultarVeiculo(
   ])
 
   // Custo real: o leilão usa o valor do fornecedor que de fato respondeu.
-  const custoBase = custoDe(modulos.filter(m => m !== 'placa_leilao'))
-  const custoTotal = parseFloat((custoBase + custoLeilao).toFixed(2))
+  // Só os módulos de preço fixo entram pela tabela; leilão e bases usam o
+  // custo do fornecedor que de fato respondeu.
+  const VARIAVEIS = ['placa_leilao', 'placa_bin_federal', 'placa_bin_estadual']
+  const custoBase = custoDe(modulos.filter(m => !VARIAVEIS.includes(m)))
+  const custoTotal = parseFloat(
+    (custoBase + custoLeilao + custoNacional + custoEstadual).toFixed(2)
+  )
 
   return {
     provider: 'assertiva',
@@ -76,7 +101,9 @@ export async function consultarVeiculo(
     _modulos: modulos,
     _fonteLeilao: fonteLeilao,
     _custoLeilao: custoLeilao,
+    _fonteNacional: fonteNacional,
+    _fonteEstadual: fonteEstadual,
     _custoTotal: custoTotal,
-    _economia: economiaDe(modulos, custoLeilao),
+    _economia: parseFloat((CUSTO_REFERENCIA - custoTotal).toFixed(2)),
   }
 }
