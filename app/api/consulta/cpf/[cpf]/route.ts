@@ -5,6 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { buscarProcessosProprietario } from '@/lib/providers/datajud'
 import { consultarSancoesCpf } from '@/lib/providers/sancoes-gov'
 import { PRECO } from '@/lib/products'
+import { lerSaldoCpf, debitarSaldoCpf, mensagemSemSaldo, saldoAcabando } from '@/lib/saldo'
 
 const BASE_URL   = 'https://api.assertivasolucoes.com.br'
 const TOKEN_URL  = 'https://api.assertivasolucoes.com.br/oauth2/v3/token'
@@ -63,9 +64,17 @@ export async function GET(
   const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
   const isAssinante = !isAdmin && await tenantComAssinaturaAtiva(email)
   if (!isAdmin && !isAssinante && !perfil?.pode_cpf) return NextResponse.json({ error: 'Sem permissão para consulta de CPF.' }, { status: 403 })
-  const saldo = parseFloat(perfil?.saldo_cpf ?? '0')
-  const custo = PRECO.cpf
-  if (!isAdmin && !isAssinante && saldo < custo) return NextResponse.json({ error: `Saldo insuficiente. Esta consulta custa R$ ${custo.toFixed(2).replace('.', ',')}. Recarregue sua carteira.` }, { status: 402 })
+  // O caixa é da EMPRESA, não de cada operador. Sem empresa, cai no perfil.
+  const { saldo, origem, precoTenant } = await lerSaldoCpf(svc, {
+    email, tenantId: perfil?.tenant_id ?? null,
+  })
+  const custo = precoTenant ?? PRECO.cpf
+  if (!isAdmin && !isAssinante && saldo < custo) {
+    return NextResponse.json(
+      { error: mensagemSemSaldo(saldo, custo, origem), recarregar: true, saldo },
+      { status: 402 },
+    )
+  }
 
   // ── Reaproveitamento dentro da mesma empresa ──
   const forcar = req.nextUrl.searchParams.get('atualizar') === '1'
@@ -186,8 +195,13 @@ export async function GET(
   const resultado = { cpf, basico, enderecos, telefones, pep: null, societario, relacionamentos, datajud, sancoes, erros }
   const descricao = basico?.nome ?? ''
 
-  // Debitar somente após retorno da API — assinantes de tenant nao debitam saldo individual
-  if (!isAdmin && !isAssinante) await svc.from('perfis').update({ saldo_cpf: parseFloat((saldo - custo).toFixed(2)), atualizado_em: new Date().toISOString() }).eq('email', email)
+  // Debitar somente após retorno da API (evita perda de saldo em falha externa).
+  // Admin e assinante B2B não consomem caixa.
+  let restante = saldo
+  if (!isAdmin && !isAssinante) {
+    const d = await debitarSaldoCpf(svc, { email, tenantId: perfil?.tenant_id ?? null, valor: custo })
+    restante = d.restante
+  }
 
   const saved = await salvarConsulta({ email, tipo: 'cpf', documento: cpf, descricao, resultado })
   if (saved?.id) {
@@ -198,5 +212,12 @@ export async function GET(
   }
   registrarAuditoria({ email, acao: 'consulta_cpf', documento: cpf, custo: isAdmin ? 0 : custo })
 
-  return NextResponse.json({ ...resultado, token: saved?.token ?? null })
+  return NextResponse.json({
+    ...resultado,
+    token: saved?.token ?? null,
+    _debitado:      isAdmin || isAssinante ? 0 : custo,
+    _saldoRestante: restante,
+    // Avisa antes de travar no meio de um atendimento.
+    _saldoAcabando: !isAdmin && !isAssinante && saldoAcabando(restante, custo),
+  })
 }

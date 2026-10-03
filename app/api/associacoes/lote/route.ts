@@ -8,6 +8,7 @@ import {
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getAuthEmail, registrarAuditoria, tenantComAssinaturaAtiva } from '@/lib/consulta-helper'
 import { PRECO } from '@/lib/products'
+import { lerSaldoCpf, debitarSaldoCpf } from '@/lib/saldo'
 
 // Limite de CPFs por planilha
 const MAX_CPFS = 500
@@ -224,18 +225,22 @@ export async function POST(req: NextRequest) {
     // ── 2. Saldo precisa cobrir o lote inteiro ───────────────────────────────
     // Mesmo preço por CPF da consulta avulsa (/api/consulta/cpf), porque é a
     // mesma consulta repetida N vezes.
-    const custoUnitario = PRECO.cpf
+    // O caixa é da EMPRESA, não de cada operador. Sem empresa, cai no perfil.
+    const { saldo, origem, precoTenant } = await lerSaldoCpf(svc, {
+      email, tenantId: perfil?.tenant_id ?? null,
+    })
+    const custoUnitario = precoTenant ?? PRECO.cpf
     const custoTotal    = parseFloat((custoUnitario * cpfs.length).toFixed(2))
-    const saldo         = parseFloat(String(perfil?.saldo_cpf ?? '0')) || 0
     const cobrar        = !isAdmin && !isAssinante
 
     if (cobrar && saldo < custoTotal) {
       const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       const cabe = Math.floor(saldo / custoUnitario)
+      const deQuem = origem === 'tenant' ? 'o saldo da sua empresa é' : 'seu saldo é'
       return NextResponse.json(
         {
           erro: `Saldo insuficiente para este lote. ${cpfs.length} CPFs custam ${brl(custoTotal)} `
-              + `(${brl(custoUnitario)} por CPF) e seu saldo é ${brl(saldo)}. `
+              + `(${brl(custoUnitario)} por CPF) e ${deQuem} ${brl(saldo)}. `
               + `Com o saldo atual cabem ${cabe} CPFs. Recarregue ou envie uma planilha menor.`,
           recarregar: true,
           saldo,
@@ -250,23 +255,17 @@ export async function POST(req: NextRequest) {
     // Debita antes de disparar as chamadas pagas. Dois operadores enviando
     // planilha ao mesmo tempo não podem gastar o mesmo saldo duas vezes, e a
     // Assertiva cobra a chamada mesmo que a resposta venha vazia.
+    // A trava contra concorrência está dentro de debitarSaldoCpf: para empresa é
+    // a RPC atômica (UPDATE ... AND saldo_cpf >= valor), para perfil é a leitura
+    // seguida de comparação. Se o saldo foi consumido no meio, sucesso = false e
+    // o lote é recusado em vez de rodar de graça.
     if (cobrar) {
-      const restante = parseFloat((saldo - custoTotal).toFixed(2))
-      // O `gte` é a trava: se outro envio consumiu o saldo no meio, nenhuma
-      // linha é atualizada e o lote é recusado em vez de rodar de graça.
-      const { data: debitado, error: errDeb } = await svc
-        .from('perfis')
-        .update({ saldo_cpf: restante, atualizado_em: new Date().toISOString() })
-        .eq('email', email)
-        .gte('saldo_cpf', custoTotal)
-        .select('email')
-      if (errDeb) {
-        console.error('[associacoes/lote] débito falhou:', errDeb.message)
-        return NextResponse.json({ erro: 'Não foi possível debitar o saldo. Tente novamente.' }, { status: 500 })
-      }
-      if (!Array.isArray(debitado) || debitado.length === 0) {
+      const d = await debitarSaldoCpf(svc, {
+        email, tenantId: perfil?.tenant_id ?? null, valor: custoTotal,
+      })
+      if (!d.sucesso) {
         return NextResponse.json(
-          { erro: 'Saldo insuficiente no momento do débito. Recarregue e tente novamente.', recarregar: true },
+          { erro: 'Saldo insuficiente no momento do débito. Recarregue e tente novamente.', recarregar: true, saldo: d.restante },
           { status: 402 },
         )
       }
