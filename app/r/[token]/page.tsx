@@ -187,13 +187,22 @@ function RelatórioCnpj({ r }: { r: any }) {
 export default async function PaginaPublica({ params }: Props) {
   const { token } = await params
 
+  // O builder do Supabase é "thenable", mas não é uma Promise nativa: ele não
+  // tem .catch encadeável. Com `.maybeSingle().catch(...)` a página inteira
+  // quebrava com 500 e o cliente que PAGOU não via o relatório. Por isso o
+  // try/catch fica em volta do await, que é onde a promessa realmente resolve.
   const svc = createServiceRoleClient() as any
-  const { data } = await svc
-    .from('consultas')
-    .select('tipo, documento, descricao, resultado, expires_at, created_at')
-    .eq('token', token)
-    .maybeSingle()
-    .catch(() => ({ data: null }))
+  let data: any = null
+  try {
+    const r = await svc
+      .from('consultas')
+      .select('tipo, documento, descricao, resultado, expires_at, created_at')
+      .eq('token', token)
+      .maybeSingle()
+    data = r?.data ?? null
+  } catch (e: any) {
+    console.error('[relatorio publico]', e?.message ?? e)
+  }
 
   if (!data) notFound()
 
