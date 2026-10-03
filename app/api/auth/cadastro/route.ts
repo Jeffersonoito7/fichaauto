@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { randomUUID } from 'crypto'
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,10 +36,18 @@ export async function POST(req: NextRequest) {
     const { error } = await (supabase as any)
       .from('perfis')
       .insert({
+        // user_id e NOT NULL na tabela, herdado de quando o login era do
+        // Supabase Auth. Hoje a sessao e JWT proprio, entao aqui ele e apenas
+        // a chave interna do perfil. Sem isto, TODO cadastro pelo site falhava
+        // com 500 e ninguem conseguia criar conta.
+        user_id:           randomUUID(),
         nome:              nome.trim(),
         email:             email.toLowerCase().trim(),
         cpf_cnpj:          cpfCnpj ?? null,
-        saldo_consultas:   0,
+        // A coluna saldo_consultas NAO EXISTE em perfis. O caixa e separado
+        // por produto: saldo_veiculo e saldo_cpf.
+        saldo_veiculo:     0,
+        saldo_cpf:         0,
         ativo:             false,
         pode_placa:        false,
         pode_cpf:          false,

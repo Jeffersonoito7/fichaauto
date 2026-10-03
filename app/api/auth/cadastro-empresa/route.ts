@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { randomUUID } from 'crypto'
 
 function slugify(s: string): string {
   return s
@@ -71,6 +72,9 @@ export async function POST(req: NextRequest) {
     const { error: errPerfil } = await db
       .from('perfis')
       .insert({
+        // Ver o comentario em /api/auth/cadastro: user_id e NOT NULL e sem
+        // ele o cadastro de empresa tambem falhava com 500.
+        user_id:     randomUUID(),
         nome:        nome.trim(),
         email:       emailNorm,
         cpf_cnpj:    cnpj?.replace(/\D/g, '') || null,
