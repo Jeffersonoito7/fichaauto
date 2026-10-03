@@ -3,12 +3,20 @@ import { assinarJwt }   from '@/lib/jwt'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { hashSenha, verificarSenha } from '@/lib/hash-senha'
 import bcrypt from 'bcryptjs'
+import { ipDaRequisicao, limitar, respostaLimiteExcedido } from '@/lib/rate-limit'
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? ''
 const ADMIN_SENHA = process.env.ADMIN_SENHA ?? ''
 const ADMIN_NOME  = process.env.ADMIN_NOME  ?? 'Administrador'
 
 export async function POST(req: Request) {
+  // Sem este limite, da para testar senha a vontade. Duas travas: por IP, que
+  // segura o ataque amplo, e por e-mail, que segura quem troca de IP mas mira
+  // uma conta so.
+  const ip = ipDaRequisicao(req)
+  const porIp = limitar(`login:ip:${ip}`, 20, 5 * 60_000)
+  if (!porIp.permitido) return respostaLimiteExcedido(porIp.esperarSegundos)
+
   const body = await req.json().catch(() => ({}))
   const { email, senha } = body
 
@@ -17,6 +25,9 @@ export async function POST(req: Request) {
   }
 
   const emailNorm = email.toLowerCase().trim()
+
+  const porEmail = limitar(`login:email:${emailNorm}`, 10, 10 * 60_000)
+  if (!porEmail.permitido) return respostaLimiteExcedido(porEmail.esperarSegundos)
 
   // 1. Super admin via variavel de ambiente
   // ADMIN_SENHA deve ser um hash bcrypt gerado com: node -e "require('bcryptjs').hash('SUA_SENHA',12).then(console.log)"

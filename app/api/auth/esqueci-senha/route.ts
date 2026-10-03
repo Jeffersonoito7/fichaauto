@@ -2,12 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHash, randomBytes } from 'crypto'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { enviarEmail, htmlRecuperacao, emailConfigurado } from '@/lib/email'
+import { ipDaRequisicao, limitar, respostaLimiteExcedido } from '@/lib/rate-limit'
 
 const VALIDADE_MINUTOS = 30
 /** Quantos pedidos o mesmo e-mail pode fazer por hora. */
 const LIMITE_POR_HORA = 3
 
 export async function POST(req: NextRequest) {
+  // O limite por e-mail (3 por hora) ja existia, mas nao segura quem varia o
+  // e-mail para descobrir quais contas existem, nem quem so quer gastar nosso
+  // envio. Este limite e por origem.
+  const ip = ipDaRequisicao(req)
+  const porIp = limitar(`esqueci:ip:${ip}`, 10, 60 * 60_000)
+  if (!porIp.permitido) return respostaLimiteExcedido(porIp.esperarSegundos)
+
   const body = await req.json().catch(() => ({}))
   const email = String(body?.email ?? '').toLowerCase().trim()
 
@@ -69,7 +77,7 @@ export async function POST(req: NextRequest) {
       email,
       token_hash: tokenHash,
       expira_em: new Date(Date.now() + VALIDADE_MINUTOS * 60_000).toISOString(),
-      ip: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+      ip,
     })
 
     if (!emailConfigurado()) {

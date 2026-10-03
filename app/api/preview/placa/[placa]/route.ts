@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { consultarPlacaFipe } from '@/lib/providers/placafipe'
 import { getCachePlaca } from '@/lib/cache-placas'
 import { getFipePorCodigo } from '@/lib/providers/brasilapi'
+import { ipDaRequisicao, limitar, respostaLimiteExcedido } from '@/lib/rate-limit'
 
 const PARALLELUM = 'https://parallelum.com.br/fipe/api/v1'
 
@@ -206,9 +207,15 @@ async function previewAssertiva(placa: string) {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ placa: string }> }
 ) {
+  // Rota publica que, no fallback, chama fornecedor PAGO. Sem limite por
+  // origem, um robo transforma isso em conta a pagar.
+  const ip = ipDaRequisicao(req)
+  const lim = limitar(`preview:${ip}`, 20, 60_000)
+  if (!lim.permitido) return respostaLimiteExcedido(lim.esperarSegundos)
+
   const { placa: placaParam } = await context.params
   const placa = placaParam.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 7)
 
