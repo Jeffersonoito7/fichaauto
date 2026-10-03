@@ -160,7 +160,9 @@ export default function FipeResultadoPage() {
         <div className="w-9" />
       </div>
 
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
+      {/* 512px fixos faziam a pagina parecer um app de celular esticado no
+          computador. No celular nada muda; a partir de lg ela respira. */}
+      <div className="mx-auto w-full max-w-lg px-4 py-6 space-y-4 lg:max-w-3xl">
 
         {/* Loading */}
         {loading && (

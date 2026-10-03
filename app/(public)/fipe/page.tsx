@@ -159,7 +159,12 @@ export default function FipeBuscaPage() {
         </p>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 -mt-1">
+      {/* Ate aqui a pagina inteira vivia em 512px, entao no computador ela
+          parecia um aplicativo de celular esticado no meio da tela. O
+          formulario continua estreito de proposito (campo largo demais fica
+          estranho), mas o apoio vai para a coluna da direita a partir de
+          lg, e empilha no celular exatamente como era. */}
+      <div className="mx-auto w-full max-w-lg px-4 -mt-1 lg:max-w-5xl lg:grid lg:grid-cols-[minmax(0,420px)_1fr] lg:gap-10 lg:items-start">
         <form onSubmit={buscar} className="space-y-4">
           {/* Placa visual como campo de digitacao */}
           <div className="bg-white rounded-2xl shadow-md p-6 flex flex-col items-center gap-5">
@@ -181,8 +186,9 @@ export default function FipeBuscaPage() {
           </div>
         </form>
 
+        <div className="lg:mt-0">
         {/* O que a consulta traz */}
-        <div className="mt-5 space-y-2.5">
+        <div className="mt-5 space-y-2.5 lg:mt-0">
           {[
             { icon: TrendingUp,  titulo: 'Valor FIPE atualizado',    desc: 'Preço de referência do mês vigente' },
             { icon: FileText,    titulo: 'Marca, modelo e ano',       desc: 'Identificação completa do veículo' },
@@ -208,6 +214,7 @@ export default function FipeBuscaPage() {
           <p className="mt-2 text-sm font-bold text-green-700">
             Consulta completa por R$&nbsp;34,00 — sem cadastro
           </p>
+        </div>
         </div>
       </div>
     </div>

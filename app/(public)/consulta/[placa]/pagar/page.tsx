@@ -90,7 +90,9 @@ export default function PagarAvulsoPage() {
         </div>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
+      {/* Tela de pagamento continua estreita de proposito, porque e um fluxo
+          de uma coluna, mas 512px cravados ficavam apertados no computador. */}
+      <div className="mx-auto w-full max-w-lg px-4 py-6 space-y-4 lg:max-w-2xl">
 
         {/* Gerando PIX */}
         {estado === 'gerando' && (
