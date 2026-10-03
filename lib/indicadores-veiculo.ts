@@ -45,8 +45,22 @@ export const SENTINELAS_AUSENCIA = [
   'NÃO CONSTA',
   'SEM REGISTRO',
   'SEM REGISTROS',
+  // Plural obrigatorio: a Assertiva devolve, para veiculo LIMPO,
+  // "VEICULO SEM RESTRICOES ATIVAS NA BASE SNG". Sem o plural aqui, esse
+  // texto era lido como gravame de verdade e o relatorio acusava
+  // financiamento inexistente. Medido na placa RZF6D15 em 03/10/2026.
   'SEM RESTRICAO',
   'SEM RESTRIÇÃO',
+  'SEM RESTRICOES',
+  'SEM RESTRIÇÕES',
+  'SEM GRAVAME',
+  'SEM ALIENACAO',
+  'SEM ALIENAÇÃO',
+  'SEM OCORRENCIA',
+  'SEM OCORRÊNCIA',
+  'NAO LOCALIZAMOS',
+  'NÃO LOCALIZAMOS',
+  'INEXISTENTE',
   'SEM INDICIO',
   'SEM INDÍCIO',
   'NAO EXISTEM',

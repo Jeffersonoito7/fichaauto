@@ -211,3 +211,29 @@ describe('ehSentinelaAusencia', () => {
     expect(ehSentinelaAusencia(null)).toBe(false)
   })
 })
+
+// Texto REAL devolvido pela Assertiva na placa RZF6D15 (03/10/2026) para um
+// veiculo SEM gravame. Por faltar o plural em "SEM RESTRICOES", ele era lido
+// como gravame de verdade e o relatorio acusava financiamento inexistente.
+describe('sentinelas que a Assertiva usa de verdade', () => {
+  const limpos = [
+    'VEICULO SEM RESTRICOES ATIVAS NA BASE SNG',
+    'SEM RESTRIÇÕES ATIVAS',
+    'NAO LOCALIZAMOS REGISTROS',
+    'SEM GRAVAME',
+    'SEM ALIENACAO FIDUCIARIA',
+  ]
+  for (const texto of limpos) {
+    it(`nao conta "${texto}" como registro`, () => {
+      expect(contarRegistrosReais([{ status: texto }], CAMPOS_ID_GRAVAME)).toBe(0)
+      expect(ehSentinelaAusencia(texto)).toBe(true)
+    })
+  }
+
+  it('gravame real com agente financeiro continua contando', () => {
+    expect(contarRegistrosReais(
+      [{ status: 'ATIVO', agenteFinanceiro: 'BANCO X', dataInclusao: '01/01/2024' }],
+      CAMPOS_ID_GRAVAME,
+    )).toBe(1)
+  })
+})
