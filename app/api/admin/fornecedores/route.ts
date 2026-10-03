@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthEmail } from '@/lib/consulta-helper'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import { exigirAdmin } from '@/lib/admin-guard'
 import { MODULOS_PADRAO, CUSTO_MODULO, type ModuloVeiculo } from '@/lib/modulos-veiculo'
 import {
   FORNECEDORES, OPCOES_POR_MODULO, chaveConfig, PREFIXO_CONFIG,
   fornecedorConfigurado, motivoIndisponivel, resolverFornecedor,
   type FornecedorId,
 } from '@/lib/fornecedores'
-
-/** Mesma checagem usada em /api/admin/integracao, para não haver dois critérios de admin. */
-async function isAdmin(email: string) {
-  const svc = createServiceRoleClient() as any
-  const { data } = await svc.from('perfis').select('role').eq('email', email).maybeSingle()
-  return data?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
-}
 
 /** Escolhas gravadas hoje, como mapa módulo para fornecedor. */
 async function lerEscolhas(): Promise<Record<string, string>> {
@@ -31,10 +24,8 @@ async function lerEscolhas(): Promise<Record<string, string>> {
 }
 
 export async function GET() {
-  const email = await getAuthEmail()
-  if (!email || !(await isAdmin(email))) {
-    return NextResponse.json({ erro: 'Não autorizado' }, { status: 403 })
-  }
+  const auth = await exigirAdmin()
+  if (!auth.ok) return auth.resposta
 
   const escolhas = await lerEscolhas()
 
@@ -69,10 +60,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const email = await getAuthEmail()
-  if (!email || !(await isAdmin(email))) {
-    return NextResponse.json({ erro: 'Não autorizado' }, { status: 403 })
-  }
+  const auth = await exigirAdmin()
+  if (!auth.ok) return auth.resposta
 
   const body = await req.json().catch(() => ({}))
   const modulo = String(body?.modulo ?? '') as ModuloVeiculo

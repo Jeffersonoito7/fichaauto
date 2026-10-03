@@ -1,14 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { consultarVeiculo } from '@/lib/providers'
-import { randomUUID } from 'crypto'
+import { randomUUID, timingSafeEqual } from 'crypto'
+import { reverterParaPendente } from '../_transacao'
 
-// EFÍ envia POST para: /api/pix/webhook?token=PIX_WEBHOOK_SECRET
-// Cadastrar essa URL exata no painel EFÍ (Configurações > PIX > Webhook)
+// Webhook de aviso de pagamento da Efí.
+//
+// INCIDENTE 02/10/2026: a URL registrada na Efí era
+// https://webhook.fichaauto.com.br/api/pix/webhook, SEM `?token=`, e esta rota
+// exigia o token na query. Resultado: todo aviso de pagamento voltava 401 e era
+// descartado. Agora o segredo e aceito por cabecalho TAMBEM, porque e assim que
+// a Efí manda segredo quando configurada com header customizado, e a query
+// continua valendo para nao quebrar quem ja usa a URL com token.
+//
+// A Efí tambem costuma chamar a URL cadastrada acrescentando `/pix` no final.
+// Essa variante e atendida por app/api/pix/webhook/pix/route.ts, que reaproveita
+// este mesmo handler.
+const CABECALHOS_SEGREDO = [
+  'x-webhook-token',    // nome que usamos ao cadastrar header customizado na Efí
+  'x-pix-token',
+  'authorization',      // aceita "Bearer <segredo>" ou o segredo cru
+] as const
+
+/** Compara em tempo constante, para o segredo nao vazar por timing. */
+function segredoConfere(recebido: string, esperado: string): boolean {
+  const a = Buffer.from(recebido)
+  const b = Buffer.from(esperado)
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
+}
+
+function autorizado(req: NextRequest): boolean {
+  const esperado = process.env.PIX_WEBHOOK_SECRET
+  if (!esperado) {
+    // Sem segredo configurado nao ha como autenticar: recusa em vez de abrir.
+    console.error('[PIX webhook] PIX_WEBHOOK_SECRET não configurado')
+    return false
+  }
+
+  const daQuery = req.nextUrl.searchParams.get('token')
+  if (daQuery && segredoConfere(daQuery, esperado)) return true
+
+  for (const nome of CABECALHOS_SEGREDO) {
+    const bruto = req.headers.get(nome)
+    if (!bruto) continue
+    const valor = bruto.replace(/^Bearer\s+/i, '').trim()
+    if (valor && segredoConfere(valor, esperado)) return true
+  }
+
+  return false
+}
+
 export async function POST(req: NextRequest) {
-  // 1. Autenticação: token obrigatório na query string
-  const token = req.nextUrl.searchParams.get('token')
-  if (!token || token !== process.env.PIX_WEBHOOK_SECRET) {
+  // 1. Autenticação: segredo por query (compatibilidade) ou por cabeçalho
+  if (!autorizado(req)) {
     console.warn('[PIX webhook] token inválido ou ausente')
     return NextResponse.json({ ok: false }, { status: 401 })
   }
@@ -71,10 +116,20 @@ export async function POST(req: NextRequest) {
             expires_at,
           })
 
-          await supabase
+          // Sem esse token gravado o visitante nao tem como abrir o relatorio
+          // que acabou de pagar: se falhar, grita para revisao manual.
+          const { error: errToken } = await supabase
             .from('transacoes_pix')
             .update({ resultado_token: token } as any)
             .eq('txid', txid)
+
+          if (errToken) {
+            console.error(
+              `[PIX webhook] PAGO SEM ENTREGAR: falha ao gravar resultado_token txid=${txid} placa=${placa} token=${token}:`,
+              errToken.message,
+            )
+            continue
+          }
 
           console.log(`[PIX webhook] avulsa txid=${txid} placa=${placa} token=${token}`)
         } catch (e: any) {
@@ -93,7 +148,7 @@ export async function POST(req: NextRequest) {
         })
         if (errRec) {
           console.error(`[PIX webhook] falha ao creditar empresa txid=${txid}`, errRec)
-          await supabase.from('transacoes_pix').update({ status: 'pendente', pago_em: null }).eq('txid', txid)
+          await reverterParaPendente(supabase, txid, 'credito de saldo da empresa')
           continue
         }
         console.log(`[PIX webhook] txid=${txid} empresa=${transacao.tenant_id} recarregada`)
@@ -115,7 +170,7 @@ export async function POST(req: NextRequest) {
 
         if (errTenant) {
           console.error(`[PIX webhook] falha ao ativar assinatura txid=${txid}`, errTenant)
-          await supabase.from('transacoes_pix').update({ status: 'pendente', pago_em: null }).eq('txid', txid)
+          await reverterParaPendente(supabase, txid, 'ativacao de assinatura do tenant')
           continue
         }
 
@@ -133,7 +188,7 @@ export async function POST(req: NextRequest) {
 
         if (errCredito) {
           console.error(`[PIX webhook] falha ao creditar créditos txid=${txid}`, errCredito)
-          await supabase.from('transacoes_pix').update({ status: 'pendente', pago_em: null }).eq('txid', txid)
+          await reverterParaPendente(supabase, txid, 'credito de creditos de consulta')
           continue
         }
 
@@ -151,7 +206,7 @@ export async function POST(req: NextRequest) {
 
         if (errSaldo) {
           console.error(`[PIX webhook] falha ao creditar saldo txid=${txid}`, errSaldo)
-          await supabase.from('transacoes_pix').update({ status: 'pendente', pago_em: null }).eq('txid', txid)
+          await reverterParaPendente(supabase, txid, 'credito de saldo do usuario')
           continue
         }
 

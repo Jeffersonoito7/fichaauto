@@ -1,6 +1,16 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createServiceRoleClient } from '@/lib/supabase-server'
+import {
+  contarLeilao,
+  contarRegistrosReais,
+  naoConsultado,
+  registrosGravame,
+  rotuloTexto,
+  statusTexto,
+  CAMPOS_ID_SANCAO,
+  type StatusIndicador,
+} from '@/lib/indicadores-veiculo'
 
 interface Props { params: Promise<{ token: string }> }
 
@@ -22,13 +32,35 @@ function fmtExpira(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function Row({ label, value, destaque }: { label: string; value: string; destaque?: boolean }) {
+/**
+ * `tom`:
+ *  - 'alerta'  → vermelho (há registro)
+ *  - 'ausente' → cinza claro + itálico. Usado SÓ para "Não consultado".
+ *                Nunca pode parecer "tudo certo": dado ausente não é dado
+ *                limpo (já erramos nisso com o PEP, em que `null` virava
+ *                um check verde de "Não identificado").
+ */
+function Row({ label, value, destaque, tom }: {
+  label: string; value: string; destaque?: boolean; tom?: 'normal' | 'alerta' | 'ausente'
+}) {
+  const t = tom ?? (destaque ? 'alerta' : 'normal')
+  const cor = t === 'alerta' ? 'text-red-600' : t === 'ausente' ? 'text-gray-400 italic' : 'text-gray-800'
   return (
     <div className="flex justify-between items-start py-2 border-b border-gray-100 last:border-0 gap-4">
       <span className="text-sm text-gray-500 shrink-0">{label}</span>
-      <span className={`text-sm font-medium text-right ${destaque ? 'text-red-600' : 'text-gray-800'}`}>{value}</span>
+      <span className={`text-sm font-medium text-right ${cor}`}>{value}</span>
     </div>
   )
+}
+
+/** Converte um status de indicador no `tom` visual da linha. */
+function tomDe(status: StatusIndicador): 'normal' | 'alerta' | 'ausente' {
+  return status === 'consta' ? 'alerta' : status === 'nao-consultado' ? 'ausente' : 'normal'
+}
+
+/** Linha de indicador de risco, sempre com texto legível (nunca booleano cru). */
+function RowIndicador({ label, status, texto }: { label: string; status: StatusIndicador; texto: string }) {
+  return <Row label={label} value={texto} tom={tomDe(status)} />
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -49,16 +81,64 @@ function RelatórioVeiculo({ r }: { r: any }) {
   const grav = r.gravame?.resposta ?? {}
   const leil = r.leilao?.resposta ?? {}
 
-  const lotalLeilao = Array.isArray(leil.historicoLeilao) ? leil.historicoLeilao.length
-    : (leil.baseA?.length ?? 0) + (leil.baseB?.length ?? 0) + (leil.remarketing?.length ?? 0) + (leil.lotes?.length ?? 0)
+  // ── Indicadores de risco ───────────────────────────────────────────────────
+  // TODA contagem/avaliação vem de lib/indicadores-veiculo.ts, a mesma função
+  // que o relatório completo usa. Antes esta página contava `.length` cru e a
+  // Assertiva devolve `historicoLeilao: [{}]` para veículo SEM leilão, o que
+  // fazia a mesma placa aparecer com LEILÃO aqui e SEM LEILÃO no relatório.
+  const binConsultado  = !naoConsultado(r.binFederal)
+  const sinConsultado  = !naoConsultado(r.sinistro)
+  const gravConsultado = !naoConsultado(r.gravame)
+  const leilConsultado = !naoConsultado(r.leilao)
 
-  const restricoes: string[] = []
-  if (bin.restricaoRENAJUD && !String(bin.restricaoRENAJUD).toUpperCase().includes('NADA')) restricoes.push('RENAJUD')
-  if (String(sin.indicioSinistro ?? '').toUpperCase().includes('CONSTA') && !String(sin.indicioSinistro).toUpperCase().includes('NADA')) restricoes.push('Sinistro')
-  if (lotalLeilao > 0) restricoes.push(`Leilão (${lotalLeilao}x)`)
+  // O BIN Federal devolve `restricoes` como array de strings. Quando esse array
+  // veio, a AUSÊNCIA do termo é prova de "nada consta". Quando nem o array nem
+  // o campo vieram, é "não consultado" — não dá para afirmar que está limpo.
+  const binRestArr: string[] = Array.isArray(bin.restricoes) ? bin.restricoes : []
+  function statusBin(termos: RegExp, campoDireto: unknown): StatusIndicador {
+    if (!binConsultado) return 'nao-consultado'
+    if (binRestArr.some(x => termos.test(String(x ?? '').toUpperCase()))) return 'consta'
+    const direto = statusTexto(campoDireto)
+    if (direto !== 'nao-consultado') return direto
+    return binRestArr.length > 0 ? 'nada-consta' : 'nao-consultado'
+  }
 
+  const renajud = statusBin(/RENAJUD/, bin.restricaoRENAJUD)
+  const roubo   = statusBin(/ROUBO|FURTO/, bin.restricaoRouboFurto ?? bin.roubofurto)
+
+  // Sinistro: a resposta pode vir como booleano (`indicioSinistro: false`) e
+  // era renderizada crua, saindo "Sinistro false" no PDF da página pública.
+  const sinistroBruto = sin.indicioSinistro ?? sin.situacao ?? sin.resultado ?? r.sinistro?.cabecalho?.resultado
+  const sinistro = sinConsultado ? rotuloTexto(sinistroBruto) : { status: 'nao-consultado' as StatusIndicador, texto: 'Não consultado' }
+
+  // Gravame: objeto único na v3; `{}` e "NADA CONSTA" contam zero.
+  const qtdGravame = gravConsultado ? registrosGravame(grav).length : 0
+  const gravameStatus: StatusIndicador = !gravConsultado ? 'nao-consultado' : qtdGravame > 0 ? 'consta' : 'nada-consta'
   const gravameDesc = v(grav.restricaoFinanceira ?? grav.alienacao ?? grav.descricao, '')
-  if (gravameDesc && !gravameDesc.toUpperCase().includes('NADA') && !gravameDesc.toUpperCase().includes('SEM')) restricoes.push('Gravame')
+  const gravameTexto = gravameStatus === 'nao-consultado'
+    ? 'Não consultado'
+    : gravameStatus === 'consta'
+      ? (gravameDesc || `${qtdGravame} gravame(s)`)
+      : 'Nada consta'
+
+  const totalLeilao = leilConsultado ? contarLeilao(leil) : 0
+  const leilaoStatus: StatusIndicador = !leilConsultado ? 'nao-consultado' : totalLeilao > 0 ? 'consta' : 'nada-consta'
+
+  // Resumo de alertas: só entra o que CONSTA de verdade.
+  const restricoes: string[] = []
+  if (renajud === 'consta') restricoes.push('RENAJUD')
+  if (roubo === 'consta') restricoes.push('Roubo/Furto')
+  if (sinistro.status === 'consta') restricoes.push('Sinistro')
+  if (leilaoStatus === 'consta') restricoes.push(`Leilão (${totalLeilao}x)`)
+  if (gravameStatus === 'consta') restricoes.push('Gravame')
+
+  // Indicadores que o plano não cobriu ou que falharam: precisam aparecer.
+  const naoConsultados: string[] = []
+  if (renajud === 'nao-consultado') naoConsultados.push('RENAJUD')
+  if (roubo === 'nao-consultado') naoConsultados.push('Roubo/Furto')
+  if (sinistro.status === 'nao-consultado') naoConsultados.push('Sinistro')
+  if (leilaoStatus === 'nao-consultado') naoConsultados.push('Leilão')
+  if (gravameStatus === 'nao-consultado') naoConsultados.push('Gravame')
 
   return (
     <>
@@ -73,15 +153,22 @@ function RelatórioVeiculo({ r }: { r: any }) {
       </Section>
 
       <Section title="Restrições">
-        {restricoes.length === 0
-          ? <Row label="Situação" value="Nada consta" />
-          : restricoes.map(r => <Row key={r} label="Alerta" value={r} destaque />)
+        {restricoes.length > 0
+          ? restricoes.map(x => <Row key={x} label="Alerta" value={x} destaque />)
+          // "Nada consta" só pode ser afirmado quando TODOS os indicadores
+          // foram efetivamente consultados. Com algum indicador ausente a
+          // página diz o que ficou de fora, em vez de passar um "tudo certo"
+          // que não foi verificado.
+          : naoConsultados.length === 0
+            ? <Row label="Situação" value="Nada consta nos itens consultados" />
+            : <Row label="Situação" value={`Nada consta nos itens consultados. Não consultado: ${naoConsultados.join(', ')}`} tom="ausente" />
         }
-        <Row label="Roubo/Furto"  value={v(bin.restricaoRouboFurto ?? bin.roubofurto)} />
-        <Row label="RENAJUD"      value={v(bin.restricaoRENAJUD)} />
-        <Row label="Sinistro"     value={v(sin.indicioSinistro)} />
-        <Row label="Gravame"      value={gravameDesc || 'Nada consta'} />
-        <Row label="Leilão"       value={lotalLeilao > 0 ? `${lotalLeilao} ocorrência(s)` : 'Nada consta'} destaque={lotalLeilao > 0} />
+        <RowIndicador label="Roubo/Furto" status={roubo}  texto={roubo === 'nao-consultado' ? 'Não consultado' : roubo === 'consta' ? 'Consta ocorrência' : 'Nada consta'} />
+        <RowIndicador label="RENAJUD"     status={renajud} texto={renajud === 'nao-consultado' ? 'Não consultado' : renajud === 'consta' ? 'Consta restrição RENAJUD' : 'Nada consta'} />
+        <RowIndicador label="Sinistro"    status={sinistro.status} texto={sinistro.texto} />
+        <RowIndicador label="Gravame"     status={gravameStatus} texto={gravameTexto} />
+        <RowIndicador label="Leilão"      status={leilaoStatus}
+          texto={leilaoStatus === 'nao-consultado' ? 'Não consultado' : totalLeilao > 0 ? `${totalLeilao} ocorrência(s)` : 'Nada consta'} />
       </Section>
 
       {r.fipe && (
@@ -132,13 +219,26 @@ function RelatórioCpf({ r }: { r: any }) {
         <Row label="CEP"        value={v(end0.cep ?? b.cep)} />
       </Section>
 
-      {r.sancoes && (
-        <Section title="Sanções e Restrições">
-          <Row label="CEIS"   value={r.sancoes.ceis?.length  > 0 ? `${r.sancoes.ceis.length} sanção(ões)` : 'Nada consta'} destaque={r.sancoes.ceis?.length > 0} />
-          <Row label="CNEP"   value={r.sancoes.cnep?.length  > 0 ? `${r.sancoes.cnep.length} penalidade(s)` : 'Nada consta'} destaque={r.sancoes.cnep?.length > 0} />
-        </Section>
-      )}
+      <SecaoSancoes sancoes={r.sancoes} />
     </>
+  )
+}
+
+/**
+ * CEIS/CNEP contados pela função única: lista com item vazio de padding conta
+ * ZERO, e módulo ausente diz "Não consultado" em vez de "Nada consta".
+ */
+function SecaoSancoes({ sancoes }: { sancoes: any }) {
+  const consultado = !naoConsultado(sancoes)
+  const ceis = consultado ? contarRegistrosReais(sancoes?.ceis, CAMPOS_ID_SANCAO) : 0
+  const cnep = consultado ? contarRegistrosReais(sancoes?.cnep, CAMPOS_ID_SANCAO) : 0
+  return (
+    <Section title="Sanções e Restrições">
+      <Row label="CEIS" tom={!consultado ? 'ausente' : ceis > 0 ? 'alerta' : 'normal'}
+        value={!consultado ? 'Não consultado' : ceis > 0 ? `${ceis} sanção(ões)` : 'Nada consta'} />
+      <Row label="CNEP" tom={!consultado ? 'ausente' : cnep > 0 ? 'alerta' : 'normal'}
+        value={!consultado ? 'Não consultado' : cnep > 0 ? `${cnep} penalidade(s)` : 'Nada consta'} />
+    </Section>
   )
 }
 
@@ -174,12 +274,7 @@ function RelatórioCnpj({ r }: { r: any }) {
         </Section>
       )}
 
-      {r.sancoes && (
-        <Section title="Sanções e Restrições">
-          <Row label="CEIS" value={r.sancoes.ceis?.length > 0 ? `${r.sancoes.ceis.length} sanção(ões)` : 'Nada consta'} destaque={r.sancoes.ceis?.length > 0} />
-          <Row label="CNEP" value={r.sancoes.cnep?.length > 0 ? `${r.sancoes.cnep.length} penalidade(s)` : 'Nada consta'} destaque={r.sancoes.cnep?.length > 0} />
-        </Section>
-      )}
+      <SecaoSancoes sancoes={r.sancoes} />
     </>
   )
 }

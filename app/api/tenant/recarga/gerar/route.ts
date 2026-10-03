@@ -49,7 +49,9 @@ export async function POST(req: NextRequest) {
     })
     const qr = await obterQrCode(cob.loc.id)
 
-    await svc.from('transacoes_pix').insert({
+    // Sem a linha gravada o webhook nao acha o txid e o saldo da empresa nunca
+    // e creditado, mesmo com o PIX pago. Entao o erro aborta antes do QR code.
+    const { error: errInsert } = await svc.from('transacoes_pix').insert({
       txid:            cob.txid,
       tenant_id:       perfil.tenant_id,
       valor:           valorFinal,
@@ -58,6 +60,17 @@ export async function POST(req: NextRequest) {
       status:          'pendente',
       descricao:       `Recarga de saldo — ${tenant?.nome ?? ''}`,
     })
+
+    if (errInsert) {
+      console.error(
+        `[recarga/gerar] FALHA AO GRAVAR TRANSACAO txid=${cob.txid} tenant=${perfil.tenant_id}:`,
+        errInsert.message, errInsert.details ?? '',
+      )
+      return NextResponse.json(
+        { erro: 'Não foi possível iniciar a recarga. Tente novamente.' },
+        { status: 500 },
+      )
+    }
 
     return NextResponse.json({
       txid:       cob.txid,

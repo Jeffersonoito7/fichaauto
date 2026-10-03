@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { consultarVeiculo } from '@/lib/providers'
 import { createHash } from 'crypto'
+import { contarLeilao } from '@/lib/indicadores-veiculo'
 
 // Campos que monitoramos para detectar mudanças relevantes
 const CAMPOS_MONITORADOS = [
@@ -9,12 +10,11 @@ const CAMPOS_MONITORADOS = [
   { chave: 'restricaoRENAJUD',     path: (d: any) => d?.binFederal?.resposta?.restricaoRENAJUD },
   { chave: 'indicioSinistro',      path: (d: any) => d?.sinistro?.resposta?.indicioSinistro },
   { chave: 'restricaoFinanceira',  path: (d: any) => d?.gravame?.resposta?.restricaoFinanceira ?? d?.gravame?.resposta?.alienacao },
-  { chave: 'leilao',               path: (d: any) => {
-    const l = d?.leilao?.resposta ?? {}
-    const total = Array.isArray(l.historicoLeilao) ? l.historicoLeilao.length
-      : (l.baseA?.length ?? 0) + (l.baseB?.length ?? 0) + (l.remarketing?.length ?? 0)
-    return String(total)
-  }},
+  // Contar o tamanho da lista crua dispararia ALERTA FALSO: a Assertiva
+  // devolve `historicoLeilao: [{}]`, um registro vazio, para veiculo sem
+  // leilao nenhum. Usar a mesma contagem do relatorio e obrigatorio, senao o
+  // cliente recebe aviso de leilao que nao existe.
+  { chave: 'leilao',               path: (d: any) => String(contarLeilao(d?.leilao)) },
   { chave: 'situacaoVeiculo',      path: (d: any) => d?.placa?.resposta?.descricao?.situacao ?? d?.placa?.resposta?.situacao },
 ]
 

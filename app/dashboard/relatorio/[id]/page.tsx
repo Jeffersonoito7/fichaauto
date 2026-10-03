@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { History, ArrowLeft, Download, ChevronDown, Loader2, XCircle, Lock, Share2, Check } from 'lucide-react'
 import { temModulo, planoQueTemModulo } from '@/lib/products'
+import { contarLeilao, registrosLeilao, registrosGravame } from '@/lib/indicadores-veiculo'
 
 const BRAND_LOGO: Record<string, string> = {
   TOYOTA: 'https://logo.clearbit.com/toyota.com',
@@ -109,9 +110,10 @@ function calcScore(data: ReportData): number {
   if (j.includes('ALIENAC') && !j.includes('BAIXADO')) s -= 10
   if (j.includes('ROUBO') && !j.includes('NADA CONSTA') && !j.includes('NAO EXISTEM')) s -= 30
   if (j.includes('SINISTRO') && j.includes('CONSTA') && !j.includes('NADA CONSTA') && !j.includes('NAO EXISTEM')) s -= 15
-  const lr = data.leilao?.resposta ?? data.leilao ?? {}
-  const lTotal = Array.isArray(lr?.historicoLeilao) ? lr.historicoLeilao.length
-    : (lr?.baseA?.length ?? 0) + (lr?.baseB?.length ?? 0) + (lr?.remarketing?.length ?? 0) + (lr?.lotes?.length ?? 0)
+  // Contagem pela função única: a Assertiva devolve `historicoLeilao: [{}]`
+  // quando NÃO há leilão, e o `.length` cru derrubava o score em 15 pontos
+  // de graça. Ver lib/indicadores-veiculo.ts.
+  const lTotal = contarLeilao(data.leilao?.resposta ?? data.leilao ?? {})
   if (lTotal > 0) s -= 15
   // Penalidade por processos judiciais do proprietário
   if (data.datajud) {
@@ -374,33 +376,18 @@ export default function RelatorioPage() {
   // Leilão — preserva origem (base) de cada item antes de flatten
   const leilaoNull = !data.leilao
   const leilResp   = data.leilao?.resposta ?? data.leilao ?? {}
-  const todosLeilaoRaw: any[] = Array.isArray(leilResp?.historicoLeilao)
-    ? leilResp.historicoLeilao.map((l: any) => ({ ...l, _base: l._base ?? 'HISTÓRICO' }))
-    : [
-        ...(Array.isArray(leilResp?.baseA)       ? leilResp.baseA.map((l: any)       => ({ ...l, _base: 'BASE A — JUDICIAL' }))      : []),
-        ...(Array.isArray(leilResp?.baseB)       ? leilResp.baseB.map((l: any)       => ({ ...l, _base: 'BASE B — FINANCEIRO' }))    : []),
-        ...(Array.isArray(leilResp?.remarketing) ? leilResp.remarketing.map((l: any) => ({ ...l, _base: 'REMARKETING' }))            : []),
-        ...(Array.isArray(leilResp?.lotes)       ? leilResp.lotes.map((l: any)       => ({ ...l, _base: 'JUDICIAL — LOTES' }))      : []),
-      ]
-  // Filtra registros reais: precisam ter pelo menos um campo identificador preenchido
-  // e não podem ser respostas "NADA CONSTA" / "SEM REGISTRO"
-  const todosLeilao = todosLeilaoRaw.filter((l: any) => {
-    const situacao = (l.resultado ?? l.situacao ?? l.status ?? '').toString().toUpperCase()
-    if (situacao.includes('NADA CONSTA') || situacao.includes('SEM REGISTRO') || situacao.includes('NAO CONSTA')) return false
-    const temDado = !!(l.data ?? l.dataLeilao ?? l.dataCadastro ?? l.comitente ?? l.leiloeiro ?? l.leilaoeiro ?? l.orgao ?? l.comarca ?? l.descricao)
-    return temDado
-  })
+  // Achatamento + filtro de registros reais ficam em lib/indicadores-veiculo.ts,
+  // que é a MESMA função usada pela página pública. Antes cada tela contava do
+  // seu jeito e a mesma placa aparecia com e sem leilão.
+  const todosLeilao = registrosLeilao(leilResp)
   const temLeilao = todosLeilao.length > 0
 
   // Gravame — API v3 retorna resposta.gravame como objeto único (não array)
   const gravameNull = !data.gravame
   const gravResp    = data.gravame?.resposta ?? data.gravame ?? {}
-  const gravameObj  = gravResp?.gravame
-  const gravames: any[] = Array.isArray(gravResp?.gravames ?? gravResp?.listaGravames)
-    ? (gravResp?.gravames ?? gravResp?.listaGravames)
-    : (gravameObj && typeof gravameObj === 'object' && Object.keys(gravameObj).length > 0)
-      ? [gravameObj]
-      : []
+  // Mesma função única da página pública: objeto único da v3 ou lista, sempre
+  // descartando `{}` e respostas "NADA CONSTA".
+  const gravames: any[] = registrosGravame(gravResp)
 
   // Débitos — vêm do BIN Estadual (debitosPendentes)
   const debitos       = binEstResp?.debitosPendentes ?? {}

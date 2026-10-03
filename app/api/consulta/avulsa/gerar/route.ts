@@ -30,7 +30,11 @@ export async function POST(req: NextRequest) {
 
     const pedidoId = randomUUID()
 
-    await svc().from('transacoes_pix').insert({
+    // A transacao PRECISA estar gravada antes de a gente mostrar o QR code.
+    // Sem a linha no banco o webhook da Efi nao tem o que encontrar pelo txid e
+    // o cliente paga sem jeito de receber o relatorio. Por isso o erro aborta a
+    // rota: e melhor o visitante ver "tente novamente" do que pagar no vazio.
+    const { error: errInsert } = await svc().from('transacoes_pix').insert({
       txid:           cob.txid,
       user_id:        null,
       produto:        'avulsa',
@@ -40,6 +44,17 @@ export async function POST(req: NextRequest) {
       descricao:      placa,
       pedido_id:      pedidoId,
     })
+
+    if (errInsert) {
+      console.error(
+        `[avulsa/gerar] FALHA AO GRAVAR TRANSACAO txid=${cob.txid} placa=${placa}:`,
+        errInsert.message, errInsert.details ?? '',
+      )
+      return NextResponse.json(
+        { erro: 'Não foi possível iniciar o pagamento. Tente novamente.' },
+        { status: 500 },
+      )
+    }
 
     return NextResponse.json({
       txid:      cob.txid,

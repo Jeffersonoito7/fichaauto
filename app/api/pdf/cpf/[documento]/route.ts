@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthEmail } from '@/lib/consulta-helper'
 import QRCode from 'qrcode'
 import {
   consultarCpfBasico, consultarScoreCpf, consultarProcessosCpf,
@@ -519,6 +520,13 @@ export async function GET(
   req: NextRequest,
   context: { params: Promise<{ documento: string }> }
 ) {
+  // Esta rota refaz consultas PAGAS na Assertiva. Sem sessão, qualquer pessoa
+  // na internet gerava custo chamando /api/pdf/cpf/<documento>.
+  const email = await getAuthEmail()
+  if (!email) {
+    return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  }
+
   const { documento } = await context.params
   const cpf = documento.replace(/\D/g, '')
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthEmail } from '@/lib/consulta-helper'
+import { reverterParaPendente } from '../../_transacao'
 
 // Busca status de pagamento PIX na EFÍ e credita saldo se confirmado.
 // Chamado pelo frontend em polling a cada 5s — dispensa webhook com mTLS.
@@ -91,42 +92,58 @@ async function creditarSaldo(supabase: any, transacao: any): Promise<boolean> {
 
   if (error || !atualizado) return false // já foi processado
 
-  const { data: perfil } = await supabase
-    .from('perfis')
-    .select('saldo_veiculo, saldo_cpf, creditos_credito')
-    .eq('user_id', transacao.user_id)
-    .single()
+  // Recarga de empresa (caminho da AutoVale): o dono e o tenant, nao a pessoa.
+  // Antes esta funcao ia direto buscar o perfil por user_id, que nesse produto e
+  // nulo; nao achava nada e devolvia false SEM reverter, deixando a transacao
+  // 'pago' sem credito. Como o webhook so processa o que esta 'pendente', o
+  // saldo nunca mais era creditado: dinheiro recebido e nao entregue.
+  if (transacao.tenant_id && transacao.produto === 'recarga_tenant') {
+    const { error: errRec } = await supabase.rpc('creditar_saldo_tenant', {
+      p_tenant_id: transacao.tenant_id,
+      p_valor:     Number(transacao.saldo_creditado ?? transacao.valor),
+    })
+    if (errRec) {
+      await reverterParaPendente(supabase, transacao.txid, 'recarga de empresa (polling)')
+      return false
+    }
+    console.log(`[PIX status] txid=${transacao.txid} empresa=${transacao.tenant_id} recarregada via polling`)
+    return true
+  }
 
-  if (!perfil) return false
+  // Assinatura de tenant e consulta avulsa de visitante têm tratamento próprio
+  // no webhook (ativar assinatura / consultar a placa e gerar o token). Reverter
+  // devolve a transacao para 'pendente' para o webhook concluir a entrega, em
+  // vez de travar o pedido como 'pago' e sem nada entregue.
+  if (transacao.produto === 'avulsa' || transacao.produto === 'assinatura' || !transacao.user_id) {
+    await reverterParaPendente(supabase, transacao.txid, `produto '${transacao.produto}' é entregue pelo webhook`)
+    return false
+  }
 
+  // Crédito atômico via RPC, igual ao webhook: ler o saldo e somar em JS
+  // permitia duas requisicoes concorrentes gravarem o mesmo valor base.
   if (transacao.creditos_creditados) {
-    const { error: err } = await supabase
-      .from('perfis')
-      .update({
-        creditos_credito: Number(perfil.creditos_credito ?? 0) + Number(transacao.creditos_creditados),
-        atualizado_em: new Date().toISOString(),
-      })
-      .eq('user_id', transacao.user_id)
+    const { error: err } = await supabase.rpc('creditar_saldo', {
+      p_user_id: transacao.user_id,
+      p_campo:   'creditos_credito',
+      p_valor:   Number(transacao.creditos_creditados),
+    })
 
     if (err) {
-      await supabase.from('transacoes_pix').update({ status: 'pendente', pago_em: null }).eq('txid', transacao.txid)
+      await reverterParaPendente(supabase, transacao.txid, 'credito de creditos de consulta (polling)')
       return false
     }
   } else {
     const saldoCreditado = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
     const campo = transacao.produto === 'cpf' ? 'saldo_cpf' : 'saldo_veiculo'
-    const saldoAtual = parseFloat(perfil[campo] ?? '0')
 
-    const { error: err } = await supabase
-      .from('perfis')
-      .update({
-        [campo]: parseFloat((saldoAtual + saldoCreditado).toFixed(2)),
-        atualizado_em: new Date().toISOString(),
-      })
-      .eq('user_id', transacao.user_id)
+    const { error: err } = await supabase.rpc('creditar_saldo', {
+      p_user_id: transacao.user_id,
+      p_campo:   campo,
+      p_valor:   saldoCreditado,
+    })
 
     if (err) {
-      await supabase.from('transacoes_pix').update({ status: 'pendente', pago_em: null }).eq('txid', transacao.txid)
+      await reverterParaPendente(supabase, transacao.txid, 'credito de saldo do usuario (polling)')
       return false
     }
   }

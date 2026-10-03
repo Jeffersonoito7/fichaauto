@@ -5,6 +5,9 @@ import {
   consultarProtestosCpf, consultarPepCpf, consultarSocietarioCpf,
   consultarHistoricoVeiculosPorCpf,
 } from '@/lib/providers/assertiva'
+import { createServiceRoleClient } from '@/lib/supabase-server'
+import { getAuthEmail, registrarAuditoria, tenantComAssinaturaAtiva } from '@/lib/consulta-helper'
+import { PRECO } from '@/lib/products'
 
 // Limite de CPFs por planilha
 const MAX_CPFS = 500
@@ -148,6 +151,33 @@ function montarPlanilha(resultados: Record<string, any>[]) {
 
 export async function POST(req: NextRequest) {
   try {
+    // ── 1. Sessão obrigatória ────────────────────────────────────────────────
+    // Sem isto a rota aceitava planilha de qualquer pessoa na internet e
+    // disparava até 7 consultas pagas da Assertiva por CPF, 3.500 no total.
+    const email = await getAuthEmail()
+    if (!email) {
+      return NextResponse.json({ erro: 'Não autenticado' }, { status: 401 })
+    }
+
+    const svc = createServiceRoleClient() as any
+    const { data: perfil } = await svc
+      .from('perfis')
+      .select('saldo_cpf, role, pode_cpf, ativo, tenant_id')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (perfil && perfil.ativo === false) {
+      return NextResponse.json({ erro: 'Usuário inativo.' }, { status: 403 })
+    }
+
+    const isAdmin     = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
+    const isAssinante = !isAdmin && await tenantComAssinaturaAtiva(email)
+
+    // Lote é consulta de CPF: vale a mesma permissão da consulta de CPF avulsa.
+    if (!isAdmin && !isAssinante && !perfil?.pode_cpf) {
+      return NextResponse.json({ erro: 'Sem permissão para consulta de CPF.' }, { status: 403 })
+    }
+
     const formData = await req.formData()
     const file     = formData.get('arquivo') as File | null
 
@@ -161,22 +191,93 @@ export async function POST(req: NextRequest) {
     const rows    = XLSX.utils.sheet_to_json<any>(ws, { header: 1 })
 
     // Detecta coluna com CPF (procura no cabeçalho)
+    if (!Array.isArray(rows[0])) {
+      return NextResponse.json({ erro: 'Planilha vazia ou sem cabeçalho.' }, { status: 400 })
+    }
     const header  = (rows[0] as string[]).map((c: string) => String(c).toLowerCase())
     const cpfCol  = header.findIndex(h => h.includes('cpf'))
     if (cpfCol === -1) {
       return NextResponse.json({ erro: 'Coluna "CPF" não encontrada na planilha. A primeira linha deve ter um cabeçalho com a palavra CPF.' }, { status: 400 })
     }
 
-    // Extrai CPFs válidos (11 dígitos)
-    const cpfs: string[] = rows
+    // Extrai CPFs válidos (11 dígitos), sem repetir o mesmo CPF: pagar duas
+    // vezes pela mesma linha duplicada é prejuízo puro.
+    const encontrados: string[] = rows
       .slice(1)
       .map((r: any) => limpaCpf(String(r[cpfCol] ?? '')))
       .filter(c => c.length === 11)
-      .slice(0, MAX_CPFS)
+    const cpfs: string[] = Array.from(new Set(encontrados))
 
     if (cpfs.length === 0) {
       return NextResponse.json({ erro: 'Nenhum CPF válido encontrado na planilha.' }, { status: 400 })
     }
+
+    // Antes a planilha era truncada em silêncio. Recusar é mais honesto: o
+    // cliente não fica achando que consultou 900 quando só pagamos 500.
+    if (cpfs.length > MAX_CPFS) {
+      return NextResponse.json(
+        { erro: `Limite de ${MAX_CPFS} CPFs por envio. Sua planilha tem ${cpfs.length} CPFs distintos. Divida em partes.` },
+        { status: 400 },
+      )
+    }
+
+    // ── 2. Saldo precisa cobrir o lote inteiro ───────────────────────────────
+    // Mesmo preço por CPF da consulta avulsa (/api/consulta/cpf), porque é a
+    // mesma consulta repetida N vezes.
+    const custoUnitario = PRECO.cpf
+    const custoTotal    = parseFloat((custoUnitario * cpfs.length).toFixed(2))
+    const saldo         = parseFloat(String(perfil?.saldo_cpf ?? '0')) || 0
+    const cobrar        = !isAdmin && !isAssinante
+
+    if (cobrar && saldo < custoTotal) {
+      const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      const cabe = Math.floor(saldo / custoUnitario)
+      return NextResponse.json(
+        {
+          erro: `Saldo insuficiente para este lote. ${cpfs.length} CPFs custam ${brl(custoTotal)} `
+              + `(${brl(custoUnitario)} por CPF) e seu saldo é ${brl(saldo)}. `
+              + `Com o saldo atual cabem ${cabe} CPFs. Recarregue ou envie uma planilha menor.`,
+          recarregar: true,
+          saldo,
+          custoTotal,
+          custoUnitario,
+          cpfs: cpfs.length,
+        },
+        { status: 402 },
+      )
+    }
+
+    // Debita antes de disparar as chamadas pagas. Dois operadores enviando
+    // planilha ao mesmo tempo não podem gastar o mesmo saldo duas vezes, e a
+    // Assertiva cobra a chamada mesmo que a resposta venha vazia.
+    if (cobrar) {
+      const restante = parseFloat((saldo - custoTotal).toFixed(2))
+      // O `gte` é a trava: se outro envio consumiu o saldo no meio, nenhuma
+      // linha é atualizada e o lote é recusado em vez de rodar de graça.
+      const { data: debitado, error: errDeb } = await svc
+        .from('perfis')
+        .update({ saldo_cpf: restante, atualizado_em: new Date().toISOString() })
+        .eq('email', email)
+        .gte('saldo_cpf', custoTotal)
+        .select('email')
+      if (errDeb) {
+        console.error('[associacoes/lote] débito falhou:', errDeb.message)
+        return NextResponse.json({ erro: 'Não foi possível debitar o saldo. Tente novamente.' }, { status: 500 })
+      }
+      if (!Array.isArray(debitado) || debitado.length === 0) {
+        return NextResponse.json(
+          { erro: 'Saldo insuficiente no momento do débito. Recarregue e tente novamente.', recarregar: true },
+          { status: 402 },
+        )
+      }
+    }
+
+    registrarAuditoria({
+      email,
+      acao: 'consulta_lote_cpf',
+      custo: cobrar ? custoTotal : 0,
+      detalhes: `${cpfs.length} CPFs`,
+    })
 
     // Processa em lotes de BATCH_SIZE
     const resultados: Record<string, any>[] = []

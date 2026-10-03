@@ -75,7 +75,10 @@ export async function POST(req: NextRequest) {
 
     // Salvar transação pendente
     const svc = createServiceRoleClient() as any
-    await svc.from('transacoes_pix').insert({
+    // Mesma regra dos outros caminhos de dinheiro: se a transacao nao foi
+    // gravada, nao entregamos QR code. Cobrar sem ter a linha para creditar
+    // depois e aceitar dinheiro sem como honrar.
+    const { error: errInsert } = await svc.from('transacoes_pix').insert({
       txid:                cob.txid,
       user_id:             user.id,
       valor:               valorPago,
@@ -84,6 +87,17 @@ export async function POST(req: NextRequest) {
       produto,
       status:              'pendente',
     })
+
+    if (errInsert) {
+      console.error(
+        `[PIX gerar] FALHA AO GRAVAR TRANSACAO txid=${cob.txid} user=${user.id}:`,
+        errInsert.message, errInsert.details ?? '',
+      )
+      return NextResponse.json(
+        { erro: 'Não foi possível iniciar o pagamento. Tente novamente.' },
+        { status: 500 },
+      )
+    }
 
     return NextResponse.json({
       txid:               cob.txid,
