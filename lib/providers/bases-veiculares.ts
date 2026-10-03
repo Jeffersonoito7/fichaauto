@@ -33,8 +33,21 @@ async function buscar(
   qual: 'nacional' | 'estadual',
   placa: string,
   protocolo?: string,
+  preferido?: string,
 ): Promise<ResultadoBase> {
   const custos = CUSTO_BASE[qual]
+
+  // O dono escolheu Assertiva no painel: respeita e nem tenta a Infocar.
+  if (preferido === 'assertiva') {
+    try {
+      const dados = qual === 'nacional'
+        ? await consultarBinFederal(placa, protocolo)
+        : await consultarBinEstadual(placa, protocolo)
+      return { dados, fonte: 'assertiva', custo: custos.assertiva }
+    } catch (e: any) {
+      return { dados: null, fonte: 'nenhuma', custo: 0, erro: e?.message ?? `falha na base ${qual}` }
+    }
+  }
 
   if (basesInfocarAtivas()) {
     try {
@@ -57,8 +70,8 @@ async function buscar(
   }
 }
 
-export const buscarBaseNacional = (placa: string, protocolo?: string) =>
-  buscar('nacional', placa, protocolo)
+export const buscarBaseNacional = (placa: string, protocolo?: string, preferido?: string) =>
+  buscar('nacional', placa, protocolo, preferido)
 
-export const buscarBaseEstadual = (placa: string, protocolo?: string) =>
-  buscar('estadual', placa, protocolo)
+export const buscarBaseEstadual = (placa: string, protocolo?: string, preferido?: string) =>
+  buscar('estadual', placa, protocolo, preferido)

@@ -38,7 +38,18 @@ export interface ResultadoLeilao {
 export async function buscarLeilao(
   placa: string,
   protocolo?: string,
+  preferido?: string,
 ): Promise<ResultadoLeilao> {
+  // O dono escolheu Assertiva no painel: respeita e nem tenta a Infocar.
+  if (preferido === 'assertiva') {
+    try {
+      const dados = await leilaoAssertiva(placa, protocolo)
+      return { dados, fonte: 'assertiva', custo: CUSTO_LEILAO.assertiva }
+    } catch (e: any) {
+      return { dados: null, fonte: 'nenhuma', custo: 0, erro: e?.message ?? 'falha ao consultar leilão' }
+    }
+  }
+
   if (infocarAtiva()) {
     try {
       const dados = await leilaoInfocar(placa, 'placa')

@@ -5,6 +5,7 @@ import { buscarLeilao, type FonteLeilao } from './leilao'
 import { buscarBaseNacional, buscarBaseEstadual, type FonteBase } from './bases-veiculares'
 import { resolverModulos, custoDe, CUSTO_REFERENCIA } from '@/lib/modulos-veiculo'
 import { getCachePlaca } from '@/lib/cache-placas'
+import { lerEscolhasFornecedor } from '@/lib/escolha-fornecedor'
 
 export async function consultarVeiculo(
   placa: string,
@@ -14,6 +15,11 @@ export async function consultarVeiculo(
   // Só consulta o que o cliente contratou. Sem configuração, roda o pacote
   // completo, para ninguém perder dado por cadastro em branco.
   const modulos = resolverModulos(modulosContratados)
+
+  // De qual API vem cada módulo, conforme o dono marcou em
+  // /dashboard/admin/fornecedores. Mapa vazio significa "decide automático",
+  // que é exatamente como o sistema funcionava antes desta tela existir.
+  const escolhas = await lerEscolhasFornecedor()
 
   // Leilão é o módulo mais caro da consulta, então vai pelo roteador de
   // fornecedor (Infocar quando houver chave, senão Assertiva).
@@ -28,21 +34,21 @@ export async function consultarVeiculo(
   const resultado = await consultarCompleto(placa, chassi, {
     modulos,
     buscarLeilao: async (p, protocolo) => {
-      const r = await buscarLeilao(p, protocolo)
+      const r = await buscarLeilao(p, protocolo, escolhas['placa_leilao'])
       fonteLeilao = r.fonte
       custoLeilao = r.custo
       if (r.erro) throw new Error(r.erro)
       return r.dados
     },
     buscarBaseNacional: async (p, protocolo) => {
-      const r = await buscarBaseNacional(p, protocolo)
+      const r = await buscarBaseNacional(p, protocolo, escolhas['placa_bin_federal'])
       fonteNacional = r.fonte
       custoNacional = r.custo
       if (r.erro) throw new Error(r.erro)
       return r.dados
     },
     buscarBaseEstadual: async (p, protocolo) => {
-      const r = await buscarBaseEstadual(p, protocolo)
+      const r = await buscarBaseEstadual(p, protocolo, escolhas['placa_bin_estadual'])
       fonteEstadual = r.fonte
       custoEstadual = r.custo
       if (r.erro) throw new Error(r.erro)
