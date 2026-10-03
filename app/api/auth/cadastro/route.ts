@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
-import { randomUUID } from 'crypto'
+import { garantirUsuarioAuth } from '@/lib/usuario-auth'
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,6 +32,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ erro: 'Este e-mail já está cadastrado.' }, { status: 409 })
     }
 
+    // perfis.user_id tem FK para auth.users, entao a identidade precisa existir
+    // ANTES do insert. Sem isto o cadastro falhava com 23503.
+    const identidade = await garantirUsuarioAuth(email)
+    if (!identidade.userId) {
+      return NextResponse.json(
+        { erro: identidade.erro ?? 'Erro ao salvar. Tente novamente.' },
+        { status: 500 },
+      )
+    }
+
     // Salva solicitação na tabela de perfis (inativo até aprovação manual)
     const { error } = await (supabase as any)
       .from('perfis')
@@ -40,7 +50,7 @@ export async function POST(req: NextRequest) {
         // Supabase Auth. Hoje a sessao e JWT proprio, entao aqui ele e apenas
         // a chave interna do perfil. Sem isto, TODO cadastro pelo site falhava
         // com 500 e ninguem conseguia criar conta.
-        user_id:           randomUUID(),
+        user_id:           identidade.userId,
         nome:              nome.trim(),
         email:             email.toLowerCase().trim(),
         cpf_cnpj:          cpfCnpj ?? null,

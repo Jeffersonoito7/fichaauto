@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase-server'
-import { randomUUID } from 'crypto'
+import { garantirUsuarioAuth } from '@/lib/usuario-auth'
 
 function slugify(s: string): string {
   return s
@@ -68,13 +68,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ erro: 'Erro ao criar empresa.' }, { status: 500 })
     }
 
+    // perfis.user_id tem FK para auth.users: a identidade vem antes do perfil.
+    const identidade = await garantirUsuarioAuth(emailNorm)
+    if (!identidade.userId) {
+      await db.from('tenants').delete().eq('id', tenant.id)
+      return NextResponse.json(
+        { erro: identidade.erro ?? 'Erro ao criar usuario.' },
+        { status: 500 },
+      )
+    }
+
     // Criar perfil do admin da empresa
     const { error: errPerfil } = await db
       .from('perfis')
       .insert({
         // Ver o comentario em /api/auth/cadastro: user_id e NOT NULL e sem
         // ele o cadastro de empresa tambem falhava com 500.
-        user_id:     randomUUID(),
+        user_id:     identidade.userId,
         nome:        nome.trim(),
         email:       emailNorm,
         cpf_cnpj:    cnpj?.replace(/\D/g, '') || null,
