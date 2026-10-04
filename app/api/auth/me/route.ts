@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { verificarJwt } from '@/lib/jwt'
+import { lerSaldo, lerSaldoCpf } from '@/lib/saldo'
 
 export async function GET(_req: NextRequest) {
   try {
@@ -18,6 +19,7 @@ export async function GET(_req: NextRequest) {
 
     // Tenta buscar saldo e plano via service role
     let saldo_veiculo    = 0
+    let origem_saldo: 'tenant' | 'perfil' = 'perfil'
     let saldo_cpf        = 0
     let creditos_credito = 0
     let plano: string | null = null
@@ -55,19 +57,29 @@ export async function GET(_req: NextRequest) {
       if (tenant_id) {
         const { data: tenant } = await service
           .from('tenants')
-          .select('nome, assinatura_ativa, assinatura_vence_em')
+          .select('nome, nome_fantasia, assinatura_ativa, assinatura_vence_em')
           .eq('id', tenant_id)
           .maybeSingle()
-        tenant_nome = tenant?.nome ?? null
+        tenant_nome = tenant?.nome_fantasia ?? tenant?.nome ?? null
         assinatura_ativa = !!tenant?.assinatura_ativa
           && !!tenant?.assinatura_vence_em
           && new Date(tenant.assinatura_vence_em) > new Date()
       }
+
+      // O caixa e DA EMPRESA. Ler o saldo do perfil fazia o painel da AutoVale
+      // mostrar R$ 0,00 tendo R$ 500 no caixa, e o operador concluia que nao
+      // podia consultar. Mesmo leitor usado pelo debito, para a tela e a
+      // cobranca nunca olharem lugares diferentes.
+      const caixaVeiculo = await lerSaldo(service, { email, tenantId: tenant_id })
+      const caixaCpf     = await lerSaldoCpf(service, { email, tenantId: tenant_id })
+      saldo_veiculo = caixaVeiculo.saldo
+      saldo_cpf     = caixaCpf.saldo
+      origem_saldo  = caixaVeiculo.origem
     } catch (e: any) {
       console.error('[/api/auth/me] falha ao buscar perfil no banco:', e?.message ?? e)
     }
 
-    return NextResponse.json({ nome, email, role, saldo_veiculo, saldo_cpf, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, tenant_id, tenant_role, tenant_nome, assinatura_ativa })
+    return NextResponse.json({ nome, email, role, saldo: saldo_veiculo, origem_saldo, saldo_veiculo, saldo_cpf, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, tenant_id, tenant_role, tenant_nome, assinatura_ativa })
   } catch {
     return NextResponse.json({ erro: 'Token inválido' }, { status: 401 })
   }

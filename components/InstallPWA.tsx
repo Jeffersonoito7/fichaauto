@@ -1,8 +1,14 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Download, X } from 'lucide-react'
+import { useTenant } from '@/components/TenantProvider'
 
 export default function InstallPWA() {
+  // No subdominio do cliente, quem usa o sistema e funcionario DELE e nunca
+  // deve ver a nossa marca. Este convite dizia "Instalar Ficha Auto" dentro do
+  // painel da AutoVale, que e vazamento de marca no white-label.
+  const tenant = useTenant()
+  const marca = tenant.nome_fantasia ?? tenant.nome ?? 'Ficha Auto'
   const [prompt, setPrompt] = useState<any>(null)
   const [dismissed, setDismissed] = useState(false)
   const [installed, setInstalled] = useState(false)
@@ -49,7 +55,7 @@ export default function InstallPWA() {
           <Download className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-brand-dark">Instalar Ficha Auto</p>
+          <p className="text-sm font-bold text-brand-dark">Instalar {marca}</p>
           <p className="text-xs text-brand-gray">Acesse direto da tela inicial, sem navegador</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
