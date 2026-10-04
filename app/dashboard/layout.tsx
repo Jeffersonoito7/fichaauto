@@ -19,7 +19,9 @@ const navItems = [
 ]
 
 const tenantItems = [
-  { href: '/dashboard/tenant',          icon: Shield,    label: 'Painel da Revenda' },
+  // "Revenda" e termo de loja de carro. Os clientes de hoje sao associacoes
+  // de protecao veicular, e o rotulo precisa servir para qualquer empresa.
+  { href: '/dashboard/tenant',          icon: Shield,    label: 'Painel da Empresa' },
 ]
 
 const adminItems = [
@@ -107,7 +109,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {isTenantAdmin && (
           <div className="pt-4 pb-1">
-            <p className="text-xs font-semibold text-amber-500 px-3 mb-2 uppercase tracking-wider">Revenda</p>
+            <p className="text-xs font-semibold text-amber-500 px-3 mb-2 uppercase tracking-wider">Empresa</p>
             {tenantItems.map(item => <NavLink key={item.href} {...item} />)}
           </div>
         )}

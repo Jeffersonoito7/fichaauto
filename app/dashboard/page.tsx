@@ -172,15 +172,23 @@ export default function DashboardHome() {
           {/* Saldo */}
           <div className="card p-5">
             <div className="flex items-center justify-between mb-1">
-              <p className="text-xs text-brand-gray">Consultas disponíveis</p>
+              <p className="text-xs text-brand-gray">Saldo disponível</p>
               <Link href="/dashboard/carteira" className="text-xs text-brand-green font-medium hover:underline">
                 Recarregar
               </Link>
             </div>
+            {/* O saldo e em REAIS, nao em unidades. Este bloco dizia
+                "Consultas disponiveis" e "creditos" embaixo do numero, entao
+                R$ 500,00 aparecia como "500 creditos". Numero certo com
+                rotulo errado engana igual a numero errado. */}
             <p className="text-4xl font-extrabold text-brand-green">
-              {saldo === null ? '—' : saldo}
+              {saldo === null
+                ? '—'
+                : Number(saldo).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
-            <p className="text-xs text-brand-gray mt-1">créditos</p>
+            <p className="text-xs text-brand-gray mt-1">
+              cada consulta desconta deste valor
+            </p>
           </div>
 
           {/* O que inclui */}

@@ -291,7 +291,7 @@ export default async function PaginaPublica({ params }: Props) {
   try {
     const r = await svc
       .from('consultas')
-      .select('tipo, documento, descricao, resultado, expires_at, created_at')
+      .select('tipo, documento, descricao, resultado, expires_at, created_at, origem_id, reaproveitada')
       .eq('token', token)
       .maybeSingle()
     data = r?.data ?? null
@@ -300,6 +300,27 @@ export default async function PaginaPublica({ params }: Props) {
   }
 
   if (!data) notFound()
+
+  // Consulta reaproveitada grava uma linha NOVA apontando para a original, e o
+  // created_at dessa linha e de hoje. Mostrar essa data faria um dado de meses
+  // atras aparecer como "consulta realizada hoje", que e pior do que nao
+  // avisar nada. Aqui buscamos a data REAL do dado.
+  let dataDoDado: string = data.created_at
+  let diasDoDado = 0
+  if (data.origem_id) {
+    try {
+      const r = await svc
+        .from('consultas')
+        .select('created_at')
+        .eq('id', data.origem_id)
+        .maybeSingle()
+      if (r?.data?.created_at) dataDoDado = r.data.created_at
+    } catch (e: any) {
+      console.error('[relatorio publico] origem', e?.message ?? e)
+    }
+  }
+  diasDoDado = Math.floor((Date.now() - new Date(dataDoDado).getTime()) / 86_400_000)
+  const dadoVelho = diasDoDado >= 30
 
   const expirado = data.expires_at && new Date(data.expires_at) < new Date()
   if (expirado) {
@@ -350,7 +371,14 @@ export default async function PaginaPublica({ params }: Props) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <p className="text-xs text-amber-700">
-            Consulta realizada em {fmtData(data.created_at)}. Link válido até {fmtExpira(data.expires_at)}.
+            Dados consultados em {fmtData(dataDoDado)}
+            {diasDoDado > 0 && ` (há ${diasDoDado} ${diasDoDado === 1 ? 'dia' : 'dias'})`}.
+            {' '}Link válido até {fmtExpira(data.expires_at)}.
+            {dadoVelho && (
+              <strong className="block mt-1 font-semibold">
+                Atenção: gravame, restrições e leilão podem ter mudado desde essa data.
+              </strong>
+            )}
           </p>
         </div>
 
