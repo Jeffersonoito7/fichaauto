@@ -108,6 +108,8 @@ export async function POST(req: NextRequest) {
       placa  ? input : '',
       chassi ? input : undefined,
       modulos,
+      // Cada empresa pode ter fornecedor proprio, definido no cadastro dela.
+      perfil?.tenant_id ?? null,
     )
 
     // Debitar somente após retorno da API (evita perda de saldo em falha externa).

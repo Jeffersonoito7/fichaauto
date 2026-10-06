@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthEmail } from '@/lib/consulta-helper'
 import { ehModuloVeiculo } from '@/lib/modulos-veiculo'
+import { OPCOES_POR_MODULO, motivoIndisponivel, type FornecedorId } from '@/lib/fornecedores'
+import type { ModuloVeiculo } from '@/lib/modulos-veiculo'
 
 function service() {
   return createClient(
@@ -52,6 +54,31 @@ export async function PATCH(
       return NextResponse.json({ erro: `Módulo desconhecido: ${invalidos.join(', ')}` }, { status: 400 })
     }
     campos.modulos_liberados = body.modulos_liberados
+  }
+
+  // Fornecedor por modulo DESTA empresa. Valida da mesma forma que os modulos:
+  // aceitar fornecedor que nao entrega aquele dado deixaria a consulta do
+  // cliente quebrada sem ninguem perceber ate ele clicar.
+  if ('fornecedores_modulo' in body) {
+    const mapa = body.fornecedores_modulo
+    if (mapa === null || typeof mapa !== 'object' || Array.isArray(mapa)) {
+      return NextResponse.json({ erro: 'fornecedores_modulo deve ser um objeto' }, { status: 400 })
+    }
+    for (const [modulo, fornecedor] of Object.entries(mapa)) {
+      const opcoes = OPCOES_POR_MODULO[modulo as ModuloVeiculo]
+      if (!opcoes) {
+        return NextResponse.json({ erro: `Módulo desconhecido: ${modulo}` }, { status: 400 })
+      }
+      if (!opcoes.some(o => o.fornecedor === fornecedor)) {
+        return NextResponse.json(
+          { erro: `${fornecedor} não entrega o módulo ${modulo}.` },
+          { status: 400 },
+        )
+      }
+      const motivo = motivoIndisponivel(fornecedor as FornecedorId)
+      if (motivo) return NextResponse.json({ erro: motivo }, { status: 400 })
+    }
+    campos.fornecedores_modulo = mapa
   }
 
   const { data, error } = await service()

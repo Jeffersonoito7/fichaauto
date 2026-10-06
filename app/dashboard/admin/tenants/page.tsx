@@ -9,6 +9,7 @@ import {
   type ModuloVeiculo,
 } from '@/lib/modulos-veiculo'
 import { MODULOS, type ModuloId } from '@/lib/products'
+import { OPCOES_POR_MODULO, FORNECEDORES } from '@/lib/fornecedores'
 
 interface Tenant {
   id: string; slug: string; nome: string; nome_fantasia: string | null
@@ -18,6 +19,7 @@ interface Tenant {
   ativo: boolean; saldo_veiculo: number; saldo_cpf: number
   preco_veiculo: number | null; preco_cpf: number | null
   modulos_liberados: string[]
+  fornecedores_modulo?: Record<string, string> | null
   criado_em: string
 }
 
@@ -27,6 +29,7 @@ const VAZIO: Omit<Tenant, 'id' | 'criado_em'> = {
   telefone: '', email_contato: '', ativo: true,
   saldo_veiculo: 0, saldo_cpf: 0, preco_veiculo: null, preco_cpf: null,
   modulos_liberados: [],
+  fornecedores_modulo: {},
 }
 
 function moeda(v: number) {
@@ -35,6 +38,55 @@ function moeda(v: number) {
 
 function fmtData(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR')
+}
+
+// ── Seletor de fornecedor por modulo, para ESTA empresa ──────────────────────
+// Guarda so o que foi escolhido. Modulo sem escolha nao entra no mapa, e nesse
+// caso vale a configuracao geral do dono.
+function SeletorFornecedores({
+  valor, onChange,
+}: {
+  valor: Record<string, string>
+  onChange: (v: Record<string, string>) => void
+}) {
+  function escolher(modulo: string, fornecedor: string) {
+    const novo = { ...valor }
+    if (!fornecedor) delete novo[modulo]
+    else novo[modulo] = fornecedor
+    onChange(novo)
+  }
+
+  const comOpcao = MODULOS_PADRAO.filter(m => (OPCOES_POR_MODULO[m] ?? []).length > 1)
+
+  return (
+    <div className="space-y-2">
+      {comOpcao.map(modulo => (
+        <div key={modulo} className="flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-sm text-gray-700">
+            {CUSTO_MODULO[modulo]?.chave ?? modulo}
+          </span>
+          <select
+            value={valor[modulo] ?? ''}
+            onChange={e => escolher(modulo, e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 min-w-[220px]"
+          >
+            <option value="">Padrão do sistema</option>
+            {(OPCOES_POR_MODULO[modulo] ?? []).map(o => (
+              <option key={o.fornecedor} value={o.fornecedor}>
+                {FORNECEDORES[o.fornecedor].nome}
+                {o.custo > 0 ? ` — ${o.custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      ))}
+      {comOpcao.length === 0 && (
+        <p className="text-xs text-gray-400">
+          Nenhum módulo tem mais de um fornecedor disponível hoje.
+        </p>
+      )}
+    </div>
+  )
 }
 
 // ── Seletor de modulos contratados ─────────────────────────────────────────────
@@ -300,6 +352,25 @@ function ModalTenant({
             <SeletorModulos
               selecionados={form.modulos_liberados ?? []}
               onChange={v => campo('modulos_liberados', v)}
+            />
+          </div>
+
+          {/* De qual API vem cada modulo PARA ESTA EMPRESA. Em branco significa
+              usar o padrao do dono, definido em /dashboard/admin/fornecedores.
+              Serve para o cliente que precisa de fornecedor proprio, como quem
+              vai consumir um credito ja pago. */}
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-sm font-semibold text-gray-800 mb-1">
+              De qual API vem cada dado desta empresa
+            </p>
+            <p className="text-xs text-gray-500 mb-3">
+              Deixe em "Padrão do sistema" para seguir a configuração geral.
+              Escolha um fornecedor apenas quando esta empresa precisar de um
+              diferente dos demais.
+            </p>
+            <SeletorFornecedores
+              valor={form.fornecedores_modulo ?? {}}
+              onChange={v => campo('fornecedores_modulo', v)}
             />
           </div>
 
