@@ -24,10 +24,29 @@ export async function GET(req: NextRequest) {
     try {
       // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
       const service = createServiceRoleClient() as any
-      const { data, count, error } = await service
-        .from('consultas')
-        .select('id, tipo, documento, descricao, created_at, status, plano', { count: 'exact' })
+
+      // O caixa e DA EMPRESA, entao o historico tambem e: todo operador da
+      // mesma associacao precisa ver o que a empresa ja consultou, senao dois
+      // deles pagam a mesma placa sem saber. Quem nao pertence a empresa
+      // nenhuma continua vendo apenas as proprias consultas.
+      const { data: perfil } = await service
+        .from('perfis')
+        .select('tenant_id')
         .eq('email', email)
+        .maybeSingle()
+
+      let q = service
+        .from('consultas')
+        // A coluna `plano` NAO EXISTE nesta tabela. Pedir por ela fazia o
+        // select falhar, o catch engolia o erro e a tela mostrava "nenhuma
+        // consulta realizada" mesmo com consulta gravada no banco.
+        .select('id, tipo, documento, descricao, created_at, status, custo, email, reaproveitada', { count: 'exact' })
+
+      q = perfil?.tenant_id
+        ? q.eq('tenant_id', perfil.tenant_id)
+        : q.eq('email', email)
+
+      const { data, count, error } = await q
         .order('created_at', { ascending: false })
         .range(offset, offset + PAGE_SIZE - 1)
 
@@ -40,7 +59,11 @@ export async function GET(req: NextRequest) {
         descricao: c.descricao ?? '',
         data:      c.created_at,
         status:    c.status    ?? 'Realizada',
-        plano:     c.plano     ?? 'completa',
+        plano:     'completa',
+        custo:     c.custo != null ? Number(c.custo) : null,
+        // Quem consultou, para a empresa saber de quem foi o gasto.
+        por:       c.email ?? null,
+        reaproveitada: !!c.reaproveitada,
       }))
 
       return NextResponse.json({
@@ -51,10 +74,14 @@ export async function GET(req: NextRequest) {
         totalPages: Math.ceil((count ?? 0) / PAGE_SIZE),
       })
     } catch (e: any) {
+      // Devolver lista vazia em caso de falha fazia a tela dizer "nenhuma
+      // consulta realizada" com o banco cheio. Agora o erro aparece.
       console.error('[/api/historico] falha ao buscar consultas:', e?.message ?? e)
+      return NextResponse.json(
+        { erro: 'Não foi possível carregar o histórico.', lista: [], total: 0, page, pageSize: PAGE_SIZE, totalPages: 0 },
+        { status: 500 },
+      )
     }
-
-    return NextResponse.json({ lista: [], total: 0, page: 1, pageSize: PAGE_SIZE, totalPages: 0 })
   } catch (e: any) {
     console.error('[/api/historico] erro inesperado:', e?.message ?? e)
     return NextResponse.json({ lista: [], total: 0, page: 1, pageSize: PAGE_SIZE, totalPages: 0 })
