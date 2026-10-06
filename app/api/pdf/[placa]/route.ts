@@ -999,8 +999,13 @@ export async function GET(
     let pdfBuffer: Buffer | null = null
     try {
       const puppeteer = await import('puppeteer-core')
+      // O /usr/bin/chromium-browser do servidor e o pacote snap, confinado por
+      // AppArmor: ele ACEITA iniciar e morre com ECONNRESET, entao o catch
+      // abaixo engolia a falha e todo mundo recebia HTML achando que era PDF.
+      // O caminho certo e o navegador que o proprio puppeteer baixa, instalado
+      // com `npx puppeteer browsers install chrome-headless-shell`.
       const browser = await puppeteer.default.launch({
-        executablePath: '/usr/bin/chromium-browser',
+        executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium-browser',
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
         headless: true,
       })
@@ -1012,7 +1017,11 @@ export async function GET(
         margin: { top: '0', right: '0', bottom: '0', left: '0' },
       }))
       await browser.close()
-    } catch { /* fallback para HTML */ }
+    } catch (e: any) {
+      // Fallback para HTML continua existindo, para o cliente nunca ficar sem
+      // nada, mas agora a falha aparece no log em vez de sumir.
+      console.error('[pdf] puppeteer falhou, devolvendo HTML:', e?.message ?? e)
+    }
 
     if (pdfBuffer) {
       return new NextResponse(pdfBuffer as BodyInit, {

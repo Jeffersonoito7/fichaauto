@@ -104,3 +104,49 @@ html, body {
          hover:bg-brand-gray-light active:scale-95
          transition-all duration-200;
 }
+
+/* ─── Impressão ──────────────────────────────────────────────────────────────
+   O botão Imprimir do relatório manda a página para a impressora. Sem estas
+   regras saía o menu lateral, os botões e o convite de instalar junto, e as
+   cores de fundo sumiam, deixando os alertas (gravame, leilão, roubo) sem o
+   destaque que é justamente o ponto do relatório. */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm 10mm;
+  }
+
+  /* Fundos e cores precisam ser impressos, senão o semáforo some. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Tudo que é navegação ou ação não vai para o papel. */
+  aside,
+  nav,
+  button,
+  [data-nao-imprimir],
+  .nao-imprimir {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  /* O conteúdo ocupa a folha inteira, sem a margem que o menu deixava. */
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Cartão não pode ser partido no meio de uma página. */
+  .card,
+  section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

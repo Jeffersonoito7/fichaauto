@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { History, ArrowLeft, Download, ChevronDown, Loader2, XCircle, Lock, Share2, Check } from 'lucide-react'
+import { History, ArrowLeft, Download, ChevronDown, Loader2, XCircle, Lock, Share2, Check, Printer} from 'lucide-react'
 import { temModulo, planoQueTemModulo } from '@/lib/products'
 import { contarLeilao, registrosLeilao, registrosGravame } from '@/lib/indicadores-veiculo'
 
@@ -550,10 +550,20 @@ export default function RelatorioPage() {
               {copiado ? <><Check className="w-4 h-4" /> Link copiado!</> : <><Share2 className="w-4 h-4" /> Compartilhar</>}
             </button>
           )}
-          <a href={`/api/pdf/${id}`} target="_blank"
+          {/* Dois caminhos, porque a pessoa quer uma coisa ou outra e nao
+              deve ter que descobrir sozinha: baixar o arquivo, ou mandar
+              direto para a impressora. */}
+          <a href={`/api/pdf/${id}`} download={`ficha-${String(id).toUpperCase()}.pdf`}
              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue/90 text-white rounded-xl transition-colors">
-            <Download className="w-4 h-4" /> Visualizar PDF Completo
+            <Download className="w-4 h-4" /> Baixar PDF
           </a>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-white hover:bg-gray-50 text-brand-dark rounded-xl transition-colors border border-brand-border"
+          >
+            <Printer className="w-4 h-4" /> Imprimir
+          </button>
         </div>
       </div>
 
