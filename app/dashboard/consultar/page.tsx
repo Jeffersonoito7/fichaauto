@@ -169,6 +169,15 @@ export default function ConsultarPage() {
     documento: string; idadeTexto: string; diasAtras: number
     envelhecida: boolean; consultadaPor: string | null
   } | null>(null)
+  // Veículo identificado por R$ 3,22, esperando a pessoa confirmar que digitou
+  // a placa certa. Nasceu do caso TNM2H51: um N no lugar do M custou R$ 57,38.
+  const [confirmar, setConfirmar] = useState<{
+    placa: string
+    custo: number
+    veiculo: { marca: string | null; modelo: string | null; ano: string | null
+               cor: string | null; chassi: string | null; municipio: string | null }
+  } | null>(null)
+  const [erro, setErro] = useState('')
 
   const p = PRODUTOS.find(x => x.id === produto)!
   const usaPlaca = produto === 'veiculo' && subVeic === 'placa'
@@ -185,7 +194,9 @@ export default function ConsultarPage() {
   }, [])
 
   // limpa os campos ao trocar de produto ou de sub-tipo
-  useEffect(() => { setPlaca(''); setTexto(''); setAnterior(null) }, [produto, subVeic, subCred])
+  useEffect(() => {
+    setPlaca(''); setTexto(''); setAnterior(null); setConfirmar(null); setErro('')
+  }, [produto, subVeic, subCred])
 
   function handleTexto(v: string) {
     if (produto === 'veiculo') return setTexto(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 17))
@@ -218,20 +229,41 @@ export default function ConsultarPage() {
     // Veículo: antes de gastar API, verifica se a empresa já consultou.
     const alvo = usaPlaca ? placa : texto
     setLoading(true)
-    try {
-      const res = await fetch(`/api/consulta/anterior?documento=${encodeURIComponent(alvo)}&tipo=veiculo`)
-      const d = await res.json()
-      if (d?.existe) {
-        setAnterior({ ...d, documento: alvo })
-        setLoading(false)
-        return
+    setErro('')
+
+    // Chassi não passa pela confirmação: tem 17 caracteres e dígito verificador,
+    // então errar sem perceber é muito menos provável que numa placa.
+    if (!usaPlaca) {
+      try {
+        const res = await fetch(`/api/consulta/anterior?documento=${encodeURIComponent(alvo)}&tipo=veiculo`)
+        const d = await res.json()
+        if (d?.existe) { setAnterior({ ...d, documento: alvo }); setLoading(false); return }
+      } catch {
+        // Falha na checagem não pode travar a consulta.
       }
-    } catch {
-      // Falha na checagem não pode travar a consulta.
+      router.push(`/dashboard/relatorio/${alvo}?novo=1`)
+      return
     }
-    // ?novo=1: a pessoa acabou de digitar a placa aqui e viu o valor na tela,
-    // então o relatório pode consultar direto. Sem esse parâmetro ele só lê.
-    router.push(`/dashboard/relatorio/${alvo}?novo=1`)
+
+    // Placa: identifica primeiro por R$ 3,22 e mostra o veículo para confirmar.
+    // A rota já devolve o relatório anterior quando existe, sem gastar nada.
+    try {
+      const res = await fetch('/api/consulta/identificar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ placa: alvo }),
+      })
+      const d = await res.json()
+
+      if (d?.jaConsultada) { setAnterior({ ...d, documento: d.placa ?? alvo }); setLoading(false); return }
+      if (!res.ok) { setErro(d?.error || 'Não foi possível identificar a placa.'); setLoading(false); return }
+
+      setConfirmar({ placa: d.placa ?? alvo, custo: Number(d.custo) || 0, veiculo: d.veiculo })
+      setLoading(false)
+    } catch {
+      setErro('Falha de conexão ao identificar a placa. Tente de novo.')
+      setLoading(false)
+    }
   }
 
   const rotuloTexto =
@@ -249,6 +281,91 @@ export default function ConsultarPage() {
   // Aparece antes de gastar API. A empresa decide: abre o que já tem, de
   // graça, ou paga por dado novo. Dado veicular envelhece, então a idade
   // fica em destaque e acima de 30 dias vira alerta.
+  // ── Confirmação do veículo ──
+  // A identificação já foi paga (R$ 3,22). A pessoa confirma que é o carro
+  // certo antes dos R$ 54 restantes. Errar a placa deixa de custar a consulta
+  // inteira e passa a custar o preço da identificação.
+  if (confirmar) {
+    const v = confirmar.veiculo
+    return (
+      <div className="max-w-xl mx-auto">
+        <button
+          onClick={() => { setConfirmar(null); setPlaca('') }}
+          className="flex items-center gap-2 text-sm text-brand-gray hover:text-brand-dark mb-5 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+
+        <div className="card p-6">
+          <div className="flex gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-brand-green-light flex items-center justify-center shrink-0">
+              <Car className="w-5 h-5 text-brand-green" />
+            </div>
+            <div>
+              <h2 className="font-bold text-brand-dark">É este o veículo?</h2>
+              <p className="text-sm text-brand-gray mt-0.5">
+                Confirme antes de consultar o restante.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl border-[1.5px] border-brand-border mb-4">
+            <p className="font-mono text-lg font-extrabold tracking-wider text-brand-dark">
+              {confirmar.placa}
+            </p>
+            <p className="font-bold text-brand-dark mt-1">
+              {[v.marca, v.modelo].filter(Boolean).join(' ') || 'Veículo identificado'}
+            </p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-brand-gray">
+              {v.ano       && <span>Ano {v.ano}</span>}
+              {v.cor       && <span>Cor {v.cor}</span>}
+              {v.municipio && <span>{v.municipio}</span>}
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            <button
+              onClick={() => { setLoading(true); router.push(`/dashboard/relatorio/${confirmar.placa}?novo=1`) }}
+              disabled={loading}
+              className="w-full flex items-center justify-between gap-3 p-4 rounded-xl border-[1.5px] border-brand-green bg-brand-green-light/40 hover:bg-brand-green-light transition-colors text-left disabled:opacity-60"
+            >
+              <span>
+                <span className="block text-sm font-bold text-brand-dark">
+                  Sim, consultar este veículo
+                </span>
+                <span className="block text-xs text-brand-gray mt-0.5">
+                  Relatório completo: restrições, gravame, leilão, sinistro e FIPE
+                </span>
+              </span>
+              {loading
+                ? <Loader2 className="w-4 h-4 animate-spin text-brand-green shrink-0" />
+                : <CheckCircle2 className="w-5 h-5 text-brand-green shrink-0" />}
+            </button>
+
+            <button
+              onClick={() => { setConfirmar(null); setPlaca('') }}
+              className="w-full p-4 rounded-xl border-[1.5px] border-brand-border hover:border-brand-danger transition-colors text-left"
+            >
+              <span className="block text-sm font-bold text-brand-dark">
+                Não é este, corrigir a placa
+              </span>
+              <span className="block text-xs text-brand-gray mt-0.5">
+                Nada mais é cobrado
+              </span>
+            </button>
+          </div>
+
+          {confirmar.custo > 0 && (
+            <p className="text-[11px] text-brand-gray mt-4">
+              A identificação custou {moeda(confirmar.custo)} e já foi debitada. Ela não é
+              cobrada de novo no relatório completo.
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   if (anterior) {
     return (
       <div className="max-w-xl mx-auto">
@@ -437,12 +554,23 @@ export default function ConsultarPage() {
 
             <div className="flex items-center justify-between bg-brand-off-white rounded-xl px-3.5 py-3 mb-4 text-xs">
               <span className="text-brand-gray">
-                {assinante ? 'Incluído na sua assinatura' : 'Será debitado do saldo'}
+                {assinante
+                  ? 'Incluído na sua assinatura'
+                  : usaPlaca
+                    ? 'Identificação primeiro, resto após você confirmar'
+                    : 'Será debitado do saldo'}
               </span>
               <strong className="text-sm text-brand-dark tabular-nums">
                 {assinante ? 'R$ 0,00' : moeda(p.preco)}
               </strong>
             </div>
+
+            {erro && (
+              <div className="flex gap-2.5 p-3 mb-3 bg-red-50 border border-red-200 rounded-xl">
+                <AlertTriangle className="w-4 h-4 text-brand-danger shrink-0 mt-px" />
+                <p className="text-xs text-red-900 leading-snug">{erro}</p>
+              </div>
+            )}
 
             <button
               type="submit"
@@ -450,7 +578,9 @@ export default function ConsultarPage() {
               className="w-full flex items-center justify-center gap-2 py-3.5 bg-brand-green hover:bg-brand-green-dark disabled:opacity-40 text-white font-bold rounded-xl transition-colors"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              {produto === 'credito' ? 'Analisar crédito' : 'Consultar agora'}
+              {loading && usaPlaca
+                ? 'Identificando o veículo...'
+                : produto === 'credito' ? 'Analisar crédito' : 'Consultar agora'}
             </button>
           </form>
         </div>

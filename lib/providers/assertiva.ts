@@ -527,6 +527,14 @@ export async function consultarCompleto(
      * o pacote completo.
      */
     modulos?: string[]
+    /**
+     * Consulta-base JA PAGA, vinda da etapa de confirmacao do veiculo.
+     *
+     * Quando informada, a consulta-base NAO e chamada outra vez: dela sairiam
+     * os mesmos dados e o mesmo protocolo, por mais R$ 3,22. Sem isto, separar
+     * a confirmacao da consulta completa dobraria o custo da base.
+     */
+    basePreConsultada?: any
   },
 ): Promise<ConsultaVeiculoResult> {
   const placaLimpa = limpaPlaca(placa)
@@ -543,7 +551,8 @@ export async function consultarCompleto(
 
   // Chama consulta-base primeiro para obter o protocolo. Nunca é pulada:
   // dela saem os dados do veículo e o protocolo exigido pelos demais módulos.
-  const placaData = await safe(() => consultarPlaca(placaLimpa), 'placa')
+  const placaData = opcoes?.basePreConsultada
+    ?? await safe(() => consultarPlaca(placaLimpa), 'placa')
   const protocolo = placaData?.cabecalho?.protocolo as string | undefined
 
   const fonteLeilao   = opcoes?.buscarLeilao       ?? consultarLeilao

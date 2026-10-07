@@ -6,6 +6,7 @@ import { PRECO } from '@/lib/products'
 import { salvarCacheDeResultado } from '@/lib/cache-placas'
 import { buscarConsultaAnterior, buscarConsultaSalvaDoUsuario, textoIdade } from '@/lib/reaproveitar-consulta'
 import { lerSaldo, debitarSaldo, mensagemSemSaldo, saldoAcabando } from '@/lib/saldo'
+import { lerBasePendente, descartarBasePendente } from '@/lib/consulta-base-pendente'
 
 export async function POST(req: NextRequest) {
   try {
@@ -145,13 +146,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Consulta-base já paga na etapa de confirmação do veículo. Reaproveitar
+    // evita cobrar R$ 3,22 duas vezes pela mesma chamada, então confirmar a
+    // placa antes não encarece a consulta.
+    const pendente = placa
+      ? await lerBasePendente({ placa: doc, email, tenantId: perfil?.tenant_id ?? null })
+      : null
+
     const resultado = await consultarVeiculo(
       placa  ? input : '',
       chassi ? input : undefined,
       modulos,
       // Cada empresa pode ter fornecedor proprio, definido no cadastro dela.
       perfil?.tenant_id ?? null,
+      pendente?.payload,
     )
+
+    // Consumida: não pode servir uma segunda consulta, senão o relatório sairia
+    // com protocolo velho e módulo vazio parecendo "nada consta".
+    if (pendente) descartarBasePendente({ placa: doc, email })
 
     // Debitar somente após retorno da API (evita perda de saldo em falha externa).
     // Empresa sem preço de tabela consome o CUSTO REAL da consulta, calculado

@@ -12,6 +12,12 @@ export async function consultarVeiculo(
   chassi?: string,
   modulosContratados?: string[] | null,
   tenantId?: string | null,
+  /**
+   * Consulta-base já paga na etapa de confirmação do veículo. Quando vem, a
+   * base não é consultada nem cobrada de novo, então confirmar a placa não
+   * encarece a consulta. Ver lib/consulta-base-pendente.ts.
+   */
+  basePreConsultada?: any,
 ) {
   // Só consulta o que o cliente contratou. Sem configuração, roda o pacote
   // completo, para ninguém perder dado por cadastro em branco.
@@ -34,6 +40,7 @@ export async function consultarVeiculo(
 
   const resultado = await consultarCompleto(placa, chassi, {
     modulos,
+    basePreConsultada,
     buscarLeilao: async (p, protocolo) => {
       const r = await buscarLeilao(p, protocolo, escolhas['placa_leilao'])
       fonteLeilao = r.fonte
@@ -94,8 +101,13 @@ export async function consultarVeiculo(
   // Custo real: o leilão usa o valor do fornecedor que de fato respondeu.
   // Só os módulos de preço fixo entram pela tabela; leilão e bases usam o
   // custo do fornecedor que de fato respondeu.
+  // A base já paga não entra na conta: quem a pagou foi a etapa de confirmação.
+  // Sem esta exclusão o cliente pagaria R$ 3,22 duas vezes pela mesma chamada.
   const VARIAVEIS = ['placa_leilao', 'placa_bin_federal', 'placa_bin_estadual']
-  const custoBase = custoDe(modulos.filter(m => !VARIAVEIS.includes(m)))
+  const jaPagos = basePreConsultada ? ['placa_identificacao'] : []
+  const custoBase = custoDe(
+    modulos.filter(m => !VARIAVEIS.includes(m) && !jaPagos.includes(m))
+  )
   const custoTotal = parseFloat(
     (custoBase + custoLeilao + custoNacional + custoEstadual).toFixed(2)
   )
@@ -111,6 +123,7 @@ export async function consultarVeiculo(
     _fonteNacional: fonteNacional,
     _fonteEstadual: fonteEstadual,
     _custoTotal: custoTotal,
+    _baseReaproveitada: !!basePreConsultada,
     _economia: parseFloat((CUSTO_REFERENCIA - custoTotal).toFixed(2)),
   }
 }
