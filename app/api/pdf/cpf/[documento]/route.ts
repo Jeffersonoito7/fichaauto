@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthEmail } from '@/lib/consulta-helper'
+import { createServiceRoleClient } from '@/lib/supabase-server'
+import { buscarRelatorioSalvo } from '@/lib/relatorio-salvo'
 import QRCode from 'qrcode'
-import {
-  consultarCpfBasico, consultarScoreCpf, consultarProcessosCpf,
-  consultarProtestosCpf, consultarEnderecosCpf, consultarTelefonesCpf,
-  consultarRendaCpf, consultarPepCpf, consultarSocietarioCpf,
-  consultarRelacionamentosCpf, consultarHistoricoVeiculosPorCpf,
-} from '@/lib/providers/assertiva'
+// Os provedores da Assertiva NAO sao mais importados aqui de proposito:
+// esta rota imprime relatorio ja pago e nunca gera consulta. Ver lib/relatorio-salvo.
 
 const TENANT = { nome: 'Ficha Auto', cor: '#00703C', site: 'fichaauto.com.br' }
 
@@ -534,28 +532,29 @@ export async function GET(
     return NextResponse.json({ error: 'CPF inválido' }, { status: 400 })
   }
 
-  const erros: string[] = []
-  const safe = async (fn: () => Promise<any>, nome: string) => {
-    try { return await fn() }
-    catch (e: any) { erros.push(`${nome}: ${e.message}`); return null }
+  // Esta rota NÃO consulta mais nada. Antes ela disparava 11 chamadas pagas na
+  // Assertiva a CADA download, para qualquer usuário autenticado, inclusive sem
+  // saldo e sem permissão para o produto, e sem debitar ninguém. Agora imprime
+  // o que já foi pago; gerar dado é trabalho da rota de consulta, que cobra.
+  const svc = createServiceRoleClient() as any
+  const { data: perfil } = await svc
+    .from('perfis').select('tenant_id').eq('email', email).maybeSingle()
+
+  const salvo = await buscarRelatorioSalvo({
+    email,
+    tenantId: perfil?.tenant_id ?? null,
+    tipo: 'cpf',
+    documento: cpf,
+  })
+
+  if ('erro' in salvo) {
+    return NextResponse.json(
+      { error: salvo.erro.mensagem, semRelatorio: salvo.erro.status === 404 },
+      { status: salvo.erro.status },
+    )
   }
 
-  const [basico, score, processos, protestos, enderecos, telefones, renda, pep, societario, relacionamentos, veiculos] =
-    await Promise.all([
-      safe(() => consultarCpfBasico(cpf),                 'basico'),
-      safe(() => consultarScoreCpf(cpf),                  'score'),
-      safe(() => consultarProcessosCpf(cpf),              'processos'),
-      safe(() => consultarProtestosCpf(cpf),              'protestos'),
-      safe(() => consultarEnderecosCpf(cpf),              'enderecos'),
-      safe(() => consultarTelefonesCpf(cpf),              'telefones'),
-      safe(() => consultarRendaCpf(cpf),                  'renda'),
-      safe(() => consultarPepCpf(cpf),                    'pep'),
-      safe(() => consultarSocietarioCpf(cpf),             'societario'),
-      safe(() => consultarRelacionamentosCpf(cpf),        'relacionamentos'),
-      safe(() => consultarHistoricoVeiculosPorCpf(cpf),   'veiculos'),
-    ])
-
-  const data = { cpf, basico, score, processos, protestos, enderecos, telefones, renda, pep, societario, relacionamentos, veiculos, erros }
+  const data = salvo.dados.resultado
   const html = await buildHtml(cpf, data)
 
   let pdfBuffer: Buffer | null = null

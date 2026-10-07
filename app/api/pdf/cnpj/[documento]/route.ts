@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthEmail } from '@/lib/consulta-helper'
-import {
-  consultarCnpjBasico, consultarQsaCnpj, consultarScoreCnpj,
-  consultarProcessosCnpj, consultarProtestosCnpj, consultarRelacionadasCnpj,
-} from '@/lib/providers/assertiva'
+import { createServiceRoleClient } from '@/lib/supabase-server'
+import { buscarRelatorioSalvo } from '@/lib/relatorio-salvo'
+// Os provedores da Assertiva NAO sao mais importados aqui de proposito:
+// esta rota imprime relatorio ja pago e nunca gera consulta. Ver lib/relatorio-salvo.
 
 const TENANT = { nome: 'Ficha Auto', cor: '#00703C', site: 'fichaauto.com.br' }
 
@@ -376,23 +376,28 @@ export async function GET(
     return NextResponse.json({ error: 'CNPJ inválido' }, { status: 400 })
   }
 
-  const erros: string[] = []
-  const safe = async (fn: () => Promise<any>, nome: string) => {
-    try { return await fn() }
-    catch (e: any) { erros.push(`${nome}: ${e.message}`); return null }
+  // Esta rota NÃO consulta mais nada. Antes disparava 6 chamadas pagas na
+  // Assertiva a CADA download, sem débito e sem checar permissão. Agora imprime
+  // o que já foi pago; gerar dado é trabalho da rota de consulta, que cobra.
+  const svc = createServiceRoleClient() as any
+  const { data: perfil } = await svc
+    .from('perfis').select('tenant_id').eq('email', email).maybeSingle()
+
+  const salvo = await buscarRelatorioSalvo({
+    email,
+    tenantId: perfil?.tenant_id ?? null,
+    tipo: 'cnpj',
+    documento: cnpj,
+  })
+
+  if ('erro' in salvo) {
+    return NextResponse.json(
+      { error: salvo.erro.mensagem, semRelatorio: salvo.erro.status === 404 },
+      { status: salvo.erro.status },
+    )
   }
 
-  const [basico, qsa, score, processos, protestos, relacionadas] =
-    await Promise.all([
-      safe(() => consultarCnpjBasico(cnpj),      'basico'),
-      safe(() => consultarQsaCnpj(cnpj),          'qsa'),
-      safe(() => consultarScoreCnpj(cnpj),        'score'),
-      safe(() => consultarProcessosCnpj(cnpj),    'processos'),
-      safe(() => consultarProtestosCnpj(cnpj),    'protestos'),
-      safe(() => consultarRelacionadasCnpj(cnpj), 'relacionadas'),
-    ])
-
-  const data = { cnpj, basico, qsa, score, processos, protestos, relacionadas, erros }
+  const data = salvo.dados.resultado
   const html = buildHtml(cnpj, data)
 
   let pdfBuffer: Buffer | null = null

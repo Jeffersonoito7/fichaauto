@@ -48,10 +48,25 @@ export default function UsuariosPage() {
 
   async function carregar() {
     setLoading(true)
-    const res  = await fetch('/api/admin/usuarios')
-    const data = await res.json()
-    setUsuarios(Array.isArray(data) ? data : [])
-    setLoading(false)
+    setErro(null)
+    try {
+      const res  = await fetch('/api/admin/usuarios')
+      const data = await res.json()
+
+      // Falha de carregamento não pode virar lista vazia: quem olha conclui
+      // que não há usuário, em vez de ver que a tela quebrou.
+      if (!res.ok || !Array.isArray(data)) {
+        setErro(data?.erro || data?.error || 'Não foi possível carregar os usuários.')
+        setUsuarios([])
+      } else {
+        setUsuarios(data)
+      }
+    } catch {
+      setErro('Falha de conexão ao carregar os usuários.')
+      setUsuarios([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { carregar() }, [])

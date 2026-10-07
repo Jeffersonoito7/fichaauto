@@ -29,10 +29,27 @@ export default function PacotesPage() {
 
   async function carregar() {
     setLoading(true)
-    const res = await fetch('/api/admin/pacotes')
-    const data = await res.json()
-    setPlanos(Array.isArray(data) ? data : [])
-    setLoading(false)
+    setErro(null)
+    try {
+      const res = await fetch('/api/admin/pacotes')
+      const data = await res.json()
+
+      // Antes era `Array.isArray(data) ? data : []`: a rota devolvia 500
+      // porque a tabela não existia, e a tela mostrava lista vazia como se
+      // simplesmente não houvesse pacote. Falha que se disfarça de "nada aqui"
+      // é pior que erro na cara, porque ninguém vai investigar.
+      if (!res.ok || !Array.isArray(data)) {
+        setErro(data?.error || data?.erro || 'Não foi possível carregar os pacotes.')
+        setPlanos([])
+      } else {
+        setPlanos(data)
+      }
+    } catch {
+      setErro('Falha de conexão ao carregar os pacotes.')
+      setPlanos([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { carregar() }, [])
@@ -94,6 +111,20 @@ export default function PacotesPage() {
         </button>
       </div>
 
+      {/* Falha de carregamento aparece aqui, e não disfarçada de lista vazia. */}
+      {!loading && erro && (
+        <div className="card p-5 mb-3 border-red-200 bg-red-50">
+          <p className="text-sm font-bold text-red-900">Não foi possível carregar os pacotes</p>
+          <p className="text-xs text-red-800 mt-1">{erro}</p>
+          <button
+            onClick={carregar}
+            className="mt-3 text-xs font-bold text-brand-danger hover:underline"
+          >
+            Tentar de novo
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-brand-green" /></div>
       ) : (
@@ -136,7 +167,7 @@ export default function PacotesPage() {
             </div>
           ))}
 
-          {planos.length === 0 && (
+          {planos.length === 0 && !erro && (
             <div className="card p-12 text-center text-brand-gray">
               <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p>Nenhum pacote cadastrado. Crie o primeiro!</p>
