@@ -1,20 +1,70 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import QRCode from 'qrcode'
 import { getAuthEmail } from '@/lib/consulta-helper'
 import { createServiceRoleClient } from '@/lib/supabase-server'
-import { consultarVeiculo } from '@/lib/providers'
 
-// TENANT_REF e mutavel para suportar white-label por request
-const TENANT_REF = { nome: 'Ficha Auto', cor: '#00703C', logoUrl: '', site: 'fichaauto.com.br' }
-// Alias para compatibilidade com o restante do codigo que usa TENANT.*
-const TENANT = TENANT_REF
+export interface MarcaPdf {
+  nome: string
+  cor: string
+  logoUrl: string
+  site: string
+}
 
-function getTenantInfo(req: NextRequest) {
-  const nome    = req.nextUrl.searchParams.get('tenant_nome') || req.headers.get('x-tenant-nome')         || 'Ficha Auto'
-  const cor     = req.nextUrl.searchParams.get('tenant_cor')  || req.headers.get('x-tenant-cor-primaria') || '#00703C'
-  const logoUrl = req.nextUrl.searchParams.get('tenant_logo') || req.headers.get('x-tenant-logo')         || ''
-  const site    = req.nextUrl.searchParams.get('tenant_site') || 'fichaauto.com.br'
-  return { nome, cor, logoUrl, site }
+const MARCA_PADRAO: MarcaPdf = {
+  nome: 'Ficha Auto', cor: '#00703C', logoUrl: '', site: 'fichaauto.com.br',
+}
+
+/**
+ * Marca da requisição em curso.
+ *
+ * Antes isto era um objeto de módulo sobrescrito com Object.assign no início da
+ * montagem do HTML. Como a montagem tem await no meio (QR code), duas pessoas
+ * de empresas diferentes baixando o relatório ao mesmo tempo podiam receber a
+ * marca uma da outra: o processo é um só e o objeto era compartilhado. Com
+ * AsyncLocalStorage cada requisição tem o seu contexto, sem precisar carregar
+ * a marca por parâmetro em quinze funções de layout.
+ */
+const contextoMarca = new AsyncLocalStorage<MarcaPdf>()
+
+/** Marca da requisição atual. Fora de requisição, o padrão do produto. */
+function marca(): MarcaPdf {
+  return contextoMarca.getStore() ?? MARCA_PADRAO
+}
+
+/**
+ * Marca que vai impressa no relatório.
+ *
+ * Lida SEMPRE do banco, pela empresa do usuário autenticado. Antes vinha de
+ * query string e de cabeçalho (`?tenant_nome=`, `x-tenant-nome`), o que deixava
+ * qualquer pessoa gerar um PDF com o nome e a cor de outra empresa. Num
+ * documento que alguém usa para decidir a compra de um carro, marca forjável é
+ * falsificação pronta, e o parâmetro nem era usado pela aplicação: a tela
+ * chamava /api/pdf/<placa> sem nada, então todo relatório saía "Ficha Auto"
+ * mesmo para cliente white-label.
+ */
+async function marcaDoTenant(svc: any, tenantId: string | null): Promise<MarcaPdf> {
+  if (!tenantId) return { ...MARCA_PADRAO }
+
+  try {
+    const { data } = await svc
+      .from('tenants')
+      .select('nome, nome_fantasia, cor_primaria, logo_url, dominio')
+      .eq('id', tenantId)
+      .maybeSingle()
+
+    if (!data) return { ...MARCA_PADRAO }
+
+    return {
+      nome:    data.nome_fantasia || data.nome || MARCA_PADRAO.nome,
+      cor:     data.cor_primaria  || MARCA_PADRAO.cor,
+      logoUrl: data.logo_url      || '',
+      site:    data.dominio       || MARCA_PADRAO.site,
+    }
+  } catch (e: any) {
+    console.error('[pdf] marca do tenant:', e?.message ?? e)
+    return { ...MARCA_PADRAO }
+  }
 }
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -102,7 +152,7 @@ function banner(marcaModelo: string, placa: string): string {
   <table width="100%" cellpadding="0" cellspacing="0" style="margin:0">
     <tr>
       <td align="center" valign="middle"
-          style="background:${TENANT.cor};padding:14px 8px">
+          style="background:${marca().cor};padding:14px 8px">
         <div style="font-size:24px;font-weight:900;color:white;
                     letter-spacing:0.5px;text-transform:uppercase;line-height:1.2">
           ${marcaModelo.toUpperCase()}
@@ -123,17 +173,17 @@ function footer(): string {
          style="border-top:1px solid #ccc;margin-top:8px">
     <tr>
       <td width="42" valign="top" style="padding-top:5px">
-        <div style="width:36px;height:36px;background:${TENANT.cor};border-radius:4px;
+        <div style="width:36px;height:36px;background:${marca().cor};border-radius:4px;
           text-align:center;line-height:36px">
           <span style="color:white;font-weight:900;font-size:14px">F</span>
         </div>
       </td>
       <td valign="top" style="font-size:7.5px;color:#555;line-height:1.45;padding-top:5px">
-        A ${TENANT.nome} não é responsável pelas informações inseridas na sua base de dados já que são oriundas de consulta às Bases Públicas e
+        A ${marca().nome} não é responsável pelas informações inseridas na sua base de dados já que são oriundas de consulta às Bases Públicas e
         Privadas sobre as quais não detém a propriedade das informações, limitando-se assim, a reproduzi-las fielmente, na forma como
         originariamente apresentadas. Da mesma forma não se responsabiliza por informações incorretas, faltantes, ou divergentes de bases
         públicas. Em diversas situações, podem surgir multas retroativas para o veículo, mesmo com alteração de proprietário conforme o
-        Código de Trânsito Brasileiro. Desta forma, a ${TENANT.nome} não se responsabiliza pelos débitos lançados pelos órgãos competentes.
+        Código de Trânsito Brasileiro. Desta forma, a ${marca().nome} não se responsabiliza pelos débitos lançados pelos órgãos competentes.
       </td>
     </tr>
   </table>`
@@ -573,13 +623,41 @@ function pagFipe(placa: string, data: any, agora: string, proto: string, qr: str
   const cd   = data.chassi ?? {}
   const mm   = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
 
-  const fipeAtual     = fipe.preco ?? fipe.valorFipe ?? null
+  // A BrasilAPI devolve `valor` direto, sem envelope. O formato antigo usava
+  // preco/valorFipe. Aceita os dois para não perder o dado por nome de campo.
+  const fipeAtual     = fipe.valor ?? fipe.preco ?? fipe.valorFipe ?? null
   const historico24: any[] = Array.isArray(fipe.historico) ? fipe.historico : []
   const historicoAnual: any[] = Array.isArray(fipe.historicoAnual) ? fipe.historicoAnual : []
   const codigoFipe    = v(cd.codigoFipe ?? fipe.codigoFipe ?? fipe.codigo, '')
   const descricao     = v(fipe.descricao ?? fipe.modelo ?? mm)
 
-  if (!fipeAtual && historico24.length === 0 && historicoAnual.length === 0) return ''
+  // Sem valor FIPE, a seção DIZ que não localizou, em vez de desaparecer.
+  // Sumir calado faz quem lê achar que esqueceram de consultar, ou pior, que o
+  // veículo não tem valor de mercado. O motivo mais comum é a base não
+  // devolver código FIPE para aquele veículo.
+  if (!fipeAtual && historico24.length === 0 && historicoAnual.length === 0) {
+    return `
+<div class="pg">
+  ${header(agora, proto, 'Extra', qr)}
+  ${banner(mm, placa)}
+  <p style="text-align:center;font-size:11px;font-weight:700;margin:10px 0 6px">
+    TABELA FIPE
+  </p>
+  <table width="100%" cellpadding="0" cellspacing="0"
+         style="border:1px solid #e5e5e5;background:#fafafa">
+    <tr>
+      <td style="padding:14px;font-size:9px;color:#555;line-height:1.5;text-align:center">
+        <strong style="color:#111;font-size:10px">Valor FIPE não localizado para este veículo.</strong><br />
+        A base consultada não retornou o código FIPE deste veículo, e sem ele não há
+        como buscar o valor de mercado. Isso não indica problema no veículo nem
+        restrição: é ausência de informação na origem. Consulte a tabela FIPE
+        oficial pelo modelo e ano se precisar do valor de referência.
+      </td>
+    </tr>
+  </table>
+  ${footer()}
+</div>`
+  }
 
   const metade = Math.ceil(historico24.length / 2)
   const col1   = historico24.slice(0, metade)
@@ -722,7 +800,7 @@ function pagFicha(placa: string, data: any, agora: string, proto: string, qr: st
 function pag5(placa: string, data: any, agora: string, proto: string, qr: string): string {
   const p  = normalizaPlacaV3(data.placa)
   const mm = v(p.marcaModelo ?? p.marca, 'VEÍCULO')
-  const n  = TENANT.nome
+  const n  = marca().nome
 
   return `
 <div class="pg">
@@ -907,8 +985,7 @@ function restricoesBinEst(data: any): string[] {
 /* ════════════════════════════════════════════════════════════════════════════
    BUILD HTML COMPLETO
 ════════════════════════════════════════════════════════════════════════════ */
-async function buildHtml(placa: string, data: any, tenantInfo?: { nome: string; cor: string; logoUrl: string; site: string }): Promise<string> {
-  Object.assign(TENANT_REF, tenantInfo ?? { nome: 'Ficha Auto', cor: '#00703C', logoUrl: '', site: 'fichaauto.com.br' })
+async function buildHtml(placa: string, data: any): Promise<string> {
   const agora = new Date().toLocaleString('pt-BR')
   const proto = protocolo()
   const qrUrl = `https://fichaauto.com.br/dashboard/relatorio/${placa}`
@@ -968,33 +1045,66 @@ export async function GET(
       return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
     }
 
-    // Tenta ler do banco (consulta já paga) — evita nova chamada à Assertiva
+    // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
+    const svc = createServiceRoleClient() as any
+
+    const { data: perfil } = await svc
+      .from('perfis')
+      .select('tenant_id')
+      .eq('email', email)
+      .maybeSingle()
+
+    const tenantId: string | null = perfil?.tenant_id ?? null
+
+    // Lê a consulta JÁ PAGA. Antes esta query ordenava por `criado_em`, coluna
+    // que não existe (a coluna é `created_at`): ela falhava SEMPRE, o catch
+    // engolia o erro e o fallback abaixo refazia a consulta na Assertiva. Ou
+    // seja, cada download de PDF gastava até R$ 57,38 da nossa conta, sem
+    // debitar ninguém e sem nada parecer errado, porque o relatório saía certo.
     let data: any = null
-    try {
-      // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
-      const svc = createServiceRoleClient() as any
-      const { data: row } = await svc
-        .from('consultas')
-        .select('resultado')
-        .eq('email', email)
-        .eq('tipo', 'veiculo')
-        .eq('documento', placa)
-        .order('criado_em', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (row?.resultado) {
-        try {
-          data = typeof row.resultado === 'string' ? JSON.parse(row.resultado) : row.resultado
-        } catch {
-          console.error('[pdf] resultado corrompido para', placa)
-        }
+    let erroLeitura: string | null = null
+
+    // O relatório é da EMPRESA: qualquer operador dela pode baixar o PDF de uma
+    // consulta que a empresa pagou. Sem empresa, vale só o que é do próprio
+    // e-mail.
+    let q = svc
+      .from('consultas')
+      .select('resultado')
+      .eq('tipo', 'veiculo')
+      .eq('documento', placa)
+      .not('resultado', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    q = tenantId ? q.eq('tenant_id', tenantId) : q.eq('email', email)
+
+    const { data: row, error } = await q.maybeSingle()
+
+    if (error) {
+      // Falha de leitura NÃO pode virar consulta paga silenciosa.
+      erroLeitura = error.message
+      console.error('[pdf] leitura da consulta salva:', error.message)
+    } else if (row?.resultado) {
+      try {
+        data = typeof row.resultado === 'string' ? JSON.parse(row.resultado) : row.resultado
+      } catch {
+        console.error('[pdf] resultado corrompido para', placa)
       }
-    } catch { /* segue para fallback */ }
+    }
 
-    // Fallback: refaz consulta se não houver dado salvo no banco
-    if (!data) data = await consultarVeiculo(placa)
+    if (!data) {
+      // Nunca consultar a Assertiva aqui. Esta rota só imprime o que já foi
+      // pago; gerar dado novo é trabalho da rota de consulta, que cobra.
+      return NextResponse.json({
+        error: erroLeitura
+          ? 'Não foi possível ler o relatório salvo. Tente novamente.'
+          : 'Não há relatório salvo para esta placa. Faça a consulta primeiro.',
+        semRelatorio: !erroLeitura,
+      }, { status: erroLeitura ? 500 : 404 })
+    }
 
-    const html = await buildHtml(placa, data, getTenantInfo(req))
+    const marcaAtual = await marcaDoTenant(svc, tenantId)
+    const html = await contextoMarca.run(marcaAtual, () => buildHtml(placa, data))
 
     let pdfBuffer: Buffer | null = null
     try {
