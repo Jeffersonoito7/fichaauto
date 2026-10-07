@@ -217,7 +217,7 @@ export default function RelatorioPage() {
   const [token, setToken]       = useState<string | null>(null)
   const [copiado, setCopiado]   = useState(false)
   // Placa sem relatório salvo: guarda o custo para a tela de confirmação.
-  const [confirmar, setConfirmar] = useState<{ custo: number; assinante: boolean } | null>(null)
+  const [confirmar, setConfirmar] = useState<{ custo: number; assinante: boolean; precoFechado: boolean } | null>(null)
   // Só para a mensagem de carregamento não prometer consulta quando está lendo.
   const [modo, setModo] = useState<'ler' | 'novo' | 'atualizar'>('ler')
 
@@ -249,7 +249,11 @@ export default function RelatorioPage() {
       const json = await res.json()
       if (res.status === 402) { setSemSaldo(true); setErro(json.error); return }
       if (res.status === 404 && json?.naoConsultada) {
-        setConfirmar({ custo: Number(json.custo) || 0, assinante: !!json.assinante })
+        setConfirmar({
+          custo: Number(json.custo) || 0,
+          assinante: !!json.assinante,
+          precoFechado: json.precoFechado !== false,
+        })
         return
       }
       if (!res.ok) throw new Error(json.error || 'Erro na consulta')
@@ -311,14 +315,18 @@ export default function RelatorioPage() {
           <span className="text-sm font-extrabold text-brand-green tabular-nums shrink-0">
             {confirmar.assinante
               ? 'R$ 0,00'
-              : confirmar.custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              : confirmar.precoFechado
+                ? confirmar.custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                : 'Ver valor no extrato'}
           </span>
         </button>
 
         <p className="text-[11px] text-brand-gray mt-3">
           {confirmar.assinante
             ? 'Incluído na sua assinatura.'
-            : 'O valor sai do saldo da sua empresa assim que o resultado chegar.'}
+            : confirmar.precoFechado
+              ? 'O valor sai do saldo da sua empresa assim que o resultado chegar.'
+              : 'Sua empresa está sem preço fechado, então o débito é o custo da consulta, que varia com os módulos contratados. O valor exato fica registrado na carteira.'}
         </p>
 
         <Link href="/dashboard/consultar" className="inline-flex items-center gap-1.5 text-sm text-brand-gray hover:text-brand-dark mt-5 transition-colors">

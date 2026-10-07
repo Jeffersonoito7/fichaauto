@@ -95,6 +95,10 @@ export async function POST(req: NextRequest) {
           naoConsultada: true,
           custo: isAdmin || isAssinante ? 0 : custo,
           assinante: isAdmin || isAssinante,
+          // Empresa sem preço de tabela consome o CUSTO REAL da consulta, que
+          // só se sabe depois de rodar os módulos. Sem esta flag a tela cravaria
+          // o padrão do código e prometeria menos do que vai debitar.
+          precoFechado: isAdmin || isAssinante || precoTenant != null,
         }, { status: 404 })
       }
 
