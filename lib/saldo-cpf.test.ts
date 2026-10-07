@@ -1,12 +1,19 @@
 import { describe, it, expect } from 'vitest'
 import {
-  lerSaldoCpf, debitarSaldoCpf, lerSaldo, debitarSaldo, mensagemSemSaldo,
+  lerSaldoCpf, debitarSaldoCpf, lerSaldo, debitarSaldo, lerSaldoProduto,
+  debitarSaldoProduto, mensagemSemSaldo, COLUNA_CAIXA, RPC_DEBITO,
 } from './saldo'
 
 // ─── Dublê do cliente Supabase ────────────────────────────────────────────────
 // Só o que lib/saldo.ts usa: from().select().eq().maybeSingle(),
-// from().update().eq() e rpc(). Registra tudo para os testes checarem que o
-// caixa certo foi tocado e que o errado NÃO foi.
+// from().update().eq() e rpc(). Registra tudo para os testes checarem qual
+// caixa foi tocado.
+//
+// Esta suíte foi reescrita em 06/10/2026, quando o caixa passou a ser ÚNICO por
+// empresa. Antes cada produto tinha o seu, e a análise de crédito contava
+// unidades no perfil: a AutoVale tinha R$ 385,24 no caixa e lia "sem créditos
+// disponíveis" na tela. Os testes antigos afirmavam o desenho separado, então
+// falharam de propósito quando a regra mudou.
 
 interface Chamada { tabela: string; update?: any; rpc?: string; args?: any }
 
@@ -51,14 +58,14 @@ function fakeSvc(opts: {
       chamadas.push({ tabela: 'rpc', rpc: nome, args })
       if (opts.rpcErro) return { data: null, error: { message: opts.rpcErro } }
 
-      // Reproduz a RPC da migration 018: verifica e debita na mesma operação.
+      // Reproduz a RPC: verifica e debita o caixa na mesma operação.
       const t = tenants[args.p_tenant_id]
-      const atual = Number(t?.saldo_cpf ?? 0)
+      const atual = Number(t?.[COLUNA_CAIXA] ?? 0)
       if (!t || atual < args.p_valor) {
         return { data: [{ sucesso: false, saldo_restante: atual }], error: null }
       }
-      t.saldo_cpf = parseFloat((atual - args.p_valor).toFixed(2))
-      return { data: [{ sucesso: true, saldo_restante: t.saldo_cpf }], error: null }
+      t[COLUNA_CAIXA] = parseFloat((atual - args.p_valor).toFixed(2))
+      return { data: [{ sucesso: true, saldo_restante: t[COLUNA_CAIXA] }], error: null }
     },
   }
   return svc
@@ -67,11 +74,52 @@ function fakeSvc(opts: {
 const EMAIL  = 'operador@avp.com.br'
 const TENANT = '11111111-1111-1111-1111-111111111111'
 
+describe('caixa único — todos os produtos leem o mesmo dinheiro', () => {
+  it('veículo, CPF e crédito veem o mesmo saldo da empresa', async () => {
+    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_veiculo: 385.24, saldo_cpf: 0 } } })
+
+    const veiculo = await lerSaldoProduto(svc, { email: EMAIL, tenantId: TENANT, produto: 'veiculo' })
+    const cpf     = await lerSaldoProduto(svc, { email: EMAIL, tenantId: TENANT, produto: 'cpf' })
+    const credito = await lerSaldoProduto(svc, { email: EMAIL, tenantId: TENANT, produto: 'credito' })
+
+    expect([veiculo.saldo, cpf.saldo, credito.saldo]).toEqual([385.24, 385.24, 385.24])
+  })
+
+  it('o caixa legado de CPF não é mais lido, mesmo com valor nele', async () => {
+    // O bug que motivou a mudança: dinheiro num caixa e o produto lendo outro.
+    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_veiculo: 100, saldo_cpf: 999 } } })
+    const r = await lerSaldoCpf(svc, { email: EMAIL, tenantId: TENANT })
+    expect(r.saldo).toBe(100)
+  })
+
+  it('cada produto mantém o PREÇO próprio, só o caixa é compartilhado', async () => {
+    const svc = fakeSvc({
+      tenants: { [TENANT]: { saldo_veiculo: 500, preco_veiculo: 36.9, preco_cpf: 19.9 } },
+    })
+
+    const veiculo = await lerSaldoProduto(svc, { email: EMAIL, tenantId: TENANT, produto: 'veiculo' })
+    const cpf     = await lerSaldoProduto(svc, { email: EMAIL, tenantId: TENANT, produto: 'cpf' })
+
+    expect(veiculo.precoTenant).toBe(36.9)
+    expect(cpf.precoTenant).toBe(19.9)
+  })
+
+  it('crédito não tem coluna de preço e devolve nulo, para a rota usar o catálogo', async () => {
+    // Herdar o preço de outro produto cobraria valor errado em silêncio.
+    const svc = fakeSvc({
+      tenants: { [TENANT]: { saldo_veiculo: 500, preco_veiculo: 36.9, preco_cpf: 19.9 } },
+    })
+    const r = await lerSaldoProduto(svc, { email: EMAIL, tenantId: TENANT, produto: 'credito' })
+    expect(r.precoTenant).toBeNull()
+    expect(r.saldo).toBe(500)
+  })
+})
+
 describe('lerSaldoCpf — de onde sai o dinheiro', () => {
   it('com tenant lê o caixa da EMPRESA, não o do operador', async () => {
     const svc = fakeSvc({
-      tenants: { [TENANT]: { saldo_cpf: 500, preco_cpf: 19.9 } },
-      perfis:  { [EMAIL]:  { saldo_cpf: 7 } },
+      tenants: { [TENANT]: { saldo_veiculo: 500, preco_cpf: 19.9 } },
+      perfis:  { [EMAIL]:  { saldo_veiculo: 7 } },
     })
 
     const r = await lerSaldoCpf(svc, { email: EMAIL, tenantId: TENANT })
@@ -81,7 +129,7 @@ describe('lerSaldoCpf — de onde sai o dinheiro', () => {
   })
 
   it('sem tenant lê o saldo do PERFIL e não tem preço de tabela', async () => {
-    const svc = fakeSvc({ perfis: { [EMAIL]: { saldo_cpf: 42.5 } } })
+    const svc = fakeSvc({ perfis: { [EMAIL]: { saldo_veiculo: 42.5 } } })
 
     const r = await lerSaldoCpf(svc, { email: EMAIL, tenantId: null })
 
@@ -90,7 +138,7 @@ describe('lerSaldoCpf — de onde sai o dinheiro', () => {
   })
 
   it('empresa sem preço de tabela devolve precoTenant nulo (rota usa o preço do catálogo)', async () => {
-    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_cpf: 100, preco_cpf: null } } })
+    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_veiculo: 100, preco_cpf: null } } })
 
     const r = await lerSaldoCpf(svc, { email: EMAIL, tenantId: TENANT })
 
@@ -105,7 +153,7 @@ describe('lerSaldoCpf — de onde sai o dinheiro', () => {
   })
 
   it('numéricos vindos como string do Postgres são convertidos', async () => {
-    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_cpf: '250.00', preco_cpf: '12.50' } } })
+    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_veiculo: '250.00', preco_cpf: '12.50' } } })
     const r = await lerSaldoCpf(svc, { email: EMAIL, tenantId: TENANT })
     expect(r.saldo).toBe(250)
     expect(r.precoTenant).toBe(12.5)
@@ -115,50 +163,56 @@ describe('lerSaldoCpf — de onde sai o dinheiro', () => {
 describe('debitarSaldoCpf — quem paga a consulta', () => {
   it('com tenant debita pela RPC atômica da empresa, sem tocar no perfil', async () => {
     const svc = fakeSvc({
-      tenants: { [TENANT]: { saldo_cpf: 100 } },
-      perfis:  { [EMAIL]:  { saldo_cpf: 50 } },
+      tenants: { [TENANT]: { saldo_veiculo: 100 } },
+      perfis:  { [EMAIL]:  { saldo_veiculo: 50 } },
     })
 
     const r = await debitarSaldoCpf(svc, { email: EMAIL, tenantId: TENANT, valor: 14.9 })
 
     expect(r).toEqual({ sucesso: true, restante: 85.1 })
     expect(svc.chamadas).toEqual([
-      { tabela: 'rpc', rpc: 'debitar_saldo_cpf_tenant', args: { p_tenant_id: TENANT, p_valor: 14.9 } },
+      { tabela: 'rpc', rpc: RPC_DEBITO, args: { p_tenant_id: TENANT, p_valor: 14.9 } },
     ])
     // Carteira do operador intacta: o caixa é da empresa.
     expect(svc.chamadas.some(c => c.tabela === 'perfis')).toBe(false)
   })
 
-  it('usa a RPC de CPF, nunca a de veículo', async () => {
-    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_cpf: 100 } } })
-    await debitarSaldoCpf(svc, { email: EMAIL, tenantId: TENANT, valor: 10 })
-    expect(svc.chamadas[0].rpc).toBe('debitar_saldo_cpf_tenant')
-    expect(svc.chamadas[0].rpc).not.toBe('debitar_saldo_tenant')
+  it('todos os produtos debitam pela mesma RPC do caixa', async () => {
+    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_veiculo: 300 } } })
+
+    await debitarSaldoProduto(svc, { email: EMAIL, tenantId: TENANT, valor: 10, produto: 'veiculo' })
+    await debitarSaldoProduto(svc, { email: EMAIL, tenantId: TENANT, valor: 10, produto: 'cpf' })
+    await debitarSaldoProduto(svc, { email: EMAIL, tenantId: TENANT, valor: 10, produto: 'credito' })
+
+    expect(svc.chamadas.map(c => c.rpc)).toEqual([RPC_DEBITO, RPC_DEBITO, RPC_DEBITO])
+    // Os três saíram do mesmo dinheiro.
+    expect(svc.chamadas.at(-1)!.args.p_valor).toBe(10)
   })
 
-  it('sem tenant debita o saldo do perfil', async () => {
-    const svc = fakeSvc({ perfis: { [EMAIL]: { saldo_cpf: 50 } } })
+  it('sem tenant debita o saldo do perfil, no caixa único', async () => {
+    const svc = fakeSvc({ perfis: { [EMAIL]: { saldo_veiculo: 50 } } })
 
     const r = await debitarSaldoCpf(svc, { email: EMAIL, tenantId: null, valor: 14.9 })
 
     expect(r).toEqual({ sucesso: true, restante: 35.1 })
     const upd = svc.chamadas.find(c => c.update)
     expect(upd?.tabela).toBe('perfis')
-    expect(upd?.update.saldo_cpf).toBe(35.1)
-    // Não mexe no saldo de veículo do perfil.
-    expect(upd?.update).not.toHaveProperty('saldo_veiculo')
+    expect(upd?.update[COLUNA_CAIXA]).toBe(35.1)
+    // A coluna legada não é mais escrita.
+    expect(upd?.update).not.toHaveProperty('saldo_cpf')
   })
 
   it('empresa sem saldo recusa e NÃO altera o caixa', async () => {
-    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_cpf: 5 } } })
+    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_veiculo: 5 } } })
 
     const r = await debitarSaldoCpf(svc, { email: EMAIL, tenantId: TENANT, valor: 14.9 })
 
     expect(r).toEqual({ sucesso: false, restante: 5 })
+    expect(svc.chamadas.find(c => c.rpc)).toBeTruthy()
   })
 
   it('perfil sem saldo recusa antes de gravar qualquer update', async () => {
-    const svc = fakeSvc({ perfis: { [EMAIL]: { saldo_cpf: 5 } } })
+    const svc = fakeSvc({ perfis: { [EMAIL]: { saldo_veiculo: 5 } } })
 
     const r = await debitarSaldoCpf(svc, { email: EMAIL, tenantId: null, valor: 14.9 })
 
@@ -168,7 +222,7 @@ describe('debitarSaldoCpf — quem paga a consulta', () => {
 
   it('RPC com erro não dá o débito por bem-sucedido', async () => {
     const svc = fakeSvc({
-      tenants:  { [TENANT]: { saldo_cpf: 100 } },
+      tenants:  { [TENANT]: { saldo_veiculo: 100 } },
       rpcErro:  'function does not exist',
     })
 
@@ -178,7 +232,7 @@ describe('debitarSaldoCpf — quem paga a consulta', () => {
   })
 
   it('dois débitos concorrentes na mesma empresa não gastam o mesmo saldo duas vezes', async () => {
-    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_cpf: 20 } } })
+    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_veiculo: 20 } } })
 
     const [a, b] = await Promise.all([
       debitarSaldoCpf(svc, { email: EMAIL, tenantId: TENANT, valor: 14.9 }),
@@ -189,15 +243,27 @@ describe('debitarSaldoCpf — quem paga a consulta', () => {
     expect(svc.chamadas.filter(c => c.rpc)).toHaveLength(2)
   })
 
+  it('produtos diferentes concorrendo também disputam o mesmo caixa', async () => {
+    // Com caixas separados os dois passariam. Com caixa único, só um passa.
+    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_veiculo: 40 } } })
+
+    const [a, b] = await Promise.all([
+      debitarSaldoProduto(svc, { email: EMAIL, tenantId: TENANT, valor: 36.9, produto: 'veiculo' }),
+      debitarSaldoProduto(svc, { email: EMAIL, tenantId: TENANT, valor: 34.9, produto: 'credito' }),
+    ])
+
+    expect([a.sucesso, b.sucesso].filter(Boolean)).toHaveLength(1)
+  })
+
   it('arredonda o valor para 2 casas antes de debitar', async () => {
-    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_cpf: 100 } } })
+    const svc = fakeSvc({ tenants: { [TENANT]: { saldo_veiculo: 100 } } })
     await debitarSaldoCpf(svc, { email: EMAIL, tenantId: TENANT, valor: 14.9 * 3 })
     expect(svc.chamadas[0].args.p_valor).toBe(44.7)
   })
 })
 
-describe('caixa de veículo segue intocado', () => {
-  it('lerSaldo continua lendo saldo_veiculo/preco_veiculo do tenant', async () => {
+describe('caixa de veículo', () => {
+  it('lerSaldo lê saldo_veiculo/preco_veiculo do tenant', async () => {
     const svc = fakeSvc({
       tenants: { [TENANT]: { saldo_veiculo: 900, preco_veiculo: 36.9, saldo_cpf: 1 } },
     })
@@ -205,13 +271,13 @@ describe('caixa de veículo segue intocado', () => {
     expect(r).toEqual({ saldo: 900, origem: 'tenant', precoTenant: 36.9 })
   })
 
-  it('debitarSaldo continua chamando debitar_saldo_tenant', async () => {
+  it('debitarSaldo chama a RPC do caixa', async () => {
     const svc = fakeSvc({ tenants: { [TENANT]: { saldo_veiculo: 900 } } })
     await debitarSaldo(svc, { email: EMAIL, tenantId: TENANT, valor: 36.9 })
-    expect(svc.chamadas[0].rpc).toBe('debitar_saldo_tenant')
+    expect(svc.chamadas[0].rpc).toBe(RPC_DEBITO)
   })
 
-  it('debitarSaldo sem tenant escreve em saldo_veiculo, não em saldo_cpf', async () => {
+  it('debitarSaldo sem tenant escreve no caixa, não na coluna legada', async () => {
     const svc = fakeSvc({ perfis: { [EMAIL]: { saldo_veiculo: 100, saldo_cpf: 100 } } })
     await debitarSaldo(svc, { email: EMAIL, tenantId: null, valor: 36.9 })
     const upd = svc.chamadas.find(c => c.update)

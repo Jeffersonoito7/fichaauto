@@ -100,7 +100,7 @@ export async function GET(
   // as any: Supabase precisa de tipos gerados (supabase gen types) para inferência de select()
   const svc = createServiceRoleClient() as any
   // tenant_id passou a ser necessário: o caixa de CNPJ é o da empresa.
-  const { data: perfil } = await svc.from('perfis').select('saldo_cpf, role, pode_cnpj, tenant_id').eq('email', email).maybeSingle()
+  const { data: perfil } = await svc.from('perfis').select('role, pode_cnpj, tenant_id').eq('email', email).maybeSingle()
   const isAdmin = perfil?.role === 'super_admin' || email === process.env.ADMIN_EMAIL
   const isAssinante = !isAdmin && await tenantComAssinaturaAtiva(email)
   if (!isAdmin && !isAssinante && !perfil?.pode_cnpj) return NextResponse.json({ error: 'Sem permissão para consulta de CNPJ.' }, { status: 403 })

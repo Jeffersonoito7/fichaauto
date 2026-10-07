@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
     const svc = createServiceRoleClient() as any
     const { data: perfil } = await svc
       .from('perfis')
-      .select('saldo_cpf, role, pode_cpf, ativo, tenant_id')
+      .select('role, pode_cpf, ativo, tenant_id')
       .eq('email', email)
       .maybeSingle()
 
@@ -256,7 +256,7 @@ export async function POST(req: NextRequest) {
     // planilha ao mesmo tempo não podem gastar o mesmo saldo duas vezes, e a
     // Assertiva cobra a chamada mesmo que a resposta venha vazia.
     // A trava contra concorrência está dentro de debitarSaldoCpf: para empresa é
-    // a RPC atômica (UPDATE ... AND saldo_cpf >= valor), para perfil é a leitura
+    // a RPC atômica (UPDATE ... AND saldo_veiculo >= valor), para perfil é a leitura
     // seguida de comparação. Se o saldo foi consumido no meio, sucesso = false e
     // o lote é recusado em vez de rodar de graça.
     if (cobrar) {

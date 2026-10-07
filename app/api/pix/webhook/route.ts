@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { consultarVeiculo } from '@/lib/providers'
 import { randomUUID, timingSafeEqual } from 'crypto'
 import { reverterParaPendente } from '../_transacao'
+import { COLUNA_CAIXA } from '@/lib/saldo'
 
 // Webhook de aviso de pagamento da Efí.
 //
@@ -180,10 +181,21 @@ export async function POST(req: NextRequest) {
 
       // 4. Creditar atomicamente via RPC (elimina race condition de read+write)
       if (transacao.creditos_creditados) {
+        // Compra de pack de análise de crédito. Com o caixa unificado em reais,
+        // o que entra é o VALOR PAGO, não a quantidade de consultas: creditar
+        // "10" num caixa em reais daria R$ 10,00 em vez dos R$ 300,00 pagos.
+        const valorPago = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
+
+        if (!(valorPago > 0)) {
+          console.error(`[PIX webhook] pack de credito sem valor pago txid=${txid}; nao creditado`)
+          await reverterParaPendente(supabase, txid, 'pack de credito sem valor em reais')
+          continue
+        }
+
         const { error: errCredito } = await supabase.rpc('creditar_saldo', {
           p_user_id: transacao.user_id,
-          p_campo:   'creditos_credito',
-          p_valor:   Number(transacao.creditos_creditados),
+          p_campo:   COLUNA_CAIXA,
+          p_valor:   valorPago,
         })
 
         if (errCredito) {
@@ -192,11 +204,13 @@ export async function POST(req: NextRequest) {
           continue
         }
 
-        console.log(`[PIX webhook] txid=${txid} user=${transacao.user_id} +${transacao.creditos_creditados} créditos`)
+        console.log(`[PIX webhook] txid=${txid} user=${transacao.user_id} +R$ ${valorPago.toFixed(2)} (pack de credito)`)
 
       } else {
         const saldoCreditado = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
-        const campo = transacao.produto === 'cpf' ? 'saldo_cpf' : 'saldo_veiculo'
+        // Caixa único: a recarga entra sempre no mesmo caixa, qualquer que seja o
+        // produto comprado. Ver COLUNA_CAIXA em lib/saldo.
+        const campo = COLUNA_CAIXA
 
         const { error: errSaldo } = await supabase.rpc('creditar_saldo', {
           p_user_id: transacao.user_id,

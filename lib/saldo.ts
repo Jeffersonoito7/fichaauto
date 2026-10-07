@@ -16,24 +16,38 @@ export interface SaldoInfo {
 }
 
 /**
- * Produtos que têm caixa próprio. Veículo é um caixa, CPF/CNPJ é outro:
- * a empresa recarrega cada um separadamente (migration 004).
- * CNPJ usa o caixa de CPF, como já era no perfil e como diz a 004
- * ("saldo_cpf → Produto 2 (consulta CPF e CNPJ)").
+ * CAIXA ÚNICO POR EMPRESA.
+ *
+ * Antes cada produto tinha caixa próprio: `saldo_veiculo`, `saldo_cpf` e, pior,
+ * a análise de crédito contava UNIDADES em `perfis.creditos_credito`, fora da
+ * empresa. O resultado é o que a AutoVale viu: empresa com R$ 385,24 no caixa e
+ * "Sem créditos disponíveis" na tela, porque o dinheiro estava num caixa que
+ * aquele produto não lê.
+ *
+ * Agora o dinheiro é um só e o produto define apenas o PREÇO. Decidido pelo
+ * Jefferson em 06/10/2026, com o banco ainda em 1 empresa e 1 usuário, e todo o
+ * saldo em `saldo_veiculo`: nenhum dinheiro precisou ser movido.
+ *
+ * `saldo_cpf` fica como coluna legada, zerada e sem leitor. Não foi removida
+ * porque apagar coluna de dinheiro pede confirmação explícita.
  */
-export type ProdutoSaldo = 'veiculo' | 'cpf'
+export type ProdutoSaldo = 'veiculo' | 'cpf' | 'credito'
 
+/** A única coluna de dinheiro que o sistema lê e debita. */
+export const COLUNA_CAIXA = 'saldo_veiculo'
+
+/** RPC atômica do caixa. Uma só, porque o caixa é um só. */
+export const RPC_DEBITO = 'debitar_saldo_tenant'
+
+/**
+ * Preço de tabela por produto. Crédito não tem coluna de preço própria, então
+ * cai no preço do catálogo em vez de herdar o preço de outro produto, que
+ * cobraria valor errado em silêncio.
+ */
 const CAIXA = {
-  veiculo: {
-    colunaSaldo: 'saldo_veiculo',
-    colunaPreco: 'preco_veiculo',
-    rpcDebito:   'debitar_saldo_tenant',
-  },
-  cpf: {
-    colunaSaldo: 'saldo_cpf',
-    colunaPreco: 'preco_cpf',
-    rpcDebito:   'debitar_saldo_cpf_tenant',
-  },
+  veiculo: { colunaPreco: 'preco_veiculo' },
+  cpf:     { colunaPreco: 'preco_cpf' },
+  credito: { colunaPreco: null },
 } as const
 
 /**
@@ -44,27 +58,28 @@ export async function lerSaldoProduto(
   svc: any,
   opts: { email: string; tenantId: string | null; produto: ProdutoSaldo },
 ): Promise<SaldoInfo> {
-  const { colunaSaldo, colunaPreco } = CAIXA[opts.produto]
+  const { colunaPreco } = CAIXA[opts.produto]
 
   if (opts.tenantId) {
+    const colunas = colunaPreco ? `${COLUNA_CAIXA}, ${colunaPreco}` : COLUNA_CAIXA
     const { data } = await svc
       .from('tenants')
-      .select(`${colunaSaldo}, ${colunaPreco}`)
+      .select(colunas)
       .eq('id', opts.tenantId)
       .maybeSingle()
     return {
-      saldo:       Number(data?.[colunaSaldo] ?? 0),
+      saldo:       Number(data?.[COLUNA_CAIXA] ?? 0),
       origem:      'tenant',
-      precoTenant: data?.[colunaPreco] != null ? Number(data[colunaPreco]) : null,
+      precoTenant: colunaPreco && data?.[colunaPreco] != null ? Number(data[colunaPreco]) : null,
     }
   }
 
   const { data } = await svc
     .from('perfis')
-    .select(colunaSaldo)
+    .select(COLUNA_CAIXA)
     .eq('email', opts.email)
     .maybeSingle()
-  return { saldo: Number(data?.[colunaSaldo] ?? 0), origem: 'perfil', precoTenant: null }
+  return { saldo: Number(data?.[COLUNA_CAIXA] ?? 0), origem: 'perfil', precoTenant: null }
 }
 
 export async function lerSaldo(
@@ -91,11 +106,10 @@ export async function debitarSaldoProduto(
   svc: any,
   opts: { email: string; tenantId: string | null; valor: number; produto: ProdutoSaldo },
 ): Promise<{ sucesso: boolean; restante: number }> {
-  const { colunaSaldo, rpcDebito } = CAIXA[opts.produto]
   const valor = parseFloat(opts.valor.toFixed(2))
 
   if (opts.tenantId) {
-    const { data, error } = await svc.rpc(rpcDebito, {
+    const { data, error } = await svc.rpc(RPC_DEBITO, {
       p_tenant_id: opts.tenantId,
       p_valor:     valor,
     })
@@ -108,13 +122,13 @@ export async function debitarSaldoProduto(
   }
 
   const { data: perfil } = await svc
-    .from('perfis').select(colunaSaldo).eq('email', opts.email).maybeSingle()
-  const atual = Number(perfil?.[colunaSaldo] ?? 0)
+    .from('perfis').select(COLUNA_CAIXA).eq('email', opts.email).maybeSingle()
+  const atual = Number(perfil?.[COLUNA_CAIXA] ?? 0)
   if (atual < valor) return { sucesso: false, restante: atual }
 
   const restante = parseFloat((atual - valor).toFixed(2))
   await svc.from('perfis')
-    .update({ [colunaSaldo]: restante, atualizado_em: new Date().toISOString() })
+    .update({ [COLUNA_CAIXA]: restante, atualizado_em: new Date().toISOString() })
     .eq('email', opts.email)
   return { sucesso: true, restante }
 }

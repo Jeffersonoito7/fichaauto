@@ -4,6 +4,7 @@ import { getAuthEmail } from '@/lib/consulta-helper'
 import { ehModuloVeiculo } from '@/lib/modulos-veiculo'
 import { OPCOES_POR_MODULO, motivoIndisponivel, type FornecedorId } from '@/lib/fornecedores'
 import type { ModuloVeiculo } from '@/lib/modulos-veiculo'
+import { COLUNA_CAIXA } from '@/lib/saldo'
 
 function service() {
   return createClient(
@@ -104,7 +105,10 @@ export async function POST(
   const { produto, valor } = await req.json()
   if (!produto || !valor) return NextResponse.json({ erro: 'produto e valor obrigatórios' }, { status: 400 })
 
-  const campo = produto === 'cpf' ? 'saldo_cpf' : 'saldo_veiculo'
+  // Caixa único: toda recarga entra no mesmo lugar, qualquer que seja o
+  // produto. Creditar em saldo_cpf deixaria dinheiro parado num caixa que
+  // nenhuma consulta lê mais. Ver COLUNA_CAIXA em lib/saldo.
+  const campo = COLUNA_CAIXA
 
   const { data: tenant } = await service()
     .from('tenants')

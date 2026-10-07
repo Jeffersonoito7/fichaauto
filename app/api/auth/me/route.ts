@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { verificarJwt } from '@/lib/jwt'
-import { lerSaldo, lerSaldoCpf } from '@/lib/saldo'
+import { lerSaldo } from '@/lib/saldo'
+import { CREDITO } from '@/lib/products'
 
 export async function GET(_req: NextRequest) {
   try {
@@ -37,12 +38,10 @@ export async function GET(_req: NextRequest) {
       const service = createServiceRoleClient() as any
       const { data } = await service
         .from('perfis')
-        .select('saldo_veiculo, saldo_cpf, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, tenant_id, tenant_role')
+        .select('saldo_veiculo, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, tenant_id, tenant_role')
         .eq('email', email)
         .maybeSingle()
       saldo_veiculo    = parseFloat(data?.saldo_veiculo ?? '0')
-      saldo_cpf        = parseFloat(data?.saldo_cpf     ?? '0')
-      creditos_credito = Number(data?.creditos_credito  ?? 0)
       plano            = data?.plano          ?? null
       pode_placa       = data?.pode_placa     ?? true
       pode_cpf         = data?.pode_cpf       ?? true
@@ -70,14 +69,20 @@ export async function GET(_req: NextRequest) {
       // mostrar R$ 0,00 tendo R$ 500 no caixa, e o operador concluia que nao
       // podia consultar. Mesmo leitor usado pelo debito, para a tela e a
       // cobranca nunca olharem lugares diferentes.
-      const caixaVeiculo = await lerSaldo(service, { email, tenantId: tenant_id })
-      const caixaCpf     = await lerSaldoCpf(service, { email, tenantId: tenant_id })
-      saldo_veiculo = caixaVeiculo.saldo
-      saldo_cpf     = caixaCpf.saldo
-      origem_saldo  = caixaVeiculo.origem
+      // Caixa único: um valor só, para todos os produtos. Os campos antigos
+      // continuam na resposta apontando para ele, porque telas ainda leem
+      // saldo_cpf e creditos_credito e passariam a mostrar R$ 0,00.
+      const caixa = await lerSaldo(service, { email, tenantId: tenant_id })
+      saldo_veiculo = caixa.saldo
+      saldo_cpf     = caixa.saldo
+      origem_saldo  = caixa.origem
     } catch (e: any) {
       console.error('[/api/auth/me] falha ao buscar perfil no banco:', e?.message ?? e)
     }
+
+    // Quantas análises de crédito cabem no caixa. Deixou de ser um estoque de
+    // unidades guardado no perfil e passou a ser uma conta sobre o dinheiro.
+    creditos_credito = Math.floor(saldo_veiculo / CREDITO.avulsoCpf)
 
     return NextResponse.json({ nome, email, role, saldo: saldo_veiculo, origem_saldo, saldo_veiculo, saldo_cpf, creditos_credito, plano, pode_placa, pode_cpf, pode_cnpj, pode_lote, pode_credito, tenant_id, tenant_role, tenant_nome, assinatura_ativa })
   } catch {

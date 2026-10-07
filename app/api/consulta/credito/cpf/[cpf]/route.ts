@@ -4,6 +4,7 @@ import { buscarConsultaAnterior, textoIdade } from '@/lib/reaproveitar-consulta'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getToken } from '@/lib/providers/assertiva'
 import { CREDITO } from '@/lib/products'
+import { lerSaldoProduto, debitarSaldoProduto, mensagemSemSaldo } from '@/lib/saldo'
 
 const BASE_URL   = 'https://api.assertivasolucoes.com.br'
 const FINALIDADE = 2
@@ -36,7 +37,7 @@ export async function GET(
 
   const svc = createServiceRoleClient() as any
   const { data: perfil } = await svc.from('perfis')
-    .select('creditos_credito, role, pode_credito, tenant_id')
+    .select('role, pode_credito, tenant_id')
     .eq('email', email)
     .maybeSingle()
 
@@ -45,11 +46,19 @@ export async function GET(
     return NextResponse.json({ error: 'Sem acesso ao produto Análise de Crédito.' }, { status: 403 })
   }
 
-  const creditos = Number(perfil?.creditos_credito ?? 0)
-  if (!isAdmin && creditos < 1) {
-    return NextResponse.json({
-      error: `Sem créditos disponíveis. Adquira o pack de R$ ${CREDITO.packValor.toFixed(2).replace('.', ',')} (${CREDITO.packQtd} consultas) ou avulso por R$ ${CREDITO.avulsoCpf.toFixed(2).replace('.', ',')}.`
-    }, { status: 402 })
+  // Caixa único da empresa, em reais. Antes isto contava unidades em
+  // perfis.creditos_credito, fora do caixa: a empresa tinha dinheiro e a tela
+  // dizia "sem créditos disponíveis".
+  const { saldo, origem, precoTenant } = await lerSaldoProduto(svc, {
+    email, tenantId: perfil?.tenant_id ?? null, produto: 'credito',
+  })
+  const custo = precoTenant ?? CREDITO.avulsoCpf
+
+  if (!isAdmin && saldo < custo) {
+    return NextResponse.json(
+      { error: mensagemSemSaldo(saldo, custo, origem), recarregar: true, saldo },
+      { status: 402 }
+    )
   }
 
   // ── Reaproveitamento dentro da mesma empresa ──
@@ -86,10 +95,11 @@ export async function GET(
     safe(`/score/v3/pf/acoes/${cpf}?idFinalidade=${FINALIDADE}`,   'acoes'),
   ])
 
+  // Debita só depois do retorno da API, para falha externa não comer saldo.
   if (!isAdmin) {
-    await svc.from('perfis')
-      .update({ creditos_credito: creditos - 1, atualizado_em: new Date().toISOString() })
-      .eq('email', email)
+    await debitarSaldoProduto(svc, {
+      email, tenantId: perfil?.tenant_id ?? null, valor: custo, produto: 'credito',
+    })
   }
 
   // Extrair score

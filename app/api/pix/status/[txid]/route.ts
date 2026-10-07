@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthEmail } from '@/lib/consulta-helper'
 import { reverterParaPendente } from '../../_transacao'
+import { COLUNA_CAIXA } from '@/lib/saldo'
 
 // Busca status de pagamento PIX na EFÍ e credita saldo se confirmado.
 // Chamado pelo frontend em polling a cada 5s — dispensa webhook com mTLS.
@@ -122,10 +123,19 @@ async function creditarSaldo(supabase: any, transacao: any): Promise<boolean> {
   // Crédito atômico via RPC, igual ao webhook: ler o saldo e somar em JS
   // permitia duas requisicoes concorrentes gravarem o mesmo valor base.
   if (transacao.creditos_creditados) {
+    // Compra de pack de análise de crédito. O caixa é em reais, então entra o
+    // VALOR PAGO: creditar a quantidade daria R$ 10,00 em vez de R$ 300,00.
+    const valorPago = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
+
+    if (!(valorPago > 0)) {
+      await reverterParaPendente(supabase, transacao.txid, 'pack de credito sem valor em reais (polling)')
+      return false
+    }
+
     const { error: err } = await supabase.rpc('creditar_saldo', {
       p_user_id: transacao.user_id,
-      p_campo:   'creditos_credito',
-      p_valor:   Number(transacao.creditos_creditados),
+      p_campo:   COLUNA_CAIXA,
+      p_valor:   valorPago,
     })
 
     if (err) {
@@ -134,7 +144,9 @@ async function creditarSaldo(supabase: any, transacao: any): Promise<boolean> {
     }
   } else {
     const saldoCreditado = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
-    const campo = transacao.produto === 'cpf' ? 'saldo_cpf' : 'saldo_veiculo'
+    // Caixa único: a recarga entra sempre no mesmo caixa, qualquer que seja o
+    // produto comprado. Ver COLUNA_CAIXA em lib/saldo.
+    const campo = COLUNA_CAIXA
 
     const { error: err } = await supabase.rpc('creditar_saldo', {
       p_user_id: transacao.user_id,
