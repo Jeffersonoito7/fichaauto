@@ -4,13 +4,18 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getAuthEmail, salvarConsulta, registrarAuditoria, tenantComAssinaturaAtiva } from '@/lib/consulta-helper'
 import { PRECO } from '@/lib/products'
 import { salvarCacheDeResultado } from '@/lib/cache-placas'
-import { buscarConsultaAnterior, textoIdade } from '@/lib/reaproveitar-consulta'
+import { buscarConsultaAnterior, buscarConsultaSalvaDoUsuario, textoIdade } from '@/lib/reaproveitar-consulta'
 import { lerSaldo, debitarSaldo, mensagemSemSaldo, saldoAcabando } from '@/lib/saldo'
 
 export async function POST(req: NextRequest) {
   try {
     // forcarAtualizacao: o usuario pediu explicitamente dado novo, pagando por isso
-    const { placa, chassi, forcarAtualizacao } = await req.json()
+    // apenasSalva: modo LEITURA. Serve o relatorio ja gravado e, se nao houver
+    // nenhum, devolve 404 em vez de gastar. Existe porque a guarda de custo tem
+    // que viver aqui, na rota que gasta, e nao na tela que normalmente leva ate
+    // ela: abrir relatorio pelo historico, por link ou pela URL na mao sao
+    // portas que nao passam pelo aviso de duplicidade da tela de consulta.
+    const { placa, chassi, forcarAtualizacao, apenasSalva } = await req.json()
     const input = (placa ?? chassi ?? '').trim()
 
     if (!input) {
@@ -74,6 +79,38 @@ export async function POST(req: NextRequest) {
     // Evita pagar de novo quando outro operador da mesma associação já
     // consultou a mesma placa. Só vale quando o usuário NÃO pediu atualização.
     const doc = input.toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+    // ── Modo leitura: nunca gasta e nunca grava ──
+    // Quem abre um relatorio existente nao esta pedindo consulta nova. Sem dado
+    // salvo, a resposta e 404 com o custo, para a tela pedir confirmacao antes
+    // de qualquer debito.
+    if (apenasSalva && !forcarAtualizacao) {
+      const salva = perfil?.tenant_id
+        ? await buscarConsultaAnterior(perfil.tenant_id, doc, 'veiculo')
+        : await buscarConsultaSalvaDoUsuario(service, email, doc, 'veiculo')
+
+      if (!salva) {
+        return NextResponse.json({
+          error: 'Esta placa ainda não foi consultada.',
+          naoConsultada: true,
+          custo: isAdmin || isAssinante ? 0 : custo,
+          assinante: isAdmin || isAssinante,
+        }, { status: 404 })
+      }
+
+      return NextResponse.json({
+        success: true,
+        ...salva.resultado,
+        _somenteLeitura: true,
+        _reaproveitada:  true,
+        _consultadaEm:   salva.consultadaEm,
+        _diasAtras:      salva.diasAtras,
+        _envelhecida:    salva.envelhecida,
+        _idadeTexto:     textoIdade(salva),
+        _consultadaPor:  salva.consultadaPor,
+      })
+    }
+
     if (!forcarAtualizacao && perfil?.tenant_id) {
       const anterior = await buscarConsultaAnterior(perfil.tenant_id, doc, 'veiculo')
       if (anterior) {

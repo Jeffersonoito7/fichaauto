@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { History, ArrowLeft, Download, ChevronDown, Loader2, XCircle, Lock, Share2, Check, Printer} from 'lucide-react'
+import { History, ArrowLeft, Download, ChevronDown, Loader2, XCircle, Lock, Share2, Check, Printer, Search} from 'lucide-react'
 import { temModulo, planoQueTemModulo } from '@/lib/products'
 import { contarLeilao, registrosLeilao, registrosGravame } from '@/lib/indicadores-veiculo'
 
@@ -216,41 +216,68 @@ export default function RelatorioPage() {
   const [assinaturaAtiva, setAssinaturaAtiva] = useState(false)
   const [token, setToken]       = useState<string | null>(null)
   const [copiado, setCopiado]   = useState(false)
+  // Placa sem relatório salvo: guarda o custo para a tela de confirmação.
+  const [confirmar, setConfirmar] = useState<{ custo: number; assinante: boolean } | null>(null)
+  // Só para a mensagem de carregamento não prometer consulta quando está lendo.
+  const [modo, setModo] = useState<'ler' | 'novo' | 'atualizar'>('ler')
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => { if (d?.assinatura_ativa) setAssinaturaAtiva(true) }).catch(() => {})
   }, [])
 
-  useEffect(() => {
-    async function buscar() {
-      try {
-        // ?atualizar=1 vem da tela de consulta quando a pessoa escolheu
-        // pagar por dado novo mesmo existindo consulta anterior da empresa.
-        const forcar = new URLSearchParams(window.location.search).get('atualizar') === '1'
-        const res = await fetch('/api/consulta', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ placa: id, forcarAtualizacao: forcar }),
-        })
-        const json = await res.json()
-        if (res.status === 402) { setSemSaldo(true); setErro(json.error); return }
-        if (!res.ok) throw new Error(json.error || 'Erro na consulta')
-        setData(json)
-        if (json.token) setToken(json.token)
-      } catch (e: any) {
-        setErro(e.message)
-      } finally {
-        setLoading(false)
+  // Abrir um relatório NÃO gasta. Gastar exige um pedido explícito na URL:
+  // ?atualizar=1 (dado novo por cima de um que já existe) ou ?novo=1 (placa
+  // que a pessoa acabou de digitar na tela de consulta). Sem nenhum dos dois,
+  // esta tela só lê; se não houver nada salvo, pede confirmação antes do
+  // débito. É o que impede o histórico, um link ou a URL na mão de virarem
+  // consulta paga sem ninguém pedir.
+  async function buscar(modoPedido: 'ler' | 'novo' | 'atualizar') {
+    setModo(modoPedido)
+    setLoading(true)
+    setErro('')
+    setConfirmar(null)
+    try {
+      const res = await fetch('/api/consulta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          placa: id,
+          forcarAtualizacao: modoPedido === 'atualizar',
+          apenasSalva:       modoPedido === 'ler',
+        }),
+      })
+      const json = await res.json()
+      if (res.status === 402) { setSemSaldo(true); setErro(json.error); return }
+      if (res.status === 404 && json?.naoConsultada) {
+        setConfirmar({ custo: Number(json.custo) || 0, assinante: !!json.assinante })
+        return
       }
+      if (!res.ok) throw new Error(json.error || 'Erro na consulta')
+      setData(json)
+      if (json.token) setToken(json.token)
+    } catch (e: any) {
+      setErro(e.message)
+    } finally {
+      setLoading(false)
     }
-    buscar()
+  }
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    buscar(q.get('atualizar') === '1' ? 'atualizar' : q.get('novo') === '1' ? 'novo' : 'ler')
+    // A busca depende apenas da placa da URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
       <Loader2 className="w-10 h-10 text-brand-green animate-spin" />
-      <p className="font-semibold text-brand-dark">Consultando veículo...</p>
-      <p className="text-sm text-brand-gray">Aguarde, buscando dados em tempo real</p>
+      <p className="font-semibold text-brand-dark">
+        {modo === 'ler' ? 'Abrindo relatório...' : 'Consultando veículo...'}
+      </p>
+      <p className="text-sm text-brand-gray">
+        {modo === 'ler' ? 'Carregando o resultado já salvo' : 'Aguarde, buscando dados em tempo real'}
+      </p>
     </div>
   )
 
@@ -260,6 +287,44 @@ export default function RelatorioPage() {
       <h2 className="text-xl font-bold text-brand-dark mb-2">Saldo insuficiente</h2>
       <p className="text-brand-gray mb-6">Você não tem consultas disponíveis. Recarregue sua carteira para continuar.</p>
       <Link href="/dashboard/carteira" className="btn-primary px-6 py-3">Ir para carteira</Link>
+    </div>
+  )
+
+  // Placa sem nada salvo. Só sai daqui com o clique da pessoa, nunca sozinho.
+  if (confirmar) return (
+    <div className="max-w-md mx-auto py-16">
+      <div className="card p-6 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-brand-green-light flex items-center justify-center mx-auto mb-4">
+          <Search className="w-6 h-6 text-brand-green" />
+        </div>
+        <h2 className="text-lg font-bold text-brand-dark">Esta placa ainda não foi consultada</h2>
+        <p className="text-sm text-brand-gray mt-1.5 mb-6">
+          <span className="font-mono font-bold text-brand-dark">{String(id).toUpperCase()}</span>
+          {' não tem relatório salvo. Confirme para consultar agora.'}
+        </p>
+
+        <button
+          onClick={() => buscar('novo')}
+          className="w-full flex items-center justify-between gap-3 p-4 rounded-xl border-[1.5px] border-brand-green bg-brand-green-light/40 hover:bg-brand-green-light transition-colors text-left"
+        >
+          <span className="text-sm font-bold text-brand-dark">Consultar esta placa</span>
+          <span className="text-sm font-extrabold text-brand-green tabular-nums shrink-0">
+            {confirmar.assinante
+              ? 'R$ 0,00'
+              : confirmar.custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          </span>
+        </button>
+
+        <p className="text-[11px] text-brand-gray mt-3">
+          {confirmar.assinante
+            ? 'Incluído na sua assinatura.'
+            : 'O valor sai do saldo da sua empresa assim que o resultado chegar.'}
+        </p>
+
+        <Link href="/dashboard/consultar" className="inline-flex items-center gap-1.5 text-sm text-brand-gray hover:text-brand-dark mt-5 transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Voltar sem consultar
+        </Link>
+      </div>
     </div>
   )
 

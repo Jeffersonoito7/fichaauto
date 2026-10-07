@@ -229,7 +229,9 @@ export default function ConsultarPage() {
     } catch {
       // Falha na checagem não pode travar a consulta.
     }
-    router.push(`/dashboard/relatorio/${alvo}`)
+    // ?novo=1: a pessoa acabou de digitar a placa aqui e viu o valor na tela,
+    // então o relatório pode consultar direto. Sem esse parâmetro ele só lê.
+    router.push(`/dashboard/relatorio/${alvo}?novo=1`)
   }
 
   const rotuloTexto =

@@ -48,6 +48,8 @@ export default function DashboardHome() {
     e.preventDefault()
     if (placa.length < 7) return
     setLoading(true)
+    // Sem ?novo=1 de propósito: aqui a pessoa não viu valor nenhum na tela.
+    // O relatório abre o que já existe ou pede confirmação com o custo.
     router.push(`/dashboard/relatorio/${placa}`)
   }
 

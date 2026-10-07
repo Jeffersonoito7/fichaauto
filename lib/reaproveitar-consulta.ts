@@ -54,31 +54,69 @@ export async function buscarConsultaAnterior(
       .limit(1)
       .maybeSingle()
 
-    if (!data?.resultado) return null
-
-    // Consultas antigas foram gravadas com JSON.stringify numa coluna jsonb,
-    // então vêm como string escapada em vez de objeto. Aceita os dois.
-    let resultado = data.resultado
-    if (typeof resultado === 'string') {
-      try { resultado = JSON.parse(resultado) } catch { return null }
-    }
-    if (!resultado || typeof resultado !== 'object') return null
-
-    const consultadaEm = new Date(data.created_at)
-    const dias = Math.floor((Date.now() - consultadaEm.getTime()) / 86_400_000)
-
-    return {
-      id:            data.id,
-      resultado,
-      consultadaEm:  data.created_at,
-      diasAtras:     dias,
-      envelhecida:   dias >= DIAS_PARA_ENVELHECER,
-      custoOriginal: data.custo != null ? Number(data.custo) : null,
-      consultadaPor: data.email ?? null,
-    }
+    return montarConsultaAnterior(data)
   } catch {
     // Falha na busca nunca pode impedir a consulta nova.
     return null
+  }
+}
+
+/**
+ * Procura a consulta salva do PRÓPRIO usuário, sem passar por empresa.
+ *
+ * Existe para o modo leitura de quem não tem empresa (venda avulsa, admin):
+ * abrir um relatório que já é dele não pode virar consulta paga.
+ */
+export async function buscarConsultaSalvaDoUsuario(
+  svc: any,
+  email: string,
+  documento: string,
+  tipo: string,
+): Promise<ConsultaAnterior | null> {
+  const doc = documento.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  if (!email || !doc) return null
+
+  try {
+    const { data } = await svc
+      .from('consultas')
+      .select('id, resultado, created_at, custo, email')
+      .eq('email', email)
+      .eq('documento', doc)
+      .eq('tipo', tipo)
+      .not('resultado', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    return montarConsultaAnterior(data)
+  } catch {
+    return null
+  }
+}
+
+/** Normaliza a linha do banco. Devolve null quando não dá para confiar nela. */
+function montarConsultaAnterior(data: any): ConsultaAnterior | null {
+  if (!data?.resultado) return null
+
+  // Consultas antigas foram gravadas com JSON.stringify numa coluna jsonb,
+  // então vêm como string escapada em vez de objeto. Aceita os dois.
+  let resultado = data.resultado
+  if (typeof resultado === 'string') {
+    try { resultado = JSON.parse(resultado) } catch { return null }
+  }
+  if (!resultado || typeof resultado !== 'object') return null
+
+  const consultadaEm = new Date(data.created_at)
+  const dias = Math.floor((Date.now() - consultadaEm.getTime()) / 86_400_000)
+
+  return {
+    id:            data.id,
+    resultado,
+    consultadaEm:  data.created_at,
+    diasAtras:     dias,
+    envelhecida:   dias >= DIAS_PARA_ENVELHECER,
+    custoOriginal: data.custo != null ? Number(data.custo) : null,
+    consultadaPor: data.email ?? null,
   }
 }
 
