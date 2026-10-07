@@ -3,7 +3,7 @@ import { getFipePorCodigo }  from './brasilapi'
 import { buscarProcessosProprietario } from './datajud'
 import { buscarLeilao, type FonteLeilao } from './leilao'
 import { buscarBaseNacional, buscarBaseEstadual, type FonteBase } from './bases-veiculares'
-import { resolverModulos, custoDe, CUSTO_REFERENCIA } from '@/lib/modulos-veiculo'
+import { resolverModulos, custoDaConsulta, CUSTO_REFERENCIA } from '@/lib/modulos-veiculo'
 import { getCachePlaca } from '@/lib/cache-placas'
 import { lerEscolhasDoTenant } from '@/lib/escolha-fornecedor'
 
@@ -101,16 +101,16 @@ export async function consultarVeiculo(
   // Custo real: o leilão usa o valor do fornecedor que de fato respondeu.
   // Só os módulos de preço fixo entram pela tabela; leilão e bases usam o
   // custo do fornecedor que de fato respondeu.
-  // A base já paga não entra na conta: quem a pagou foi a etapa de confirmação.
-  // Sem esta exclusão o cliente pagaria R$ 3,22 duas vezes pela mesma chamada.
-  const VARIAVEIS = ['placa_leilao', 'placa_bin_federal', 'placa_bin_estadual']
-  const jaPagos = basePreConsultada ? ['placa_identificacao'] : []
-  const custoBase = custoDe(
-    modulos.filter(m => !VARIAVEIS.includes(m) && !jaPagos.includes(m))
-  )
-  const custoTotal = parseFloat(
-    (custoBase + custoLeilao + custoNacional + custoEstadual).toFixed(2)
-  )
+  // A conta mora em lib/modulos-veiculo (custoDaConsulta), com teste: ela decide
+  // quanto o cliente paga quando a empresa não tem preço de tabela, e a regra da
+  // base já paga é fácil de quebrar sem ninguém notar.
+  const custoTotal = custoDaConsulta({
+    modulos,
+    custoLeilao,
+    custoNacional,
+    custoEstadual,
+    baseReaproveitada: !!basePreConsultada,
+  })
 
   return {
     provider: 'assertiva',

@@ -100,6 +100,47 @@ export const CUSTO_REFERENCIA = parseFloat(
 )
 
 /**
+ * Módulos cujo preço depende do fornecedor que de fato respondeu, e por isso
+ * não saem da tabela fixa.
+ */
+export const MODULOS_DE_PRECO_VARIAVEL: ModuloVeiculo[] = [
+  'placa_leilao', 'placa_bin_federal', 'placa_bin_estadual',
+]
+
+/**
+ * Custo real de uma consulta.
+ *
+ * Esta conta vivia dentro do motor de consulta, onde nenhum teste alcançava, e
+ * ela decide quanto o cliente paga quando a empresa não tem preço de tabela.
+ *
+ * `baseReaproveitada` é o ponto delicado: quando a consulta-base veio da etapa
+ * de confirmação do veículo, ela JÁ FOI PAGA ali. Contar de novo cobraria
+ * R$ 3,22 duas vezes pela mesma chamada e faria a confirmação encarecer a
+ * consulta, que é exatamente o que ela não pode fazer.
+ */
+export function custoDaConsulta(opts: {
+  modulos: ModuloVeiculo[]
+  custoLeilao?: number
+  custoNacional?: number
+  custoEstadual?: number
+  baseReaproveitada?: boolean
+}): number {
+  const jaPago: ModuloVeiculo[] = opts.baseReaproveitada ? [MODULO_OBRIGATORIO] : []
+
+  const fixos = custoDe(
+    opts.modulos.filter(m =>
+      !MODULOS_DE_PRECO_VARIAVEL.includes(m) && !jaPago.includes(m))
+  )
+
+  const variaveis =
+    (opts.custoLeilao   ?? 0) +
+    (opts.custoNacional ?? 0) +
+    (opts.custoEstadual ?? 0)
+
+  return parseFloat((fixos + variaveis).toFixed(2))
+}
+
+/**
  * Quanto esta consulta economizou contra a referência.
  * @param modulos  módulos efetivamente executados
  * @param custoLeilao custo cobrado pelo fornecedor de leilão que respondeu
