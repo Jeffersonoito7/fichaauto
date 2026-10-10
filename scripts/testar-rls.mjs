@@ -64,6 +64,11 @@ const TABELAS = [
   'config_financeiro',
   'alertas_monitoramento',
   'cobrancas',
+  // Tabela nova precisa entrar AQUI no mesmo commit que a cria. Em 09/10/2026
+  // a auditoria passou "aprovada" sem ter testado estas duas, porque a lista
+  // ficou para tras: teste que nao cobre a tabela nova aprova vazio.
+  'consulta_base_pendente',
+  'planos_recarga',
 ];
 
 /**
@@ -72,6 +77,8 @@ const TABELAS = [
  * colateral seja nulo e a falha seja detectada pelo codigo HTTP.
  */
 const RPCS = [
+  // Debita o caixa da empresa: alcancavel pela chave publica seria saque livre.
+  { nome: 'debitar_saldo_cpf_tenant', args: { p_tenant_id: ZERO_UUID(), p_valor: 0 } },
   {
     nome: 'creditar_saldo',
     args: { p_user_id: ZERO_UUID(), p_campo: 'saldo_reais', p_valor: 0 },

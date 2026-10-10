@@ -4,6 +4,7 @@ import { consultarVeiculo } from '@/lib/providers'
 import { randomUUID, timingSafeEqual } from 'crypto'
 import { reverterParaPendente } from '../_transacao'
 import { COLUNA_CAIXA } from '@/lib/saldo'
+import { conferirPagamento } from '@/lib/conferencia-pagamento'
 
 // Webhook de aviso de pagamento da Efí.
 //
@@ -87,6 +88,43 @@ export async function POST(req: NextRequest) {
       // Se não retornou nada, transação não existia ou já estava paga — ignora
       if (error || !transacao) {
         console.log(`[PIX webhook] txid=${txid} ignorado (já processado ou não encontrado)`)
+        continue
+      }
+
+      // ── 2b. O valor pago confere com o cobrado? ──
+      //
+      // Até 10/10/2026 esta conferência não existia: creditávamos o valor da
+      // COBRANÇA sem olhar quanto a pessoa realmente pagou. Cobrança de
+      // R$ 1.000 paga com R$ 1,00 creditava R$ 1.000, e nada parecia errado.
+      //
+      // Pagamento a MENOR não credita e não é revertido para pendente: fica em
+      // 'divergente', esperando conferência humana. Decidir se devolve, se
+      // credita proporcional ou se cobra a diferença é regra de negócio do
+      // dono, não do código.
+      //
+      // Pagamento a MAIOR credita só o que foi cobrado, nunca o excedente.
+      // A decisão mora em lib/conferencia-pagamento, com teste: regra de dinheiro
+      // escrita aqui dentro, no meio do laço, erraria calada.
+      const conferencia = conferirPagamento({
+        valorCobrado: transacao.valor,
+        valorPago:    pag.valor ?? pag.valorRecebido,
+      })
+
+      // Registra o que entrou mesmo quando confere, para conciliação depois.
+      await supabase
+        .from('transacoes_pix')
+        .update({ valor_pago: conferencia.valorPago })
+        .eq('txid', txid)
+
+      if (!conferencia.aceito) {
+        const detalhe = conferencia.motivo === 'sem_valor'
+          ? 'aviso sem valor legível'
+          : `PAGAMENTO A MENOR: cobrado R$ ${Number(transacao.valor ?? 0).toFixed(2)}, `
+            + `pago R$ ${(conferencia.valorPago ?? 0).toFixed(2)}`
+
+        console.error(`[PIX webhook] txid=${txid} ${detalhe}. Nada creditado, marcado divergente.`)
+        await supabase.from('transacoes_pix')
+          .update({ status: 'divergente' }).eq('txid', txid)
         continue
       }
 
@@ -182,12 +220,15 @@ export async function POST(req: NextRequest) {
       // 4. Creditar atomicamente via RPC (elimina race condition de read+write)
       if (transacao.creditos_creditados) {
         // Compra de pack de análise de crédito. Com o caixa unificado em reais,
-        // o que entra é o VALOR PAGO, não a quantidade de consultas: creditar
+        // o que entra é o valor COBRADO, não a quantidade de consultas: creditar
         // "10" num caixa em reais daria R$ 10,00 em vez dos R$ 300,00 pagos.
-        const valorPago = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
+        // O nome é `valorDoPack`, e não `valorPago`, para não se confundir com
+        // o valor realmente pago conferido lá em cima: são coisas diferentes, e
+        // é a conferência de lá que garante que este crédito é devido.
+        const valorDoPack = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
 
-        if (!(valorPago > 0)) {
-          console.error(`[PIX webhook] pack de credito sem valor pago txid=${txid}; nao creditado`)
+        if (!(valorDoPack > 0)) {
+          console.error(`[PIX webhook] pack de credito sem valor em reais txid=${txid}; nao creditado`)
           await reverterParaPendente(supabase, txid, 'pack de credito sem valor em reais')
           continue
         }
@@ -195,7 +236,7 @@ export async function POST(req: NextRequest) {
         const { error: errCredito } = await supabase.rpc('creditar_saldo', {
           p_user_id: transacao.user_id,
           p_campo:   COLUNA_CAIXA,
-          p_valor:   valorPago,
+          p_valor:   valorDoPack,
         })
 
         if (errCredito) {
@@ -204,7 +245,7 @@ export async function POST(req: NextRequest) {
           continue
         }
 
-        console.log(`[PIX webhook] txid=${txid} user=${transacao.user_id} +R$ ${valorPago.toFixed(2)} (pack de credito)`)
+        console.log(`[PIX webhook] txid=${txid} user=${transacao.user_id} +R$ ${valorDoPack.toFixed(2)} (pack de credito)`)
 
       } else {
         const saldoCreditado = parseFloat(transacao.saldo_creditado ?? transacao.valor ?? '0')
