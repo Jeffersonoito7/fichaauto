@@ -16,6 +16,8 @@ const PRODUTOS: {
   preco: number
   titulo: string
   itens: string[]
+  /** Linha abaixo da lista, para dizer onde está o que NÃO vem neste produto. */
+  rodape?: string
 }[] = [
   {
     id: 'veiculo',
@@ -41,19 +43,27 @@ const PRODUTOS: {
     nome: 'Pessoa física',
     preco: PRECO.cpf,
     titulo: 'O que vem na consulta de pessoa física',
+    // Esta lista anuncia o que o cliente PAGA para receber, então cada item
+    // precisa ter contraparte na rota. Saíram daqui em 12/10/2026, porque a
+    // consulta nunca os devolveu e o cliente pagava achando que viriam:
+    //   - Protestos em cartório e Renda presumida: vêm de score/v3/pf/credito,
+    //     que é a Análise de Crédito, produto separado e mais caro.
+    //   - Veículos vinculados ao CPF: vem de historico-por-cpf, do módulo
+    //     veicular, e também não é consultado aqui.
+    // PEP saiu antes, pelo mesmo motivo: consultarPepCpf é um stub que devolve
+    // null, o produto não está contratado na Assertiva.
+    // Antes de acrescentar item aqui, conferir se a rota realmente o traz.
     itens: [
       'Dados básicos e situação do CPF',
       'Telefones e e-mails',
       'Histórico de endereços',
       'Processos judiciais',
-      'Protestos em cartório',
-      'Renda presumida',
-      // PEP fora da lista de propósito: consultarPepCpf é um stub que devolve
-      // null, o produto não está contratado na Assertiva. Anunciar aqui era
-      // vender algo que nunca chega. Voltar quando for contratado.
       'Participação societária',
-      'Veículos vinculados ao CPF',
+      'Sanções e impedimentos (CEIS, CNEP)',
     ],
+    // Mostrado abaixo da lista, para quem procura score ou protesto saber onde
+    // encontrar em vez de concluir que o produto está incompleto.
+    rodape: 'Score, protestos e renda presumida vêm na Análise de Crédito.',
   },
   {
     id: 'credito',
@@ -596,6 +606,12 @@ export default function ConsultarPage() {
               </div>
             ))}
           </div>
+
+          {p.rodape && (
+            <p className="text-[11px] text-brand-gray leading-snug mt-3 pt-3 border-t border-brand-border/60">
+              {p.rodape}
+            </p>
+          )}
 
           <div className="flex items-baseline justify-between mt-4 pt-4 border-t border-brand-border">
             <span className="text-xs text-brand-gray">

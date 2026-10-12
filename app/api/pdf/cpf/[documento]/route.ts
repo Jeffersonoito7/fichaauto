@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthEmail } from '@/lib/consulta-helper'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { buscarRelatorioSalvo } from '@/lib/relatorio-salvo'
+import { blocoVeio, statusDeOcorrencia, statusDeScore } from '@/lib/bloco-consultado'
 import QRCode from 'qrcode'
 // Os provedores da Assertiva NAO sao mais importados aqui de proposito:
 // esta rota imprime relatorio ja pago e nunca gera consulta. Ver lib/relatorio-salvo.
@@ -14,9 +15,28 @@ function v(x: any, fb = 'Não Informado'): string {
 }
 function protocolo() { return String(Date.now()).slice(-9) }
 
-type Status = 'ok' | 'warn' | 'error'
+// 'ausente' existe para o relatorio NUNCA afirmar o que nao foi consultado.
+// Antes, protesto saia verde ("nada consta") sem a consulta ter sido feita, e
+// renda presumida tinha o status escrito a mao como 'ok'. Quem le o relatorio
+// decide compra com base nele: dizer "nada consta" sobre dado nao verificado e
+// pior que nao mostrar o item.
+type Status = 'ok' | 'warn' | 'error' | 'ausente'
 
 function iconeInner(status: Status, label: string): string {
+  if (status === 'ausente') {
+    // Cinza e traco: nao e bom nem ruim, e "nao foi consultado".
+    return `
+    <div style="width:50px;height:50px;border-radius:50%;background:#e5e7eb;
+                border:1px solid #cbd5e1;
+                display:flex;align-items:center;justify-content:center;margin:0 auto">
+      <span style="font-size:22px;font-weight:900;color:#64748b;line-height:1">&ndash;</span>
+    </div>
+    <div style="font-size:7px;font-weight:700;margin-top:3px;text-align:center;line-height:1.3;color:#222">
+      ${label}
+    </div>
+    <div style="font-size:6px;margin-top:1px;text-align:center;color:#64748b">não consultado</div>`
+  }
+
   const bg     = status === 'ok' ? '#16a34a' : status === 'warn' ? '#d97706' : '#dc2626'
   const symbol = status === 'ok' ? '&#10003;' : '!'
   return `
@@ -162,22 +182,34 @@ function pag1(cpf: string, data: any, agora: string, proto: string, qr: string):
   const pp = data.pep       ?? {}
 
   const nome       = v(b.nome ?? b.nomeCompleto, 'NOME NÃO INFORMADO')
-  const scoreVal   = Number(sc.score ?? sc.pontuacao ?? 0)
-  const temProc    = (pr.total ?? pr.quantidade ?? 0) > 0
-  const temProt    = (pt.total ?? pt.quantidade ?? 0) > 0
-  const isPep      = !!(pp.pep ?? pp.isPep ?? pp.politicamenteExposta)
   const sitCpf     = v(b.situacaoCpf ?? b.situacao, 'REGULAR').toUpperCase()
   const cpfOk      = sitCpf.includes('REGULAR') || sitCpf.includes('ATIVO')
 
-  const stScore:  Status = scoreVal >= 700 ? 'ok' : scoreVal >= 400 ? 'warn' : 'error'
-  const stProc:   Status = temProc  ? 'error' : 'ok'
-  const stProt:   Status = temProt  ? 'error' : 'ok'
-  // Sem PEP contratado, o campo vira 'atencao' com 'nao consultado',
-  // nunca um 'ok' que o leitor interpreta como verificado.
+  // Um bloco só conta como consultado se veio no resultado. A consulta de CPF
+  // NÃO traz score, protestos nem renda presumida: eles pertencem à Análise de
+  // Crédito. Antes disto o relatório inventava: score saía vermelho para todo
+  // mundo (porque o valor era sempre 0), protesto saía verde "nada consta" sem
+  // ter sido consultado, e renda tinha o status escrito à mão como 'ok'.
+  const scoreVal = Number(sc.score ?? sc.pontuacao ?? 0)
+  const stScore: Status = statusDeScore(sc, sc.score ?? sc.pontuacao)
+
+  // Processos têm duas fontes possíveis: o bloco pago e o DataJud, gratuito.
+  const fonteProc = blocoVeio(pr) ? pr : data.datajud
+  const stProc: Status = statusDeOcorrencia(
+    fonteProc,
+    pr.total ?? pr.quantidade ?? (Array.isArray(data.datajud) ? data.datajud.length : undefined),
+  )
+
+  const stProt: Status = statusDeOcorrencia(pt, pt.total ?? pt.quantidade)
+
+  // Sem PEP contratado, o campo nunca vira 'ok', que o leitor interpretaria
+  // como verificado.
+  const isPep = !!(pp.pep ?? pp.isPep ?? pp.politicamenteExposta)
   const pepConsultado = pp != null && ('pep' in pp || 'isPep' in pp || 'politicamenteExposta' in pp)
-  const stPep:    Status = !pepConsultado ? 'warn' : isPep ? 'error' : 'ok'
-  const stCpf:    Status = cpfOk    ? 'ok'    : 'error'
-  const stRenda:  Status = 'ok'
+  const stPep: Status = !pepConsultado ? 'ausente' : isPep ? 'error' : 'ok'
+
+  const stCpf:   Status = cpfOk ? 'ok' : 'error'
+  const stRenda: Status = blocoVeio(data.renda) ? 'ok' : 'ausente'
 
   return `
 <div class="pg">
@@ -211,7 +243,14 @@ function pag1(cpf: string, data: any, agora: string, proto: string, qr: string):
   ])}
 
   ${secTitle('Score de Crédito')}
-  ${scoreBar(scoreVal)}
+  ${stScore === 'ausente' ? `
+  <p style="font-size:9px;font-weight:700;color:#64748b;margin-bottom:4px">
+    NÃO CONSULTADO NESTE RELATÓRIO
+  </p>
+  <p style="font-size:8px;color:#64748b;margin:0 0 8px">
+    O score de crédito não faz parte da consulta de pessoa física.
+    Disponível na Análise de Crédito.
+  </p>` : scoreBar(scoreVal)}
 
   ${secTitle('Contato')}
   ${tabela2col([
@@ -238,11 +277,29 @@ function pag2(cpf: string, data: any, agora: string, proto: string, qr: string):
   const negativacoes: any[] = Array.isArray(sc.negativacoes) ? sc.negativacoes : []
   const totalNegat  = Number(sc.totalDebitos ?? negativacoes.length)
   const valorNegat  = Number(sc.valorTotalDebitos ?? 0)
-  const processos: any[] = Array.isArray(pr.processos ?? pr.lista) ? (pr.processos ?? pr.lista) : []
+
+  // Processos vêm do DataJud e a rota os salva na chave `datajud`. Este PDF lia
+  // só `data.processos`, que a consulta de CPF nunca preenche: o relatório
+  // escrevia NADA CONSTA mesmo havendo processo encontrado.
+  const doDatajud: any[] = Array.isArray(data.datajud) ? data.datajud
+    : Array.isArray(data.datajud?.processos) ? data.datajud.processos : []
+  const processos: any[] = Array.isArray(pr.processos ?? pr.lista)
+    ? (pr.processos ?? pr.lista) : doDatajud
   const protestos: any[] = Array.isArray(pt.lista ?? pt.protestos) ? (pt.lista ?? pt.protestos) : []
   const totalProc  = pr.total ?? pr.quantidade ?? processos.length
   const totalProt  = pt.total ?? pt.quantidade ?? protestos.length
   const valorProt  = pt.valorTotal ?? pt.valor ?? 0
+
+  // Um bloco ausente NÃO pode virar "NADA CONSTA": isso afirma ao leitor que
+  // foi verificado e não há nada, quando sequer foi consultado. Score,
+  // negativações e protestos pertencem à Análise de Crédito, produto separado.
+  const naoConsultado = (onde: string) => `
+  <p style="font-size:9px;font-weight:700;color:#64748b;margin-bottom:4px">
+    NÃO CONSULTADO NESTE RELATÓRIO
+  </p>
+  <p style="font-size:8px;color:#64748b;margin:0 0 8px">
+    Este item não faz parte da consulta de pessoa física. ${onde}
+  </p>`
 
   return `
 <div class="pg">
@@ -250,11 +307,12 @@ function pag2(cpf: string, data: any, agora: string, proto: string, qr: string):
   ${banner(nome, cpf)}
 
   ${secTitle('Negativações / Restrições de Crédito (SPC/Serasa)')}
+  ${!blocoVeio(sc) ? naoConsultado('Disponível na Análise de Crédito.') : `
   <p style="font-size:10px;font-weight:700;color:${totalNegat > 0 ? '#dc2626' : '#16a34a'};margin-bottom:4px">
     ${totalNegat > 0
       ? `CONSTA — ${totalNegat} registro(s) | Valor total: R$ ${valorNegat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
       : 'NADA CONSTA'}
-  </p>
+  </p>`}
   ${tabelaGen(
     ['Credor', 'Tipo', 'Valor', 'Vencimento', 'Inclusão', 'Cidade/UF'],
     negativacoes.slice(0, 20).map((n: any) => [
@@ -268,9 +326,10 @@ function pag2(cpf: string, data: any, agora: string, proto: string, qr: string):
   )}
 
   ${secTitle('Processos Judiciais')}
+  ${!blocoVeio(pr) && !Array.isArray(data.datajud) ? naoConsultado('Verifique nos tribunais competentes.') : `
   <p style="font-size:10px;font-weight:700;color:${totalProc > 0 ? '#dc2626' : '#16a34a'};margin-bottom:4px">
     ${totalProc > 0 ? `CONSTA — ${totalProc} processo(s) encontrado(s)` : 'NADA CONSTA'}
-  </p>
+  </p>`}
   ${tabelaGen(
     ['Número', 'Tipo', 'Vara / Tribunal', 'Data', 'Valor'],
     processos.slice(0, 15).map((p: any) => [
@@ -283,9 +342,10 @@ function pag2(cpf: string, data: any, agora: string, proto: string, qr: string):
   )}
 
   ${secTitle('Protestos em Cartório')}
+  ${!blocoVeio(pt) ? naoConsultado('Disponível na Análise de Crédito.') : `
   <p style="font-size:10px;font-weight:700;color:${totalProt > 0 ? '#dc2626' : '#16a34a'};margin-bottom:4px">
     ${totalProt > 0 ? `CONSTA — ${totalProt} protesto(s)${valorProt > 0 ? ` | Valor total: R$ ${Number(valorProt).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}` : 'NADA CONSTA'}
-  </p>
+  </p>`}
   ${tabelaGen(
     ['Data', 'Cartório', 'Cidade/UF', 'Valor', 'Credor'],
     protestos.slice(0, 10).map((p: any) => [
