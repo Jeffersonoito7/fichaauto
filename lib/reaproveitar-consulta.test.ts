@@ -41,7 +41,7 @@ describe('buscarConsultaSalvaDoUsuario', () => {
 
   it('normaliza a placa antes de filtrar, para hífen e minúscula acharem o mesmo registro', async () => {
     const { cliente, filtros } = svcFake({
-      id: 'c1', resultado: {}, created_at: diasAtras(1), custo: 0, email: 'a@b.com',
+      id: 'c1', resultado: { placa: { resposta: { descricao: { marcaModelo: 'HONDA/CG 160' } } } }, created_at: diasAtras(1), custo: 0, email: 'a@b.com',
     })
     await buscarConsultaSalvaDoUsuario(cliente, 'a@b.com', 'abc-1d23', 'veiculo')
     expect(filtros.documento).toBe('ABC1D23')
@@ -49,7 +49,7 @@ describe('buscarConsultaSalvaDoUsuario', () => {
 
   it('filtra pelo e-mail de quem pediu, nunca servindo consulta de outra pessoa', async () => {
     const { cliente, filtros } = svcFake({
-      id: 'c1', resultado: {}, created_at: diasAtras(1), custo: 0, email: 'a@b.com',
+      id: 'c1', resultado: { placa: { resposta: { descricao: { marcaModelo: 'HONDA/CG 160' } } } }, created_at: diasAtras(1), custo: 0, email: 'a@b.com',
     })
     await buscarConsultaSalvaDoUsuario(cliente, 'a@b.com', 'ABC1D23', 'veiculo')
     expect(filtros.email).toBe('a@b.com')
@@ -73,14 +73,14 @@ describe('buscarConsultaSalvaDoUsuario', () => {
   })
 
   it('marca como envelhecida a partir do prazo, e não antes', async () => {
-    const nova = svcFake({ id: 'c1', resultado: {}, created_at: diasAtras(DIAS_PARA_ENVELHECER - 1), custo: 0, email: null })
-    const velha = svcFake({ id: 'c2', resultado: {}, created_at: diasAtras(DIAS_PARA_ENVELHECER), custo: 0, email: null })
+    const nova = svcFake({ id: 'c1', resultado: { placa: { resposta: { descricao: { marcaModelo: 'HONDA/CG 160' } } } }, created_at: diasAtras(DIAS_PARA_ENVELHECER - 1), custo: 0, email: null })
+    const velha = svcFake({ id: 'c2', resultado: { placa: { resposta: { descricao: { marcaModelo: 'HONDA/CG 160' } } } }, created_at: diasAtras(DIAS_PARA_ENVELHECER), custo: 0, email: null })
     expect((await buscarConsultaSalvaDoUsuario(nova.cliente, 'a@b.com', 'ABC1D23', 'veiculo'))?.envelhecida).toBe(false)
     expect((await buscarConsultaSalvaDoUsuario(velha.cliente, 'a@b.com', 'ABC1D23', 'veiculo'))?.envelhecida).toBe(true)
   })
 
   it('devolve null sem e-mail ou sem documento, em vez de varrer a tabela', async () => {
-    const { cliente } = svcFake({ id: 'c1', resultado: {}, created_at: diasAtras(0), custo: 0, email: null })
+    const { cliente } = svcFake({ id: 'c1', resultado: { placa: { resposta: { descricao: { marcaModelo: 'HONDA/CG 160' } } } }, created_at: diasAtras(0), custo: 0, email: null })
     expect(await buscarConsultaSalvaDoUsuario(cliente, '', 'ABC1D23', 'veiculo')).toBeNull()
     expect(await buscarConsultaSalvaDoUsuario(cliente, 'a@b.com', '---', 'veiculo')).toBeNull()
   })
@@ -99,5 +99,59 @@ describe('textoIdade', () => {
     expect(textoIdade({ ...base, diasAtras: 5 })).toBe('consultada há 5 dias')
     expect(textoIdade({ ...base, diasAtras: 45 })).toBe('consultada há cerca de um mês')
     expect(textoIdade({ ...base, diasAtras: 95 })).toBe('consultada há cerca de 3 meses')
+  })
+})
+
+describe('reaproveitamento NÃO serve consulta que falhou', () => {
+  it('recusa a casca de erro que a AutoVale recebeu em 12/10/2026', async () => {
+    // Resultado real gravado: blocos vazios e dois erros 400 da Assertiva.
+    // Antes, isto era servido como relatório pronto na tentativa seguinte.
+    const { cliente } = svcFake({
+      id: 'c1', created_at: diasAtras(0), custo: 0, email: 'a@b.com',
+      resultado: {
+        cpf: '06222697968',
+        basico: {}, enderecos: [], telefones: [], societario: [],
+        relacionamentos: [], datajud: null, sancoes: null, pep: null,
+        erros: [
+          'relacionamentos: Assertiva erro 400',
+          'localize: Assertiva erro 400',
+        ],
+      },
+    })
+    expect(await buscarConsultaSalvaDoUsuario(cliente, 'a@b.com', '06222697968', 'cpf')).toBeNull()
+  })
+
+  it('recusa resultado que só tem erros', async () => {
+    const { cliente } = svcFake({
+      id: 'c1', created_at: diasAtras(0), custo: 0, email: null,
+      resultado: { erros: ['falhou'] },
+    })
+    expect(await buscarConsultaSalvaDoUsuario(cliente, 'a@b.com', 'ABC1D23', 'veiculo')).toBeNull()
+  })
+
+  it('ACEITA consulta boa, para a correção não quebrar o reaproveitamento legítimo', async () => {
+    const { cliente } = svcFake({
+      id: 'c1', created_at: diasAtras(0), custo: 57.38, email: 'a@b.com',
+      resultado: { placa: { resposta: { descricao: { marcaModelo: 'HONDA/CG 160' } } }, erros: [] },
+    })
+    const r = await buscarConsultaSalvaDoUsuario(cliente, 'a@b.com', 'ABC1D23', 'veiculo')
+    expect(r?.id).toBe('c1')
+  })
+
+  it('aceita quando o dado veio e a consulta achou zero ocorrências', async () => {
+    // "consultei e não achei nada" É resultado válido e deve ser reaproveitado.
+    const { cliente } = svcFake({
+      id: 'c1', created_at: diasAtras(0), custo: 14.9, email: 'a@b.com',
+      resultado: { basico: { nome: 'FULANO DE TAL' }, enderecos: [], erros: [] },
+    })
+    expect((await buscarConsultaSalvaDoUsuario(cliente, 'a@b.com', '11144477735', 'cpf'))?.id).toBe('c1')
+  })
+
+  it('metadado sozinho não conta como conteúdo', async () => {
+    const { cliente } = svcFake({
+      id: 'c1', created_at: diasAtras(0), custo: 0, email: 'a@b.com',
+      resultado: { cpf: '11144477735', _custoTotal: 14.9, erros: [] },
+    })
+    expect(await buscarConsultaSalvaDoUsuario(cliente, 'a@b.com', '11144477735', 'cpf')).toBeNull()
   })
 })

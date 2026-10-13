@@ -94,6 +94,38 @@ export async function buscarConsultaSalvaDoUsuario(
   }
 }
 
+/**
+ * O resultado guardado tem conteúdo de verdade, ou é só a casca de uma consulta
+ * que falhou?
+ *
+ * Em 12/10/2026 a AutoVale consultou um CPF inválido, as duas chamadas pagas
+ * deram erro 400 e o resultado foi gravado assim mesmo: um objeto com os blocos
+ * vazios e a lista de erros. Um minuto depois ela tentou de novo e o
+ * reaproveitamento serviu AQUELE LIXO como se fosse relatório pronto. Pior que
+ * entregar nada: a pessoa fica presa no resultado vazio, porque toda nova
+ * tentativa encontra o mesmo registro e devolve a mesma casca.
+ *
+ * O critério é ter ao menos um bloco de dado preenchido. Só `erros`, ou tudo
+ * nulo e vazio, não conta.
+ */
+function temConteudoUtil(resultado: any): boolean {
+  if (!resultado || typeof resultado !== 'object') return false
+
+  // Chaves que não são dado do documento consultado, e sim metadado nosso.
+  const METADADO = new Set([
+    'erros', 'avisos', 'cpf', 'cnpj', 'placa_consultada', 'documento',
+  ])
+
+  return Object.entries(resultado).some(([chave, valor]) => {
+    if (chave.startsWith('_') || METADADO.has(chave)) return false
+    if (valor === null || valor === undefined) return false
+    if (Array.isArray(valor)) return valor.length > 0
+    if (typeof valor === 'object') return Object.keys(valor as object).length > 0
+    if (typeof valor === 'string') return valor.trim() !== ''
+    return true
+  })
+}
+
 /** Normaliza a linha do banco. Devolve null quando não dá para confiar nela. */
 function montarConsultaAnterior(data: any): ConsultaAnterior | null {
   if (!data?.resultado) return null
@@ -105,6 +137,10 @@ function montarConsultaAnterior(data: any): ConsultaAnterior | null {
     try { resultado = JSON.parse(resultado) } catch { return null }
   }
   if (!resultado || typeof resultado !== 'object') return null
+
+  // Consulta que falhou não é consulta anterior: serve lixo e prende a pessoa
+  // no erro, porque a próxima tentativa reencontra o mesmo registro.
+  if (!temConteudoUtil(resultado)) return null
 
   const consultadaEm = new Date(data.created_at)
   const dias = Math.floor((Date.now() - consultadaEm.getTime()) / 86_400_000)
