@@ -4,6 +4,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getCnpj } from '@/lib/providers/brasilapi'
 import { consultarSancoesCnpj } from '@/lib/providers/sancoes-gov'
 import { PRECO } from '@/lib/products'
+import { cnpjValido } from '@/lib/documento'
 import { lerSaldoCpf, debitarSaldoCpf, mensagemSemSaldo, saldoAcabando } from '@/lib/saldo'
 
 const BASE_URL  = 'https://api.assertivasolucoes.com.br'
@@ -89,8 +90,12 @@ export async function GET(
   const { cnpj: cnpjParam } = await context.params
   const cnpj = limpaCnpj(cnpjParam)
 
-  if (cnpj.length !== 14) {
-    return NextResponse.json({ error: 'CNPJ inválido' }, { status: 400 })
+  // Digito verificador ANTES de qualquer chamada paga. Ver lib/documento.
+  if (!cnpjValido(cnpj)) {
+    return NextResponse.json({
+      error: 'CNPJ inválido. Confira os números digitados.',
+      documentoInvalido: true,
+    }, { status: 400 })
   }
 
   // Auth
@@ -189,6 +194,17 @@ export async function GET(
   const sancoes = await consultarSancoesCnpj(cnpj)
 
   const resultado = { cnpj, basico: basicoFinal, qsa: qsaFinal, relacionadas, sancoes, erros, avisos }
+
+  // Mesma trava do CPF: responder erro também é responder, e sem razão social
+  // não há relatório que justifique cobrança. Ver a rota de CPF.
+  if (!basicoFinal?.razaoSocial && !basicoFinal?.nome) {
+    console.error(`[consulta cnpj] nada retornado para ${cnpj}; NAO cobrado. erros=${JSON.stringify(erros)}`)
+    return NextResponse.json({
+      error: 'Não conseguimos obter os dados deste CNPJ agora. Nada foi cobrado.',
+      semDados: true,
+      detalhes: erros,
+    }, { status: 502 })
+  }
 
   // Debitar somente após retorno da API (evita perda de saldo em falha externa).
   let restante = saldo

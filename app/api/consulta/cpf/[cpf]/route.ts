@@ -5,6 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase-server'
 import { buscarProcessosProprietario } from '@/lib/providers/datajud'
 import { consultarSancoesCpf } from '@/lib/providers/sancoes-gov'
 import { PRECO } from '@/lib/products'
+import { cpfValido, formatarCpf } from '@/lib/documento'
 import { lerSaldoCpf, debitarSaldoCpf, mensagemSemSaldo, saldoAcabando } from '@/lib/saldo'
 
 const BASE_URL   = 'https://api.assertivasolucoes.com.br'
@@ -51,8 +52,14 @@ export async function GET(
   const { cpf: cpfParam } = await context.params
   const cpf = limpa(cpfParam)
 
-  if (cpf.length !== 11) {
-    return NextResponse.json({ error: 'CPF inválido' }, { status: 400 })
+  // Dígito verificador ANTES de qualquer chamada paga. Em 12/10/2026 um CPF de
+  // 11 dígitos porém inválido passou por aqui, a Assertiva devolveu 400 nas
+  // duas pontas e o cliente foi debitado em R$ 14,90 por um relatório vazio.
+  if (!cpfValido(cpf)) {
+    return NextResponse.json({
+      error: `CPF ${formatarCpf(cpf)} é inválido. Confira os números digitados.`,
+      documentoInvalido: true,
+    }, { status: 400 })
   }
 
   const email = await getAuthEmail()
@@ -194,6 +201,28 @@ export async function GET(
 
   const resultado = { cpf, basico, enderecos, telefones, pep: null, societario, relacionamentos, datajud, sancoes, erros }
   const descricao = basico?.nome ?? ''
+
+  // ── A consulta paga trouxe ALGUMA coisa? ──
+  //
+  // "Debitar só depois do retorno" não bastava: a Assertiva pode RESPONDER
+  // erro, e responder erro é um retorno. Em 12/10/2026 as duas chamadas pagas
+  // devolveram 400 e o cliente foi debitado em R$ 14,90 por um relatório sem
+  // nome, sem endereço e sem telefone.
+  //
+  // DataJud e sanções são gratuitos: não justificam cobrança sozinhos.
+  const veioAlgoPago = !!basico?.nome
+    || (Array.isArray(enderecos) && enderecos.length > 0)
+    || (Array.isArray(telefones) && telefones.length > 0)
+    || (Array.isArray(societario) && societario.length > 0)
+
+  if (!veioAlgoPago) {
+    console.error(`[consulta cpf] nada retornado para ${cpf}; NAO cobrado. erros=${JSON.stringify(erros)}`)
+    return NextResponse.json({
+      error: 'Não conseguimos obter os dados deste CPF agora. Nada foi cobrado.',
+      semDados: true,
+      detalhes: erros,
+    }, { status: 502 })
+  }
 
   // Debitar somente após retorno da API (evita perda de saldo em falha externa).
   // Admin e assinante B2B não consomem caixa.

@@ -6,6 +6,7 @@ import {
   History, AlertTriangle, ArrowLeft,
 } from 'lucide-react'
 import { PRECO, CREDITO } from '@/lib/products'
+import { cpfValido, cnpjValido } from '@/lib/documento'
 
 type Produto = 'veiculo' | 'cpf' | 'credito'
 
@@ -216,8 +217,10 @@ export default function ConsultarPage() {
 
   function valido() {
     if (produto === 'veiculo') return usaPlaca ? placa.length === 7 : texto.length === 17
-    if (produto === 'cpf')     return soDig(texto).length === 11
-    return soDig(texto).length === (subCred === 'cpf' ? 11 : 14)
+    // Dígito verificador aqui também, para o erro aparecer antes do clique e
+    // não depois de uma ida à API que custou dinheiro.
+    if (produto === 'cpf')     return cpfValido(texto)
+    return subCred === 'cpf' ? cpfValido(texto) : cnpjValido(texto)
   }
 
   async function submit(e: React.FormEvent) {
