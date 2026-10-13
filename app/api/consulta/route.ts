@@ -166,6 +166,28 @@ export async function POST(req: NextRequest) {
     // com protocolo velho e módulo vazio parecendo "nada consta".
     if (pendente) descartarBasePendente({ placa: doc, email })
 
+    // ── A consulta trouxe o veículo? ──
+    //
+    // Em 13/10/2026 o saldo da NOSSA conta na Assertiva acabou e ela passou a
+    // responder HTTP 422 "não há saldo suficiente disponível para o seu grupo".
+    // Sem esta trava, o cliente pagaria R$ 57,38 por um relatório sem veículo
+    // nenhum, e a culpa seria do nosso caixa, não dele. Vale para qualquer
+    // falha geral do fornecedor, não só a de saldo.
+    const descVeic = (resultado as any)?.placa?.resposta?.descricao
+      ?? (resultado as any)?.placa?.resposta ?? {}
+    const temVeiculo = !!(descVeic.marcaModelo || descVeic.marca || descVeic.chassi)
+
+    if (!temVeiculo) {
+      const motivos = (resultado as any)?.erros ?? []
+      console.error(`[consulta] ${doc} sem retorno do fornecedor; NAO cobrado. erros=${JSON.stringify(motivos)}`)
+      return NextResponse.json({
+        error: 'Não conseguimos consultar este veículo agora. Nada foi cobrado. '
+             + 'Se persistir, avise o suporte.',
+        semDados: true,
+        detalhes: motivos,
+      }, { status: 502 })
+    }
+
     // Debitar somente após retorno da API (evita perda de saldo em falha externa).
     // Empresa sem preço de tabela consome o CUSTO REAL da consulta, calculado
     // pelos módulos que rodaram e pelo fornecedor de leilão que respondeu.

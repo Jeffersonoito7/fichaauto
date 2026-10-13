@@ -41,8 +41,30 @@ async function get(path: string) {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
   })
-  if (!res.ok) throw new Error(`Assertiva ${path} erro ${res.status}`)
+  if (!res.ok) {
+    // O CORPO da resposta é onde mora o motivo, e ele era descartado: os erros
+    // gravados diziam só "erro 400", sem dizer por quê. Em 13/10/2026 a conta
+    // ficou sem saldo e a Assertiva respondia 422 com
+    // "não há saldo suficiente disponível para o seu grupo", mensagem que
+    // nunca chegava ao log nem a quem estava olhando.
+    const corpo = await res.text().catch(() => '')
+    const motivo = corpo ? ` - ${corpo.slice(0, 200)}` : ''
+    throw new Error(`Assertiva ${path} erro ${res.status}${motivo}`)
+  }
   return res.json()
+}
+
+/**
+ * O erro veio porque a NOSSA conta no fornecedor está sem saldo?
+ *
+ * Importa distinguir: falta de saldo nossa não é problema do documento que a
+ * pessoa digitou, e a mensagem na tela não pode culpá-la por isso.
+ */
+export function ehFaltaDeSaldoNoFornecedor(erro: unknown): boolean {
+  const texto = String((erro as any)?.message ?? erro ?? '').toLowerCase()
+  return texto.includes('erro 422')
+    || texto.includes('saldo suficiente')
+    || texto.includes('sem saldo')
 }
 
 function limpaPlaca(p: string)  { return p.replace(/[^A-Z0-9]/gi, '').toUpperCase() }

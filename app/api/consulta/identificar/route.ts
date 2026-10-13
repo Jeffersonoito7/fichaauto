@@ -9,7 +9,7 @@
 // lib/consulta-base-pendente.ts.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { consultarPlaca } from '@/lib/providers/assertiva'
+import { consultarPlaca, ehFaltaDeSaldoNoFornecedor } from '@/lib/providers/assertiva'
 import { createServiceRoleClient } from '@/lib/supabase-server'
 import { getAuthEmail, registrarAuditoria, tenantComAssinaturaAtiva } from '@/lib/consulta-helper'
 import { lerSaldo, debitarSaldo, mensagemSemSaldo } from '@/lib/saldo'
@@ -91,7 +91,23 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const payload = await consultarPlaca(doc)
+    let payload: any
+    try {
+      payload = await consultarPlaca(doc)
+    } catch (e: any) {
+      // Falta de saldo na NOSSA conta não é culpa de quem digitou a placa, e a
+      // mensagem não pode mandar a pessoa "conferir os caracteres" por isso.
+      if (ehFaltaDeSaldoNoFornecedor(e)) {
+        console.error('[identificar] FORNECEDOR SEM SALDO:', e?.message)
+        return NextResponse.json({
+          error: 'Consulta temporariamente indisponível. Nada foi cobrado. '
+               + 'Já estamos resolvendo com o fornecedor de dados.',
+          fornecedorIndisponivel: true,
+        }, { status: 503 })
+      }
+      throw e
+    }
+
     const veiculo = resumoDoVeiculo(payload)
 
     // Placa que não existe não deve custar nada: sem marca nem modelo, não há
