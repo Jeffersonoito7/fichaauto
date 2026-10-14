@@ -74,8 +74,8 @@ export default function AssociacoesPage() {
           <Shield className="w-5 h-5 text-brand-green" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-brand-dark">Ficha Associações</h1>
-          <p className="text-brand-gray text-sm">Blindagem antifraude para sua base de associados</p>
+          <h1 className="text-xl font-bold text-brand-dark">Análise de Base</h1>
+          <p className="text-brand-gray text-sm">Blindagem antifraude para sua carteira de clientes</p>
         </div>
         <button
           onClick={() => router.push('/dashboard/associacoes/lote')}
@@ -156,11 +156,11 @@ export default function AssociacoesPage() {
             <Upload className="w-6 h-6 text-brand-green" />
           </div>
           <div className="flex-1">
-            <h3 className="font-bold text-brand-dark mb-1">Consulta em lote — Planilha de associados</h3>
+            <h3 className="font-bold text-brand-dark mb-1">Consulta em lote — Planilha de clientes</h3>
             <p className="text-sm text-brand-gray">
               Faça upload de uma planilha <strong>.xlsx</strong> com sua base de CPFs.
               O sistema verifica todos automaticamente e devolve uma planilha colorida
-              com os alertas por associado.
+              com os alertas por cliente.
             </p>
             <div className="flex gap-3 mt-3">
               {['Óbito', 'Fraude / Roubo', 'Processos', 'PEP', 'Score', 'Veículos'].map(tag => (

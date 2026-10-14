@@ -109,7 +109,7 @@ export default function LotePage() {
         </button>
         <div>
           <h1 className="text-xl font-bold text-brand-dark">Consulta em Lote</h1>
-          <p className="text-brand-gray text-sm">Verifique toda a sua base de associados de uma vez</p>
+          <p className="text-brand-gray text-sm">Verifique toda a sua carteira de clientes de uma vez</p>
         </div>
       </div>
 
@@ -174,7 +174,7 @@ export default function LotePage() {
       {estado === 'processando' && (
         <div className="card p-8 mb-6 text-center">
           <Loader2 className="w-10 h-10 animate-spin text-brand-green mx-auto mb-4" />
-          <p className="font-bold text-brand-dark mb-2">Consultando associados...</p>
+          <p className="font-bold text-brand-dark mb-2">Consultando clientes...</p>
           <p className="text-sm text-brand-gray mb-5">Isso pode levar alguns minutos dependendo da quantidade de CPFs</p>
           <div className="w-full bg-brand-gray-light rounded-full h-2 overflow-hidden">
             <div
@@ -194,7 +194,7 @@ export default function LotePage() {
               <CheckCircle className="w-6 h-6 text-brand-green" />
               <div>
                 <p className="font-bold text-brand-dark">Consulta concluída</p>
-                <p className="text-sm text-brand-gray">{resumo.total} associados verificados</p>
+                <p className="text-sm text-brand-gray">{resumo.total} registros verificados</p>
               </div>
             </div>
 

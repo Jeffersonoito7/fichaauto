@@ -92,13 +92,15 @@ const COR: Record<string, { bg: string; text: string; border: string; light: str
   purple: { bg: 'bg-purple-600',   text: 'text-purple-600',   border: 'border-purple-500',   light: 'bg-purple-50', btn: 'bg-purple-600 hover:bg-purple-700 text-white'    },
 }
 
+// Texto de página pública: acentuação conferida palavra a palavra. Este bloco
+// estava inteiro sem acento e é a primeira coisa que um cliente novo lê.
 const PUBLICOS = [
-  { icon: Car,       label: 'Revendas e concessionarias',       desc: 'Verificar procedencia antes de comprar ou vender' },
-  { icon: Shield,    label: 'Associacoes de protecao veicular', desc: 'Aceite de veiculos e instrucao de sinistros'       },
-  { icon: User,      label: 'Despachantes e cartórios',         desc: 'Transferencia, ATPVE e comunicado de venda'        },
-  { icon: Building2, label: 'Fintechs e financeiras',           desc: 'Analise de credito e compliance CPF/CNPJ'          },
-  { icon: BarChart3, label: 'RHs e empresas de logistica',      desc: 'Verificacao de condutores e historico de veiculo'  },
-  { icon: FileText,  label: 'Seguradoras e corretoras',         desc: 'Precificacao de risco e instrucao de sinistro'      },
+  { icon: Car,       label: 'Revendas e concessionárias',       desc: 'Verificar procedência antes de comprar ou vender' },
+  { icon: Shield,    label: 'Associações de proteção veicular', desc: 'Aceite de veículos e instrução de sinistros'       },
+  { icon: User,      label: 'Despachantes e cartórios',         desc: 'Transferência, ATPV-e e comunicado de venda'       },
+  { icon: Building2, label: 'Fintechs e financeiras',           desc: 'Análise de crédito e compliance CPF/CNPJ'          },
+  { icon: BarChart3, label: 'RHs e empresas de logística',      desc: 'Verificação de condutores e histórico de veículo'  },
+  { icon: FileText,  label: 'Seguradoras e corretoras',         desc: 'Precificação de risco e instrução de sinistro'     },
 ]
 
 const FAQ = [

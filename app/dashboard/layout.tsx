@@ -13,7 +13,7 @@ const navItems = [
   { href: '/dashboard',                 icon: Home,      label: 'Home'          },
   { href: '/dashboard/consultar',       icon: Search,    label: 'Nova Consulta' },
   { href: '/dashboard/historico',       icon: History,   label: 'Histórico'     },
-  { href: '/dashboard/associacoes',     icon: Shield,    label: 'Associações'   },
+  { href: '/dashboard/associacoes',     icon: Shield,    label: 'Análise de Base' },
   { href: '/dashboard/carteira',        icon: Wallet,    label: 'Carteira'      },
   { href: '/dashboard/monitoramento',   icon: Bell,      label: 'Monitoramento' },
 ]
