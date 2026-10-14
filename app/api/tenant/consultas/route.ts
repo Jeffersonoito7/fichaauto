@@ -43,7 +43,10 @@ export async function GET(req: NextRequest) {
   const db = service()
   let query = db
     .from('consultas')
-    .select('id, email, tipo, documento, descricao, plano, status, custo, created_at', { count: 'exact' })
+    // `plano` NAO existe em consultas. Pedir por ela fazia a query falhar inteira
+    // e o Painel da Empresa mostrar lista vazia, como ja acontecera em
+    // /api/historico. Mesmo defeito, segunda rota, corrigido tarde.
+    .select('id, email, tipo, documento, descricao, status, custo, created_at, reaproveitada', { count: 'exact' })
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
     .range(offset, offset + por_pagina - 1)
